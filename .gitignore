@@ -66,5 +66,6 @@ Compilar release y backup.txt
 Repo original Musify versión 10.1.1.url
 releases.lnk
 scripts/splash_check*.png
+subir_cambios.bat
 packages/**/*.dart.bak
 packages/**/*.tu_version_actual
