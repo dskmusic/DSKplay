@@ -135,12 +135,20 @@ jobs:
         if: steps.download.outputs.changed == 'true'
         run: flutter pub get
 
+      - name: Compute release tag
+        id: tag
+        if: steps.download.outputs.changed == 'true'
+        shell: pwsh
+        run: |
+          $date = Get-Date -Format "yyyy.MM.dd"
+          "tag=auto-sync-$date-${{ github.run_number }}" >> $env:GITHUB_OUTPUT
+
       - name: Build signed release APK
         id: build
         if: steps.download.outputs.changed == 'true'
         shell: pwsh
         run: |
-          flutter build apk --release
+          flutter build apk --release --dart-define=APP_BUILD_TAG=${{ steps.tag.outputs.tag }}
           if ($LASTEXITCODE -ne 0) {
             Write-Host "::error::Release build failed after updating the YouTube extraction files - this needs manual review."
             exit 1
@@ -165,11 +173,10 @@ jobs:
         if: steps.download.outputs.changed == 'true' && steps.build.outcome == 'success'
         shell: pwsh
         run: |
-          $date = Get-Date -Format "yyyy.MM.dd"
-          $tag = "auto-sync-$date-${{ github.run_number }}"
+          $tag = "${{ steps.tag.outputs.tag }}"
           gh release create $tag `
             "build/app/outputs/flutter-apk/app-release.apk" `
-            --title "Auto sync $date" `
+            --title "Auto sync $tag" `
             --notes "Automatic sync of YouTube extraction files from upstream Musify (branch: ${{ steps.download.outputs.branch }}), pagination patch reapplied and rebuilt successfully."
 
           # A previous failure is no longer relevant once a sync succeeds.

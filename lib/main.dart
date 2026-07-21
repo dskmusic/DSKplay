@@ -41,11 +41,13 @@ import 'package:musify/services/playlist_sharing.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/router_service.dart';
 import 'package:musify/services/settings_manager.dart';
+import 'package:musify/services/update_manager.dart';
 import 'package:musify/theme/app_themes.dart';
 import 'package:musify/utilities/flutter_toast.dart';
 import 'package:musify/utilities/language_utils.dart';
 import 'package:musify/utilities/playlist_utils.dart';
 import 'package:musify/utilities/sharing_intent.dart';
+import 'package:musify/widgets/update_dialog.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
@@ -162,6 +164,15 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
         stackTrace: stackTrace,
       );
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkForUpdateSilently());
+  }
+
+  Future<void> _checkForUpdateSilently() async {
+    final info = await checkForUpdate();
+    if (info == null) return;
+    final context = NavigationManager().context;
+    if (context.mounted) await showUpdateAvailableDialog(context, info);
   }
 
   @override

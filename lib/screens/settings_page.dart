@@ -34,6 +34,7 @@ import 'package:musify/services/playlist_download_service.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/router_service.dart';
 import 'package:musify/services/settings_manager.dart';
+import 'package:musify/services/update_manager.dart';
 import 'package:musify/theme/app_colors.dart';
 import 'package:musify/theme/app_themes.dart';
 import 'package:musify/utilities/flutter_bottom_sheet.dart';
@@ -45,6 +46,7 @@ import 'package:musify/widgets/confirmation_dialog.dart';
 import 'package:musify/widgets/custom_bar.dart';
 import 'package:musify/widgets/mini_player_bottom_space.dart';
 import 'package:musify/widgets/section_header.dart';
+import 'package:musify/widgets/update_dialog.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -560,6 +562,16 @@ class SettingsPage extends StatelessWidget {
           onTap: () async => showToast(context, await logger.copyLogs(context)),
         ),
         CustomBar(
+          context.l10n!.checkForUpdates,
+          FluentIcons.arrow_sync_24_regular,
+          onTap: () => _checkForUpdates(context),
+        ),
+        CustomBar(
+          context.l10n!.runManualBuild,
+          FluentIcons.play_24_regular,
+          onTap: () => launchURL(workflowRunUrl),
+        ),
+        CustomBar(
           context.l10n!.about,
           FluentIcons.book_information_24_regular,
           borderRadius: commonCustomBarRadiusLast,
@@ -567,6 +579,16 @@ class SettingsPage extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Future<void> _checkForUpdates(BuildContext context) async {
+    final info = await checkForUpdate(ignoreDismissed: true);
+    if (!context.mounted) return;
+    if (info == null) {
+      showToast(context, context.l10n!.noUpdatesAvailable);
+      return;
+    }
+    await showUpdateAvailableDialog(context, info);
   }
 
   void _showAccentColorPicker(BuildContext context) {
