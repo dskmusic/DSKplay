@@ -743,8 +743,14 @@ Future<LyricsResult?> getSongLyrics(String? artist, String title) async {
 // Normalizes whitespace in a fetched lyrics result. Also applied to
 // results the user manually picks from the lyrics search picker.
 LyricsResult cleanLyricsResult(LyricsResult result) {
-  var plainText = result.plainText.replaceAll(RegExp(r'\n{4}'), '\n\n');
+  // Strips lines like "© music.163.com" that some lyrics sources tack on.
+  var plainText = result.plainText
+      .split('\n')
+      .where((line) => !line.contains('©'))
+      .join('\n');
+  plainText = plainText.replaceAll(RegExp(r'\n{4}'), '\n\n');
   plainText = plainText.replaceAll(RegExp(r'\n{2}'), '\n');
+  plainText = plainText.trim();
   return LyricsResult(
     plainText: plainText,
     source: result.source,

@@ -199,7 +199,7 @@ class LyricsManager {
 
         candidates.add(
           LyricsResult(
-            plainText: addCopyright(plainText, 'lrclib.net'),
+            plainText: plainText,
             syncedLines: syncedLines,
             source: 'lrclib',
             label: label,
@@ -306,7 +306,7 @@ class LyricsManager {
       ].where((s) => s.isNotEmpty).join(' - ');
 
       return LyricsResult(
-        plainText: addCopyright(plainText, 'music.163.com'),
+        plainText: plainText,
         syncedLines: syncedLines,
         source: 'netease',
         label: label,
@@ -385,7 +385,7 @@ class LyricsManager {
     ].where((s) => s.isNotEmpty).join(' - ');
 
     return LyricsResult(
-      plainText: addCopyright(lyrics, 'genius.com'),
+      plainText: lyrics,
       source: 'genius',
       label: label,
     );
@@ -506,7 +506,7 @@ class LyricsManager {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         final lyrics = json['lyrics'] as String?;
         if (lyrics != null && lyrics.isNotEmpty) {
-          return addCopyright(lyrics, 'lyrics.ovh');
+          return lyrics;
         }
       }
     } catch (e) {
@@ -540,11 +540,7 @@ class LyricsManager {
           if (lyricsLines.length > 1) {
             lyricsLines.removeAt(0);
 
-            final finalLyrics = addCopyright(
-              lyricsLines.join('\n'),
-              'www.paroles.net',
-            );
-            return _removeSpaces(finalLyrics);
+            return _removeSpaces(lyricsLines.join('\n'));
           }
         }
       }
@@ -576,10 +572,7 @@ class LyricsManager {
         final lyricsBodyElements = document.querySelectorAll('.lyrics-body');
 
         if (lyricsBodyElements.isNotEmpty) {
-          return addCopyright(
-            lyricsBodyElements.first.text,
-            'www.lyricsmania.com',
-          );
+          return lyricsBodyElements.first.text;
         }
       }
     } catch (e) {
@@ -618,9 +611,5 @@ class LyricsManager {
 
   String _removeSpaces(String input) {
     return input.replaceAll(RegExp(' {2,}'), ' ');
-  }
-
-  String addCopyright(String input, String copyright) {
-    return '$input\n\n© $copyright';
   }
 }
