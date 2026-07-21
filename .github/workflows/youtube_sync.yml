@@ -1,0 +1,206 @@
+name: YouTube sync & release
+
+# Runs once a day to pick up fixes from the upstream Musify repo for the
+# YouTube extraction files (the same ones update_youtube_libs.bat handles
+# locally), reapplies our artist-catalog pagination patch, and only builds
+# + releases a signed APK if that patch and the build both succeed.
+#
+# "Big change" (needs manual review) means exactly one of:
+#   - the patch script couldn't find its anchor points in the new
+#     music_client.dart, or
+#   - the release build failed after updating the files.
+# It is never based on how large the upstream diff is.
+#
+# workflow_dispatch always forces a release build even if nothing changed
+# upstream, for cutting a release on demand.
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: youtube-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+
+env:
+  UPSTREAM_REPO: gokadzev/Musify
+  MUSIC_CLIENT_PATH: packages/youtube_music_explode_dart/lib/src/music_client.dart
+
+jobs:
+  sync:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download current upstream files
+        id: download
+        shell: pwsh
+        run: |
+          $branch = try {
+            (Invoke-RestMethod "https://api.github.com/repos/$env:UPSTREAM_REPO").default_branch
+          } catch { $null }
+          if ([string]::IsNullOrWhiteSpace($branch)) { $branch = "master" }
+          Write-Host "Upstream default branch: $branch"
+          $baseUrl = "https://raw.githubusercontent.com/$env:UPSTREAM_REPO/$branch"
+
+          $files = @(
+            "packages/youtube_explode_dart/lib/src/reverse_engineering/youtube_http_client.dart",
+            "packages/youtube_explode_dart/lib/src/reverse_engineering/player/player_response.dart",
+            "packages/youtube_explode_dart/lib/src/reverse_engineering/player/player_source.dart",
+            "packages/youtube_explode_dart/lib/src/reverse_engineering/cipher/cipher_manifest.dart",
+            "packages/youtube_explode_dart/lib/src/reverse_engineering/cipher/cipher_operations.dart",
+            "packages/youtube_explode_dart/lib/src/reverse_engineering/challenges/js_challenge.dart",
+            "packages/youtube_explode_dart/lib/src/reverse_engineering/challenges/ejs/base_ejs_solver.dart",
+            "packages/youtube_explode_dart/lib/src/reverse_engineering/challenges/ejs/deno_ejs_solver.dart",
+            "packages/youtube_explode_dart/lib/src/reverse_engineering/challenges/ejs/ejs.dart",
+            "packages/youtube_explode_dart/lib/src/reverse_engineering/challenges/ejs/ejs_modules.g.dart",
+            "packages/youtube_explode_dart/lib/src/reverse_engineering/pages/search_page.dart",
+            "packages/youtube_explode_dart/lib/src/reverse_engineering/pages/watch_page.dart",
+            "packages/youtube_explode_dart/lib/src/reverse_engineering/pages/playlist_page.dart",
+            "packages/youtube_explode_dart/lib/src/reverse_engineering/pages/channel_page.dart",
+            "packages/youtube_explode_dart/lib/src/reverse_engineering/pages/channel_upload_page.dart",
+            "packages/youtube_explode_dart/lib/src/reverse_engineering/pages/channel_about_page.dart",
+            "packages/youtube_explode_dart/lib/src/reverse_engineering/dash_manifest.dart",
+            "packages/youtube_explode_dart/lib/src/reverse_engineering/hls_manifest.dart",
+            "$env:MUSIC_CLIENT_PATH"
+          )
+
+          foreach ($f in $files) {
+            Invoke-WebRequest -Uri "$baseUrl/$f" -OutFile $f -UseBasicParsing
+          }
+
+          $forced = "${{ github.event_name }}" -eq "workflow_dispatch"
+          $paths = $files -join ' '
+          git diff --quiet -- $paths
+          $hasDiff = $LASTEXITCODE -ne 0
+          $changed = $forced -or $hasDiff
+
+          Write-Host "Forced (manual trigger): $forced"
+          Write-Host "Upstream files actually changed: $hasDiff"
+          "changed=$changed" >> $env:GITHUB_OUTPUT
+          "branch=$branch" >> $env:GITHUB_OUTPUT
+
+      - name: Reapply artist-catalog pagination patch
+        id: patch
+        if: steps.download.outputs.changed == 'true'
+        shell: pwsh
+        run: |
+          .\patch_music_client.ps1 -FilePath "$env:MUSIC_CLIENT_PATH"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::The pagination patch could not be reapplied automatically - this needs manual review."
+            exit 1
+          }
+
+      - name: Set up Java
+        if: steps.download.outputs.changed == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        if: steps.download.outputs.changed == 'true'
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.6'
+          channel: stable
+
+      - name: Configure release signing
+        if: steps.download.outputs.changed == 'true'
+        shell: pwsh
+        run: |
+          @"
+          storePassword=$env:KEYSTORE_PASSWORD
+          keyPassword=$env:KEY_PASSWORD
+          keyAlias=$env:KEY_ALIAS
+          "@ | Set-Content -Path android/key.properties -NoNewline
+
+          $bytes = [Convert]::FromBase64String($env:KEYSTORE_BASE64)
+          [IO.File]::WriteAllBytes("android/app/key.jks", $bytes)
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+
+      - name: flutter pub get
+        if: steps.download.outputs.changed == 'true'
+        run: flutter pub get
+
+      - name: Build signed release APK
+        id: build
+        if: steps.download.outputs.changed == 'true'
+        shell: pwsh
+        run: |
+          flutter build apk --release
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::Release build failed after updating the YouTube extraction files - this needs manual review."
+            exit 1
+          }
+
+      - name: Commit synced files
+        if: steps.download.outputs.changed == 'true' && steps.build.outcome == 'success'
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add packages/youtube_explode_dart packages/youtube_music_explode_dart
+          git diff --staged --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "chore: sync YouTube extraction fixes from upstream Musify (auto)"
+            git push
+          } else {
+            Write-Host "Nothing to commit (manual trigger with no upstream changes)."
+          }
+
+      - name: Publish release
+        if: steps.download.outputs.changed == 'true' && steps.build.outcome == 'success'
+        shell: pwsh
+        run: |
+          $date = Get-Date -Format "yyyy.MM.dd"
+          $tag = "auto-sync-$date-${{ github.run_number }}"
+          gh release create $tag `
+            "build/app/outputs/flutter-apk/app-release.apk" `
+            --title "Auto sync $date" `
+            --notes "Automatic sync of YouTube extraction files from upstream Musify (branch: ${{ steps.download.outputs.branch }}), pagination patch reapplied and rebuilt successfully."
+
+          # A previous failure is no longer relevant once a sync succeeds.
+          $openIssue = gh issue list --label youtube-sync-failure --state open --json number --jq '.[0].number'
+          if ($openIssue) {
+            gh issue comment $openIssue --body "Resolved by a successful sync: $tag"
+            gh issue close $openIssue
+          }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Report failure loudly
+        if: failure()
+        shell: pwsh
+        run: |
+          $body = @"
+          The automatic YouTube sync found upstream changes but could **not** finish safely, so nothing was built or released.
+
+          - Patch step: ${{ steps.patch.outcome }}
+          - Build step: ${{ steps.build.outcome }}
+          - Upstream branch checked: ${{ steps.download.outputs.branch }}
+          - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          This means the upstream files changed enough that simply replacing them and reapplying the pagination patch didn't work. **Needs manual review.**
+          "@
+
+          $existing = gh issue list --label youtube-sync-failure --state open --json number --jq '.[0].number'
+          if ($existing) {
+            gh issue comment $existing --body $body
+          } else {
+            gh issue create --title "YouTube sync needs manual review" --label youtube-sync-failure --body $body
+          }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
