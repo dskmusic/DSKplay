@@ -25,17 +25,19 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:musify/services/data_manager.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
-
-// Baked into the APK at build time by the release workflow
-// (--dart-define=APP_BUILD_TAG=<tag>). Empty on local/dev builds, which
-// disables update checks there since there's nothing to compare against.
-const appBuildTag = String.fromEnvironment('APP_BUILD_TAG');
 
 const _repo = 'dskmusic/DSKplay';
 final workflowRunUrl = Uri.parse(
   'https://github.com/$_repo/actions/workflows/youtube_sync.yml',
 );
+
+// Matches the "BuildNumber: <n>" line the release workflow writes into every
+// release body, so updates can be detected the same way whether the
+// currently-installed APK came from CI or from a local `flutter build` -
+// both stamp the real pubspec build number as the Android versionCode.
+final _buildNumberPattern = RegExp(r'BuildNumber:\s*(\d+)');
 
 class UpdateInfo {
   const UpdateInfo({
@@ -50,8 +52,6 @@ class UpdateInfo {
 }
 
 Future<UpdateInfo?> checkForUpdate({bool ignoreDismissed = false}) async {
-  if (appBuildTag.isEmpty) return null;
-
   try {
     final response = await http.get(
       Uri.parse('https://api.github.com/repos/$_repo/releases/latest'),
@@ -60,7 +60,18 @@ Future<UpdateInfo?> checkForUpdate({bool ignoreDismissed = false}) async {
 
     final data = jsonDecode(response.body) as Map;
     final tag = data['tag_name'] as String?;
-    if (tag == null || tag == appBuildTag) return null;
+    if (tag == null) return null;
+
+    final remoteBuild = int.tryParse(
+      _buildNumberPattern.firstMatch(data['body'] as String? ?? '')
+              ?.group(1) ??
+          '',
+    );
+    if (remoteBuild == null) return null;
+
+    final packageInfo = await PackageInfo.fromPlatform();
+    final localBuild = int.tryParse(packageInfo.buildNumber);
+    if (localBuild != null && remoteBuild <= localBuild) return null;
 
     if (!ignoreDismissed) {
       final dismissed = await getData('settings', 'dismissedUpdateTag');

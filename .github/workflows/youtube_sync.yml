@@ -151,6 +151,7 @@ jobs:
           "tag=auto-sync-$date-${{ github.run_number }}" >> $env:GITHUB_OUTPUT
 
       - name: Bump build number
+        id: bump
         if: steps.download.outputs.changed == 'true'
         shell: pwsh
         run: |
@@ -160,7 +161,9 @@ jobs:
             $build = [int]$matches[2] + 1
             $pubspec = $pubspec -replace 'version:\s*[\d.]+\+\d+', "version: $verNum+$build"
             Set-Content -Path pubspec.yaml -Value $pubspec -NoNewline
-            Set-Content -Path lib/constants/version.dart -Value "const appVersion = '$verNum';`n" -NoNewline
+            Set-Content -Path lib/constants/version.dart -Value "const appVersion = '$verNum';"
+            "verNum=$verNum" >> $env:GITHUB_OUTPUT
+            "build=$build" >> $env:GITHUB_OUTPUT
           }
 
       - name: Build signed release APK
@@ -168,7 +171,7 @@ jobs:
         if: steps.download.outputs.changed == 'true'
         shell: pwsh
         run: |
-          flutter build apk --release --dart-define=APP_BUILD_TAG=${{ steps.tag.outputs.tag }}
+          flutter build apk --release
           if ($LASTEXITCODE -ne 0) {
             Write-Host "::error::Release build failed after updating the YouTube extraction files - this needs manual review."
             exit 1
@@ -194,10 +197,17 @@ jobs:
         shell: pwsh
         run: |
           $tag = "${{ steps.tag.outputs.tag }}"
+          $verNum = "${{ steps.bump.outputs.verNum }}"
+          $build = "${{ steps.bump.outputs.build }}"
+          $notes = @"
+          Automatic sync of YouTube extraction files from upstream Musify (branch: ${{ steps.download.outputs.branch }}), pagination patch reapplied and rebuilt successfully.
+
+          BuildNumber: $build
+          "@
           gh release create $tag `
             "build/app/outputs/flutter-apk/app-release.apk" `
-            --title "Auto sync $tag" `
-            --notes "Automatic sync of YouTube extraction files from upstream Musify (branch: ${{ steps.download.outputs.branch }}), pagination patch reapplied and rebuilt successfully."
+            --title "DSK Play v$verNum (build $build)" `
+            --notes $notes
 
           # A previous failure is no longer relevant once a sync succeeds.
           $openIssue = gh issue list --label youtube-sync-failure --state open --json number --jq '.[0].number'
