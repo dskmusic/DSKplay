@@ -1012,7 +1012,11 @@ class _ArtworkDisplay extends StatelessWidget {
     return ValueListenableBuilder<bool>(
       valueListenable: offlineStatus,
       builder: (_, isOffline, __) {
-        if (isOffline && artworkPath != null) {
+        // Local files (browsed via the Local files tab) also have a real
+        // artworkPath even though they're never in the offline-downloads
+        // library, so this doesn't gate on isOffline - any populated local
+        // artwork path should be shown as a local file image.
+        if (artworkPath != null && artworkPath!.isNotEmpty) {
           return _OfflineArtwork(
             artworkPath: artworkPath!,
             size: size,
