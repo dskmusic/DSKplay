@@ -19,8 +19,11 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
+import 'dart:io';
+
 import 'package:musify/services/audio_service.dart';
 import 'package:musify/services/common_services.dart';
+import 'package:musify/services/local_files_service.dart';
 import 'package:musify/utilities/formatter.dart';
 
 final _youtubeLinkRegex = RegExp(r'(youtube\.com|youtu\.be)');
@@ -66,4 +69,30 @@ Future<void> consumeYoutubeSharedTextIntent(
     audioHandler: audioHandler,
     onError: onError,
   );
+}
+
+/// Plays an audio file opened or shared from another app (e.g. "Open with"
+/// or "Share" from a file manager), using the same local-file pipeline as
+/// the Local files tab.
+Future<void> consumeSharedAudioFile(
+  String? path, {
+  required MusifyAudioHandler audioHandler,
+  required void Function(Object error, StackTrace stackTrace) onError,
+}) async {
+  if (path == null || path.isEmpty || !isAudioFile(path)) return;
+
+  final file = File(path);
+  if (!file.existsSync()) return;
+
+  try {
+    final song = await buildLocalSongMap(file);
+    await audioHandler.playPlaylistSong(
+      playlist: {
+        'list': [song],
+      },
+      songIndex: 0,
+    );
+  } catch (e, stackTrace) {
+    onError(e, stackTrace);
+  }
 }

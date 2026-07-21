@@ -88,6 +88,22 @@
                 <data android:mimeType="text/*" />
             </intent-filter>
 
+            <!-- Intent filter for opening a local audio file directly, e.g.
+                 "Open with" from a file manager -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="audio/*" />
+                <data android:scheme="file" android:mimeType="audio/*" />
+            </intent-filter>
+
+            <!-- Intent filter for sharing a local audio file to this app -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+
             <!-- Intent filter for handling YouTube links -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

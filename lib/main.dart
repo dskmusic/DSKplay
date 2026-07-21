@@ -54,6 +54,7 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
 late MusifyAudioHandler audioHandler;
 late StreamSubscription<String?> sharingIntentSubscription;
+late StreamSubscription<List<SharedMediaFile>> sharedMediaSubscription;
 
 final logger = Logger();
 final appLinks = AppLinks();
@@ -150,6 +151,43 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
       },
     );
 
+    sharedMediaSubscription = ReceiveSharingIntent.getMediaStream().listen(
+      (List<SharedMediaFile> mediaList) async {
+        for (final media in mediaList) {
+          await consumeSharedAudioFile(
+            media.path,
+            audioHandler: audioHandler,
+            onError: (error, stackTrace) {
+              logger.log(
+                'Error while playing opened/shared audio file:',
+                error: error,
+                stackTrace: stackTrace,
+              );
+            },
+          );
+        }
+      },
+      onError: (err) {
+        logger.log('getMediaStream error:', error: err);
+      },
+    );
+
+    ReceiveSharingIntent.getInitialMedia().then((mediaList) async {
+      for (final media in mediaList) {
+        await consumeSharedAudioFile(
+          media.path,
+          audioHandler: audioHandler,
+          onError: (error, stackTrace) {
+            logger.log(
+              'Error while playing initial shared audio file:',
+              error: error,
+              stackTrace: stackTrace,
+            );
+          },
+        );
+      }
+    });
+
     try {
       LicenseRegistry.addLicense(() async* {
         final license = await rootBundle.loadString(
@@ -199,6 +237,7 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
 
     Hive.close();
     sharingIntentSubscription.cancel();
+    sharedMediaSubscription.cancel();
     super.dispose();
   }
 
