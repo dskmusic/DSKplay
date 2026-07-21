@@ -24,6 +24,19 @@ import 'package:musify/services/common_services.dart';
 
 Map mediaItemToMap(MediaItem mediaItem) {
   final extras = mediaItem.extras;
+
+  // 'artWorkPath' always has a value (mapToMediaItem falls back to
+  // highResImage when there's no real local file), so only carry it over
+  // as 'artworkPath' when it's an actual local file path, not that
+  // fallback URL - otherwise a local file's artwork would work, but every
+  // online song would end up with its highResImage URL mistaken for a
+  // local file path wherever 'artworkPath' is read (e.g. SongBar).
+  final rawArtworkPath = extras?['artWorkPath']?.toString();
+  final isLocalArtworkFile =
+      rawArtworkPath != null &&
+      rawArtworkPath.isNotEmpty &&
+      !rawArtworkPath.startsWith('http');
+
   return {
     'id': mediaItem.id,
     'ytid': extras?['ytid'],
@@ -35,6 +48,7 @@ Map mediaItemToMap(MediaItem mediaItem) {
     'highResImage': extras?['highResImage'] ?? mediaItem.artUri.toString(),
     'lowResImage': extras?['lowResImage'],
     'isLive': extras?['isLive'] ?? false,
+    if (isLocalArtworkFile) 'artworkPath': rawArtworkPath,
   };
 }
 
