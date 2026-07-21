@@ -40,6 +40,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Ensure failure-tracking label exists
+        shell: pwsh
+        run: |
+          gh label create youtube-sync-failure --color b60205 --description "YouTube sync needs manual review" --force
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Download current upstream files
         id: download
         shell: pwsh

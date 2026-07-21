@@ -567,11 +567,6 @@ class SettingsPage extends StatelessWidget {
           onTap: () => _checkForUpdates(context),
         ),
         CustomBar(
-          context.l10n!.runManualBuild,
-          FluentIcons.play_24_regular,
-          onTap: () => launchURL(workflowRunUrl),
-        ),
-        CustomBar(
           context.l10n!.about,
           FluentIcons.book_information_24_regular,
           borderRadius: commonCustomBarRadiusLast,

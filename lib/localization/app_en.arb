@@ -240,6 +240,7 @@
   "restoreUserData": "Restore user data",
   "restoredSuccess": "Data restored successfully",
   "runManualBuild": "Run manual build on GitHub",
+  "runManualBuildConfirm": "This will trigger a new automatic build and release on GitHub Actions.",
   "save": "Save",
   "savedToDevice": "Saved to",
   "search": "Search",

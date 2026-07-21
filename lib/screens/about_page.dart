@@ -19,16 +19,61 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:musify/constants/app_constants.dart';
 import 'package:musify/constants/version.dart';
 import 'package:musify/extensions/l10n.dart';
+import 'package:musify/services/update_manager.dart';
 import 'package:musify/utilities/url_launcher.dart';
+import 'package:musify/widgets/confirmation_dialog.dart';
 import 'package:musify/widgets/mini_player_bottom_space.dart';
 
-class AboutPage extends StatelessWidget {
+class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
+
+  @override
+  State<AboutPage> createState() => _AboutPageState();
+}
+
+class _AboutPageState extends State<AboutPage> {
+  Timer? _versionLongPressTimer;
+
+  void _startVersionLongPress() {
+    _versionLongPressTimer = Timer(
+      const Duration(seconds: 2),
+      _confirmManualBuild,
+    );
+  }
+
+  void _cancelVersionLongPress() {
+    _versionLongPressTimer?.cancel();
+    _versionLongPressTimer = null;
+  }
+
+  void _confirmManualBuild() {
+    _versionLongPressTimer = null;
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => ConfirmationDialog(
+        confirmationMessage: dialogContext.l10n!.runManualBuildConfirm,
+        submitMessage: dialogContext.l10n!.runManualBuild,
+        onCancel: () => Navigator.pop(dialogContext),
+        onSubmit: () {
+          Navigator.pop(dialogContext);
+          launchURL(workflowRunUrl);
+        },
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _versionLongPressTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,24 +108,31 @@ class AboutPage extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 7,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.secondaryContainer,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Text(
-                      'v$appVersion',
-                      style: TextStyle(
+                  GestureDetector(
+                    onTapDown: (_) => _startVersionLongPress(),
+                    onTapUp: (_) => _cancelVersionLongPress(),
+                    onTapCancel: _cancelVersionLongPress,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSecondaryContainer,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.2,
+                        ).colorScheme.secondaryContainer,
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: Text(
+                        'v$appVersion',
+                        style: TextStyle(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSecondaryContainer,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.2,
+                        ),
                       ),
                     ),
                   ),
