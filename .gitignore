@@ -62,12 +62,13 @@ lib/localization/untranslated.json
 
 # Personal notes / local backups / scratch files (not part of the project)
 .. backup/
-Compilar release y backup.txt
+Instrucciones pre cambios y compilar.txt
 Repo original Musify versión 10.1.1.url
 releases.lnk
 scripts/splash_check*.png
 subir_cambios.bat
 bajar_cambios.bat
+comparar_con_original.pyw
 packages/**/*.dart.bak
 packages/**/*.tu_version_actual
 *.rar
