@@ -98,3 +98,4 @@ $patched = $patched.Substring(0, $helperIdx2) + $helperMethods + $patched.Substr
 
 Set-Content -LiteralPath $FilePath -Value $patched -NoNewline
 Write-Host "  Parche de paginacion de discografia aplicado automaticamente a music_client.dart."
+exit 0
