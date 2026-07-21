@@ -70,6 +70,7 @@ scripts/splash_check*.png
 subir_cambios.bat
 bajar_cambios.bat
 comparar_con_original.pyw
+GUIA_DSKPLAY.pyw
 packages/**/*.dart.bak
 packages/**/*.tu_version_actual
 *.rar

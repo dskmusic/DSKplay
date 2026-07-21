@@ -134,8 +134,21 @@ dynamic nextRecommendedSong;
 var _songLikeUpdateToken = 0;
 final _latestSongLikeUpdateTokens = <String, int>{};
 
-final lyrics = ValueNotifier<LyricsResult?>(null);
-String? lastFetchedLyrics;
+// Keyed by ytid (falling back to "artist|title" when there's none), so
+// re-showing the lyrics of a song already fetched this session - e.g.
+// after switching tabs and coming back - is instant instead of
+// re-searching every source again. Also used to remember a lyrics result
+// the user manually picked from the search picker.
+final Map<String, LyricsResult?> _lyricsCache = {};
+
+String lyricsCacheKeyFor(String? songId, String? artist, String title) =>
+    (songId != null && songId.isNotEmpty) ? songId : '${artist ?? ''}|$title';
+
+LyricsResult? getCachedLyrics(String cacheKey) => _lyricsCache[cacheKey];
+
+void cacheLyricsResult(String cacheKey, LyricsResult? result) {
+  _lyricsCache[cacheKey] = result;
+}
 
 void reloadSongLibraryStateFromStorage() {
   final userBox = Hive.box('user');
@@ -723,21 +736,22 @@ Future<Map<String, dynamic>> getSongDetails(
   }
 }
 
-Future<LyricsResult?> getSongLyrics(String? artist, String title) async {
+Future<LyricsResult?> getSongLyrics(
+  String? artist,
+  String title, {
+  String? songId,
+}) async {
   if (artist == null) return null;
-  if (lastFetchedLyrics != '$artist - $title') {
-    lyrics.value = null;
-    final result = await LyricsManager().fetchLyrics(artist, title);
-    if (result == null) return null;
 
-    final cleanedResult = cleanLyricsResult(result);
-    lyrics.value = cleanedResult;
-
-    lastFetchedLyrics = '$artist - $title';
-    return cleanedResult;
+  final cacheKey = lyricsCacheKeyFor(songId, artist, title);
+  if (_lyricsCache.containsKey(cacheKey)) {
+    return _lyricsCache[cacheKey];
   }
 
-  return lyrics.value;
+  final result = await LyricsManager().fetchLyrics(artist, title);
+  final cleanedResult = result != null ? cleanLyricsResult(result) : null;
+  cacheLyricsResult(cacheKey, cleanedResult);
+  return cleanedResult;
 }
 
 // Normalizes whitespace in a fetched lyrics result. Also applied to

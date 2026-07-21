@@ -129,9 +129,15 @@ class _LyricsBackContent extends StatefulWidget {
 class _LyricsBackContentState extends State<_LyricsBackContent> {
   late Future<LyricsResult?> _lyricsFuture;
   bool _karaokeEnabled = false;
-  // Set when the user picks a specific match from the results picker,
-  // taking priority over whatever the automatic search resolved to.
-  LyricsResult? _manualOverride;
+
+  // Keyed by ytid so switching tabs and coming back to the same song (or
+  // even a full rebuild of this widget) reuses whatever was already
+  // fetched/picked this session instead of searching again from scratch.
+  String get _cacheKey => lyricsCacheKeyFor(
+    widget.metadata.extras?['ytid'] as String?,
+    widget.metadata.artist,
+    widget.metadata.title,
+  );
 
   @override
   void initState() {
@@ -139,6 +145,7 @@ class _LyricsBackContentState extends State<_LyricsBackContent> {
     _lyricsFuture = getSongLyrics(
       widget.metadata.artist,
       widget.metadata.title,
+      songId: widget.metadata.extras?['ytid'] as String?,
     );
   }
 
@@ -150,9 +157,9 @@ class _LyricsBackContentState extends State<_LyricsBackContent> {
       _lyricsFuture = getSongLyrics(
         widget.metadata.artist,
         widget.metadata.title,
+        songId: widget.metadata.extras?['ytid'] as String?,
       );
       _karaokeEnabled = false;
-      _manualOverride = null;
     }
   }
 
@@ -163,8 +170,9 @@ class _LyricsBackContentState extends State<_LyricsBackContent> {
       title: widget.metadata.title,
       onSelected: (picked) {
         final cleaned = cleanLyricsResult(picked);
+        cacheLyricsResult(_cacheKey, cleaned);
         setState(() {
-          _manualOverride = cleaned;
+          _lyricsFuture = Future.value(cleaned);
           _karaokeEnabled = cleaned.hasSyncedLyrics;
         });
       },
@@ -174,10 +182,6 @@ class _LyricsBackContentState extends State<_LyricsBackContent> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-
-    if (_manualOverride != null) {
-      return _buildLyricsContent(context, colorScheme, _manualOverride);
-    }
 
     return AsyncLoader<LyricsResult?>(
       future: _lyricsFuture,
@@ -400,6 +404,12 @@ class _LyricsBackContentState extends State<_LyricsBackContent> {
               color: colorScheme.onSecondaryContainer,
             ),
             textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: () => _openResultsPicker(context),
+            icon: const Icon(FluentIcons.search_24_regular, size: 18),
+            label: Text(context.l10n!.searchLyrics),
           ),
         ],
       ),
