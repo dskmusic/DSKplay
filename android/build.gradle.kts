@@ -40,6 +40,14 @@ subprojects {
                 targetCompatibility = JavaVersion.VERSION_17
             }
         }
+        // Forcing the Java target above without also aligning Kotlin's own
+        // target makes Kotlin's Gradle plugin fail the build outright
+        // ("Inconsistent JVM Target Compatibility") for any module that
+        // mixes Java and Kotlin sources, since its Kotlin tasks would still
+        // default to their plugin's old target (usually 1.8).
+        tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+            compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
     }
 }
 
