@@ -70,3 +70,4 @@ subir_cambios.bat
 bajar_cambios.bat
 packages/**/*.dart.bak
 packages/**/*.tu_version_actual
+*.rar

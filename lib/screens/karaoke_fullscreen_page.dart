@@ -24,6 +24,8 @@ import 'package:flutter/material.dart';
 import 'package:musify/services/lyrics_manager.dart';
 import 'package:musify/services/settings_manager.dart';
 import 'package:musify/widgets/now_playing/karaoke_lyrics_view.dart';
+import 'package:musify/widgets/playback_icon_button.dart';
+import 'package:musify/widgets/position_slider.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 // Fullscreen lyrics view, mainly meant for karaoke mode: keeps the screen
@@ -110,7 +112,62 @@ class _KaraokeFullscreenPageState extends State<KaraokeFullscreenPage> {
                       setState(() => _karaokeEnabled = !_karaokeEnabled),
                 ),
               ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _FullscreenTransportBar(colorScheme: colorScheme),
+            ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FullscreenTransportBar extends StatelessWidget {
+  const _FullscreenTransportBar({required this.colorScheme});
+  final ColorScheme colorScheme;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.black.withValues(alpha: 0),
+            Colors.black.withValues(alpha: 0.35),
+          ],
+        ),
+      ),
+      child: DefaultTextStyle.merge(
+        style: const TextStyle(color: Colors.white),
+        child: Theme(
+          data: theme.copyWith(
+            sliderTheme: theme.sliderTheme.copyWith(
+              activeTrackColor: Colors.white,
+              inactiveTrackColor: Colors.white24,
+              thumbColor: Colors.white,
+              overlayColor: Colors.white24,
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              PlaybackIconButton(
+                iconSize: 24,
+                iconColor: Colors.white,
+                backgroundColor: Colors.white.withValues(alpha: 0.2),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(child: PositionSlider()),
+            ],
+          ),
         ),
       ),
     );

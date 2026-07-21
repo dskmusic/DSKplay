@@ -27,11 +27,19 @@ subprojects {
 // to fully evaluate very early, so calling `afterEvaluate` on it here would
 // throw ("project already evaluated") - and :app doesn't need this fix
 // anyway since it sets its own compileSdk directly.
+// Same story for Java compatibility: several plugins still default to the
+// long-obsolete Java 8 source/target, which just prints noisy "obsolete"
+// javac warnings on every build. Align them with :app's own Java 17.
 subprojects {
     if (name == "app") return@subprojects
     afterEvaluate {
-        extensions.findByType(com.android.build.gradle.LibraryExtension::class.java)
-            ?.compileSdk = 36
+        extensions.findByType(com.android.build.gradle.LibraryExtension::class.java)?.apply {
+            compileSdk = 36
+            compileOptions {
+                sourceCompatibility = JavaVersion.VERSION_17
+                targetCompatibility = JavaVersion.VERSION_17
+            }
+        }
     }
 }
 
