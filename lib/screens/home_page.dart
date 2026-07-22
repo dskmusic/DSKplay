@@ -73,6 +73,15 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  void _refreshSuggestedPlaylists() {
+    if (!mounted) return;
+    setState(() {
+      _suggestedPlaylistsFuture = getPlaylists(
+        playlistsNum: recommendedCubesNumber,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final playlistHeight = MediaQuery.sizeOf(context).height * 0.25 / 1.1;
@@ -170,6 +179,13 @@ class _HomePageState extends State<HomePage> {
           icon: showOnlyLiked
               ? FluentIcons.heart_24_filled
               : FluentIcons.list_24_filled,
+          actionButton: showOnlyLiked
+              ? null
+              : IconButton(
+                  icon: const Icon(FluentIcons.arrow_clockwise_24_regular),
+                  tooltip: 'Actualizar sugerencias',
+                  onPressed: _refreshSuggestedPlaylists,
+                ),
         ),
         ConstrainedBox(
           constraints: BoxConstraints(maxHeight: playlistHeight),

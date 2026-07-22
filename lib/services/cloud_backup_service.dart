@@ -41,8 +41,14 @@ class CloudBackupService {
   bool _ready = false;
   Timer? _debounceTimer;
   Timer? _periodicTimer;
+  Future<void>? _initFuture;
 
-  Future<void> init() async {
+  /// Idempotent: safe to call from multiple places (app bootstrap fires it
+  /// without awaiting, while upload/download/timestamp calls await it here
+  /// to avoid racing ahead of Firebase auth on a cold start).
+  Future<void> init() => _initFuture ??= _doInit();
+
+  Future<void> _doInit() async {
     try {
       await Firebase.initializeApp();
       await FirebaseAuth.instance.signInAnonymously();
@@ -87,6 +93,7 @@ class CloudBackupService {
   }
 
   Future<bool> uploadBackup() async {
+    await init();
     final document = _document;
     if (document == null) return false;
 
@@ -113,6 +120,7 @@ class CloudBackupService {
   Future<({Map<String, dynamic>? data, DateTime? updatedAt})> downloadBackup({
     String? code,
   }) async {
+    await init();
     final document = _documentFor(code ?? _uid);
     if (document == null) return (data: null, updatedAt: null);
 
@@ -139,6 +147,7 @@ class CloudBackupService {
   }
 
   Future<DateTime?> getCloudBackupTimestamp() async {
+    await init();
     final document = _document;
     if (document == null) return null;
 
