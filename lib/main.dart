@@ -268,8 +268,15 @@ class _DskPlayState extends State<DskPlay> with WidgetsBindingObserver {
         return AnnotatedRegion<SystemUiOverlayStyle>(
           value: SystemUiOverlayStyle(
             statusBarColor: Colors.transparent,
-            systemNavigationBarColor: Colors.transparent,
-            systemNavigationBarContrastEnforced: true,
+            // A transparent nav bar color is silently ignored on recent
+            // Android versions (edge-to-edge enforcement), which then just
+            // falls back to a light default instead of matching the theme -
+            // an explicit color is required to reliably get a dark bar in
+            // dark theme.
+            systemNavigationBarColor: brightness == Brightness.dark
+                ? Colors.black
+                : Colors.white,
+            systemNavigationBarContrastEnforced: false,
             statusBarBrightness: brightness == Brightness.dark
                 ? Brightness.light
                 : Brightness.dark,

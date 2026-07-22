@@ -61,7 +61,7 @@ lib/localization/untranslated.json
 .tokensave/
 
 # Personal notes / local backups / scratch files (not part of the project)
-.. backup/
+.backup/
 Instrucciones pre cambios y compilar.txt
 iCompilar release local.lnk
 Repo original Musify versión 10.1.1.url
