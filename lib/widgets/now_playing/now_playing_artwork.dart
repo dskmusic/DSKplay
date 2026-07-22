@@ -141,19 +141,22 @@ class _SaveCoverButton extends StatelessWidget {
   }
 
   Future<void> _save(BuildContext context, {required bool chooseFolder}) async {
-    final granted = await ensureExportStoragePermission();
-    if (!granted) return;
-
-    var targetDir = downloadedMusicDirPath;
-    if (chooseFolder) {
-      final picked = await FilePicker.getDirectoryPath();
-      if (picked == null) return;
-      targetDir = picked;
-    } else {
-      await Directory(targetDir).create(recursive: true);
-    }
-
     try {
+      if (!await ensureExportStoragePermission()) {
+        if (context.mounted) showToast(context, context.l10n!.error);
+        return;
+      }
+
+      var targetDir = androidDownloadsDirPath;
+      if (chooseFolder) {
+        final picked = await FilePicker.getDirectoryPath();
+        if (picked == null) return;
+        targetDir = picked;
+      } else {
+        final dir = Directory(targetDir);
+        if (!await dir.exists()) await dir.create(recursive: true);
+      }
+
       final bytes = metadata.artUri?.scheme == 'file'
           ? await File(metadata.extras?['artWorkPath'] as String).readAsBytes()
           : (await http.get(metadata.artUri!)).bodyBytes;

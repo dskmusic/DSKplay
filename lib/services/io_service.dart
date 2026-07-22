@@ -30,6 +30,11 @@ const String appExternalRootPath = '/storage/emulated/0/DSKplay';
 const String offlineMusicDirPath = '$appExternalRootPath/Offline';
 const String downloadedMusicDirPath = '$appExternalRootPath/Descargas';
 
+/// The device's actual system Downloads folder (not this app's own
+/// Descargas folder above), used for saving cover images so they show up
+/// where the user expects them, alongside other downloaded files.
+const String androidDownloadsDirPath = '/storage/emulated/0/Download';
+
 late String applicationDirPath;
 
 Future<bool> ensureExportStoragePermission() async {
