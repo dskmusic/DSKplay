@@ -52,12 +52,143 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
   bool _selectionMode = false;
   final Set<String> _selectedPaths = {};
 
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+  int _searchToken = 0;
+  bool _isScanning = false;
+  String? _scanProgressPath;
+  DateTime _lastProgressUpdate = DateTime.fromMillisecondsSinceEpoch(0);
+  List<FileSystemEntity>? _searchResults;
+
+  bool _showingFavorites = false;
+  List<String> _favoriteFolders = [];
+
   bool get _canGoUp => _folderStack.isNotEmpty;
+  bool get _inOverlayMode => _isSearching || _showingFavorites;
 
   @override
   void initState() {
     super.initState();
     _checkPermission();
+    _loadFavorites();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadFavorites() async {
+    final favorites = await getFavoriteFolders();
+    if (!mounted) return;
+    setState(() => _favoriteFolders = favorites);
+  }
+
+  Future<void> _toggleFavorite(String path) async {
+    await toggleFavoriteFolder(path);
+    await _loadFavorites();
+  }
+
+  void _startSearch() {
+    setState(() {
+      _isSearching = true;
+      _showingFavorites = false;
+    });
+  }
+
+  void _stopSearch() {
+    _searchToken++;
+    setState(() {
+      _isSearching = false;
+      _searchController.clear();
+      _searchResults = null;
+      _isScanning = false;
+      _scanProgressPath = null;
+    });
+  }
+
+  void _clearSearchText() {
+    _searchToken++;
+    setState(() {
+      _searchController.clear();
+      _searchResults = null;
+      _isScanning = false;
+      _scanProgressPath = null;
+    });
+  }
+
+  void _onSearchChanged(String query) {
+    final trimmed = query.trim();
+    _searchToken++;
+    final token = _searchToken;
+
+    if (trimmed.isEmpty) {
+      setState(() {
+        _searchResults = null;
+        _isScanning = false;
+        _scanProgressPath = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _isScanning = true;
+      _scanProgressPath = null;
+      _searchResults = null;
+    });
+    _runSearch(trimmed, token);
+  }
+
+  Future<void> _runSearch(String query, int token) async {
+    final results = await searchFilesAndFolders(
+      _currentPath,
+      query,
+      isCancelled: () => token != _searchToken,
+      onProgress: (path) {
+        if (token != _searchToken || !mounted) return;
+        final now = DateTime.now();
+        if (now.difference(_lastProgressUpdate) <
+            const Duration(milliseconds: 150)) {
+          return;
+        }
+        _lastProgressUpdate = now;
+        setState(() => _scanProgressPath = path);
+      },
+    );
+    if (!mounted || token != _searchToken) return;
+    setState(() {
+      _searchResults = results;
+      _isScanning = false;
+      _scanProgressPath = null;
+    });
+  }
+
+  void _toggleFavoritesView() {
+    setState(() {
+      _showingFavorites = !_showingFavorites;
+      if (_showingFavorites) _isSearching = false;
+    });
+  }
+
+  void _navigateToFolder(String path) {
+    if (_isSearching) _stopSearch();
+    if (_showingFavorites) setState(() => _showingFavorites = false);
+    _openFolder(path);
+  }
+
+  Future<void> _playFoundFile(File file) async {
+    final siblings = await listAudioFilesInSameFolder(file);
+    final index = siblings.indexWhere((f) => f.path == file.path);
+    final songs = await buildLocalSongMaps(siblings);
+    await audioHandler.playPlaylistSong(
+      playlist: {'list': songs},
+      songIndex: index == -1 ? 0 : index,
+    );
+    if (mounted) {
+      _stopSearch();
+      setState(() => _showingFavorites = false);
+    }
   }
 
   Future<void> _checkPermission() async {
@@ -205,17 +336,25 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: !_canGoUp && !_selectionMode,
+      canPop: !_canGoUp && !_selectionMode && !_inOverlayMode,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         if (_selectionMode) {
           _exitSelectionMode();
+        } else if (_isSearching) {
+          _stopSearch();
+        } else if (_showingFavorites) {
+          setState(() => _showingFavorites = false);
         } else if (_canGoUp) {
           _goUp();
         }
       },
       child: Scaffold(
-        appBar: _selectionMode ? _buildSelectionAppBar() : _buildAppBar(),
+        appBar: _selectionMode
+            ? _buildSelectionAppBar()
+            : _isSearching
+            ? _buildSearchAppBar()
+            : _buildAppBar(),
         body: _buildBody(),
       ),
     );
@@ -223,14 +362,61 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      leading: _canGoUp
+      leading: _showingFavorites
+          ? IconButton(
+              icon: const Icon(FluentIcons.arrow_left_24_regular),
+              onPressed: () => setState(() => _showingFavorites = false),
+            )
+          : _canGoUp
           ? IconButton(
               icon: const Icon(FluentIcons.arrow_left_24_regular),
               onPressed: _goUp,
             )
           : null,
       title: Text(
-        _canGoUp ? fileNameFromPath(_currentPath) : context.l10n!.localFiles,
+        _showingFavorites
+            ? 'Favoritos'
+            : _canGoUp
+            ? fileNameFromPath(_currentPath)
+            : context.l10n!.localFiles,
+      ),
+      actions: _hasPermission != true || _showingFavorites
+          ? null
+          : [
+              IconButton(
+                icon: const Icon(FluentIcons.search_24_regular),
+                tooltip: 'Buscar',
+                onPressed: _startSearch,
+              ),
+              IconButton(
+                icon: const Icon(FluentIcons.heart_24_regular),
+                tooltip: 'Favoritos',
+                onPressed: _toggleFavoritesView,
+              ),
+            ],
+    );
+  }
+
+  PreferredSizeWidget _buildSearchAppBar() {
+    return AppBar(
+      leading: IconButton(
+        icon: const Icon(FluentIcons.arrow_left_24_regular),
+        onPressed: _stopSearch,
+      ),
+      title: TextField(
+        controller: _searchController,
+        autofocus: true,
+        decoration: InputDecoration(
+          hintText: 'Buscar carpetas o canciones...',
+          border: InputBorder.none,
+          suffixIcon: _searchController.text.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(FluentIcons.dismiss_circle_24_regular),
+                  onPressed: _clearSearchText,
+                ),
+        ),
+        onChanged: _onSearchChanged,
       ),
     );
   }
@@ -298,6 +484,14 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
       );
     }
 
+    if (_showingFavorites) {
+      return _buildFavoritesList(colorScheme);
+    }
+
+    if (_isSearching) {
+      return _buildSearchBody(colorScheme);
+    }
+
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -325,6 +519,7 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
             directory: entry,
             selectionMode: _selectionMode,
             isSelected: isSelected,
+            isFavorite: _favoriteFolders.contains(entry.path),
             onTap: () => _selectionMode
                 ? _toggleSelected(entry.path)
                 : _openFolder(entry.path),
@@ -332,6 +527,7 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
             onPlay: () => _playFolder(entry),
             onAddToQueue: () => _addFolderToQueue(entry),
             onAddToPlaylist: () => _addFolderToPlaylist(entry),
+            onToggleFavorite: () => _toggleFavorite(entry.path),
           );
         }
 
@@ -347,6 +543,135 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
       },
     );
   }
+
+  Widget _buildFavoritesList(ColorScheme colorScheme) {
+    final validFavorites = _favoriteFolders
+        .where((path) => Directory(path).existsSync())
+        .toList();
+
+    if (validFavorites.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Text(
+            'Aún no tienes carpetas favoritas. Mantén pulsada una carpeta, o '
+            'usa el menú de los tres puntos, para añadirla aquí.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: colorScheme.onSurfaceVariant),
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: validFavorites.length + 1,
+      itemBuilder: (context, index) {
+        if (index == validFavorites.length) {
+          return const MiniPlayerBottomSpace();
+        }
+        final directory = Directory(validFavorites[index]);
+        return _FolderRow(
+          directory: directory,
+          selectionMode: false,
+          isSelected: false,
+          isFavorite: true,
+          onTap: () => _navigateToFolder(directory.path),
+          onLongPress: () {},
+          onPlay: () => _playFolder(directory),
+          onAddToQueue: () => _addFolderToQueue(directory),
+          onAddToPlaylist: () => _addFolderToPlaylist(directory),
+          onToggleFavorite: () => _toggleFavorite(directory.path),
+        );
+      },
+    );
+  }
+
+  Widget _buildSearchBody(ColorScheme colorScheme) {
+    if (_isScanning) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(
+                'Buscando...',
+                style: TextStyle(color: colorScheme.onSurfaceVariant),
+              ),
+              if (_scanProgressPath != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  _scanProgressPath!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+
+    final results = _searchResults;
+    if (results == null) {
+      return Center(
+        child: Text(
+          'Escribe para buscar en tus archivos locales',
+          style: TextStyle(color: colorScheme.onSurfaceVariant),
+        ),
+      );
+    }
+
+    if (results.isEmpty) {
+      return Center(
+        child: Text(
+          context.l10n!.noResultsFound,
+          style: TextStyle(color: colorScheme.onSurfaceVariant),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: results.length + 1,
+      itemBuilder: (context, index) {
+        if (index == results.length) return const MiniPlayerBottomSpace();
+        final entry = results[index];
+
+        if (entry is Directory) {
+          return _FolderRow(
+            directory: entry,
+            selectionMode: false,
+            isSelected: false,
+            isFavorite: _favoriteFolders.contains(entry.path),
+            onTap: () => _navigateToFolder(entry.path),
+            onLongPress: () {},
+            onPlay: () => _playFolder(entry),
+            onAddToQueue: () => _addFolderToQueue(entry),
+            onAddToPlaylist: () => _addFolderToPlaylist(entry),
+            onToggleFavorite: () => _toggleFavorite(entry.path),
+          );
+        }
+
+        final file = entry as File;
+        return _LocalFileRow(
+          file: file,
+          selectionMode: false,
+          isSelected: false,
+          onTap: () => _playFoundFile(file),
+          onLongPress: () {},
+        );
+      },
+    );
+  }
 }
 
 class _FolderRow extends StatelessWidget {
@@ -354,21 +679,25 @@ class _FolderRow extends StatelessWidget {
     required this.directory,
     required this.selectionMode,
     required this.isSelected,
+    required this.isFavorite,
     required this.onTap,
     required this.onLongPress,
     required this.onPlay,
     required this.onAddToQueue,
     required this.onAddToPlaylist,
+    required this.onToggleFavorite,
   });
 
   final Directory directory;
   final bool selectionMode;
   final bool isSelected;
+  final bool isFavorite;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   final VoidCallback onPlay;
   final VoidCallback onAddToQueue;
   final VoidCallback onAddToPlaylist;
+  final VoidCallback onToggleFavorite;
 
   @override
   Widget build(BuildContext context) {
@@ -406,6 +735,8 @@ class _FolderRow extends StatelessWidget {
                     onAddToQueue();
                   case 'add_to_playlist':
                     onAddToPlaylist();
+                  case 'toggle_favorite':
+                    onToggleFavorite();
                 }
               },
               itemBuilder: (context) => [
@@ -425,6 +756,16 @@ class _FolderRow extends StatelessWidget {
                   value: 'add_to_playlist',
                   icon: FluentIcons.album_add_24_regular,
                   label: l10n.addToPlaylist,
+                  colorScheme: colorScheme,
+                ),
+                buildPopupMenuItem<String>(
+                  value: 'toggle_favorite',
+                  icon: isFavorite
+                      ? FluentIcons.heart_24_filled
+                      : FluentIcons.heart_24_regular,
+                  label: isFavorite
+                      ? 'Quitar de favoritos'
+                      : 'Añadir a favoritos',
                   colorScheme: colorScheme,
                 ),
               ],

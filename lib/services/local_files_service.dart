@@ -23,6 +23,7 @@ import 'dart:io';
 
 import 'package:audiotags/audiotags.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:dskplay/services/data_manager.dart';
 
 // Local-file browsing/playback, kept independent of the YouTube-backed
 // song pipeline. Local songs are given a synthetic ytid (the file path,
@@ -160,6 +161,81 @@ Future<List<File>> collectAudioFilesRecursively(
 
   await walk(directory, 0);
   return results;
+}
+
+/// Recursively searches [rootPath] for folders/audio files whose name
+/// contains [query] (case-insensitive), depth-first. Calls [onProgress]
+/// with each folder as it's scanned (so the UI can show it isn't frozen),
+/// and checks [isCancelled] between steps to abort early if the search was
+/// superseded or cleared.
+Future<List<FileSystemEntity>> searchFilesAndFolders(
+  String rootPath,
+  String query, {
+  void Function(String path)? onProgress,
+  bool Function()? isCancelled,
+  int maxDepth = 12,
+}) async {
+  final lowerQuery = query.toLowerCase();
+  final results = <FileSystemEntity>[];
+
+  bool cancelled() => isCancelled?.call() ?? false;
+
+  Future<void> walk(Directory dir, int depth) async {
+    if (depth > maxDepth || cancelled()) return;
+    onProgress?.call(dir.path);
+
+    List<FileSystemEntity> entries;
+    try {
+      entries = await dir.list(followLinks: false).toList();
+    } catch (_) {
+      return;
+    }
+    if (cancelled()) return;
+
+    final subDirs = <Directory>[];
+    for (final entry in entries) {
+      final name = fileNameFromPath(entry.path);
+      if (name.startsWith('.')) continue;
+
+      if (entry is Directory) {
+        subDirs.add(entry);
+        if (name.toLowerCase().contains(lowerQuery)) results.add(entry);
+      } else if (entry is File && isAudioFile(entry.path)) {
+        if (name.toLowerCase().contains(lowerQuery)) results.add(entry);
+      }
+    }
+
+    for (final subDir in subDirs) {
+      if (cancelled()) return;
+      await walk(subDir, depth + 1);
+    }
+  }
+
+  await walk(Directory(rootPath), 0);
+  return results;
+}
+
+const String _favoriteLocalFoldersKey = 'favoriteLocalFolders';
+
+Future<List<String>> getFavoriteFolders() async {
+  final stored = await getData(
+    'user',
+    _favoriteLocalFoldersKey,
+    defaultValue: <String>[],
+  );
+  return List<String>.from(stored as List);
+}
+
+Future<bool> isFavoriteFolder(String path) async =>
+    (await getFavoriteFolders()).contains(path);
+
+/// Toggles [path] in the favorite folders list, returning the new state.
+Future<bool> toggleFavoriteFolder(String path) async {
+  final favorites = await getFavoriteFolders();
+  final isNowFavorite = !favorites.remove(path);
+  if (isNowFavorite) favorites.add(path);
+  await addOrUpdateData('user', _favoriteLocalFoldersKey, favorites);
+  return isNowFavorite;
 }
 
 /// Heuristic "Artist - Title" split from a bare file name; falls back to
