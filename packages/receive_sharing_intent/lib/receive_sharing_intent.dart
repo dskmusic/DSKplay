@@ -27,8 +27,10 @@ class ReceiveSharingIntent {
   static Future<List<SharedMediaFile>> getInitialMedia() async {
     final json = await _mChannel.invokeMethod('getInitialMedia');
     if (json == null) return [];
-    final encoded = jsonDecode(json);
-    return encoded.map<SharedMediaFile>(SharedMediaFile.fromJson).toList();
+    final encoded = jsonDecode(json) as List;
+    return encoded
+        .map((item) => SharedMediaFile.fromJson(item as Map<String, dynamic>))
+        .toList();
   }
 
   /// Returns a [Future], which completes to one of the following:
@@ -77,9 +79,15 @@ class ReceiveSharingIntent {
             if (data == null) {
               sink.add([]);
             } else {
-              final encoded = jsonDecode(data);
+              final encoded = jsonDecode(data) as List;
               sink.add(
-                encoded.map<SharedMediaFile>(SharedMediaFile.fromJson).toList(),
+                encoded
+                    .map(
+                      (item) => SharedMediaFile.fromJson(
+                        item as Map<String, dynamic>,
+                      ),
+                    )
+                    .toList(),
               );
             }
           },

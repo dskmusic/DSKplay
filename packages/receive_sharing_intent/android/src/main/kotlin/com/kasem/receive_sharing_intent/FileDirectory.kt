@@ -90,6 +90,27 @@ object FileDirectory {
     private fun getDataColumn(context: Context, uri: Uri, selection: String?,
                               selectionArgs: Array<String>?): String? {
 
+        // Try the real _data column first - this resolves for the MediaStore
+        // and most file-based providers (even plain content:// audio uris),
+        // and unlike a cache copy it preserves the file's real parent folder,
+        // which sibling-file queueing depends on.
+        var dataCursor: Cursor? = null
+        try {
+            dataCursor = context.contentResolver.query(
+                uri, arrayOf("_data"), selection, selectionArgs, null)
+            if (dataCursor != null && dataCursor.moveToFirst()) {
+                val columnIndex = dataCursor.getColumnIndex("_data")
+                val path = if (columnIndex >= 0) dataCursor.getString(columnIndex) else null
+                if (!path.isNullOrEmpty() && File(path).exists()) return path
+            }
+        } catch (e: Exception) {
+            // Some providers don't support this column at all - fall through.
+        } finally {
+            dataCursor?.close()
+        }
+
+        // Fallback: no real path available (a truly generic content provider) -
+        // copy the stream into our cache dir as a last resort.
         if (uri.authority != null) {
             var cursor: Cursor? = null
             val column = "_display_name"
@@ -128,19 +149,6 @@ object FileDirectory {
             return targetFile.path
         }
 
-        var cursor: Cursor? = null
-        val column = "_data"
-        val projection = arrayOf(column)
-
-        try {
-            cursor = context.contentResolver.query(uri, projection, selection, selectionArgs, null)
-            if (cursor != null && cursor.moveToFirst()) {
-                val columnIndex = cursor.getColumnIndexOrThrow(column)
-                return cursor.getString(columnIndex)
-            }
-        } finally {
-            cursor?.close()
-        }
         return null
     }
 

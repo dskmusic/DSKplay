@@ -29,6 +29,23 @@ import 'package:musify/widgets/now_playing/now_playing_artwork.dart';
 import 'package:musify/widgets/now_playing/now_playing_controls.dart';
 import 'package:musify/widgets/queue_list_view.dart';
 
+/// The slide-up-from-bottom transition used to open the full player, shared
+/// by the mini player's own tap/swipe and by external code (e.g. opening a
+/// shared/opened audio file) that wants to present it the same way.
+PageRoute<void> createNowPlayingRoute() {
+  return PageRouteBuilder<void>(
+    pageBuilder: (context, animation, _) => const NowPlayingPage(),
+    reverseTransitionDuration: const Duration(milliseconds: 250),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final tween = Tween(
+        begin: const Offset(0, 1),
+        end: Offset.zero,
+      ).chain(CurveTween(curve: Curves.easeInOut));
+      return SlideTransition(position: animation.drive(tween), child: child);
+    },
+  );
+}
+
 class NowPlayingPage extends StatefulWidget {
   const NowPlayingPage({super.key});
 

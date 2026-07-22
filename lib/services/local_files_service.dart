@@ -99,6 +99,30 @@ Future<List<FileSystemEntity>> listDirectoryEntries(String path) async {
   }
 }
 
+/// Lists the supported audio files alongside [file] in its own folder,
+/// sorted the same way as [listDirectoryEntries] - used to queue up the
+/// rest of a folder when a single file is opened/shared from another app.
+/// Falls back to just [file] itself if the folder can't be read.
+Future<List<File>> listAudioFilesInSameFolder(File file) async {
+  try {
+    final entries = await Directory(
+      file.parent.path,
+    ).list(followLinks: false).toList();
+
+    final files =
+        entries.whereType<File>().where((f) => isAudioFile(f.path)).toList()
+          ..sort(
+            (a, b) => fileNameFromPath(
+              a.path,
+            ).toLowerCase().compareTo(fileNameFromPath(b.path).toLowerCase()),
+          );
+
+    return files.isEmpty ? [file] : files;
+  } catch (_) {
+    return [file];
+  }
+}
+
 /// Recursively collects every supported audio file under [directory],
 /// bounded in depth to avoid runaway scans of huge/symlinked trees.
 Future<List<File>> collectAudioFilesRecursively(

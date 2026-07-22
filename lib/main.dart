@@ -32,6 +32,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:musify/extensions/l10n.dart';
 import 'package:musify/localization/app_localizations.dart';
+import 'package:musify/screens/now_playing_page.dart';
 import 'package:musify/services/audio_service.dart';
 import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/io_service.dart';
@@ -154,7 +155,7 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
     sharedMediaSubscription = ReceiveSharingIntent.getMediaStream().listen(
       (List<SharedMediaFile> mediaList) async {
         for (final media in mediaList) {
-          await consumeSharedAudioFile(
+          final started = await consumeSharedAudioFile(
             media.path,
             audioHandler: audioHandler,
             onError: (error, stackTrace) {
@@ -165,6 +166,7 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
               );
             },
           );
+          if (started) _openNowPlayingFromExternalFile();
         }
       },
       onError: (err) {
@@ -174,7 +176,7 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
 
     ReceiveSharingIntent.getInitialMedia().then((mediaList) async {
       for (final media in mediaList) {
-        await consumeSharedAudioFile(
+        final started = await consumeSharedAudioFile(
           media.path,
           audioHandler: audioHandler,
           onError: (error, stackTrace) {
@@ -185,6 +187,7 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
             );
           },
         );
+        if (started) _openNowPlayingFromExternalFile();
       }
     });
 
@@ -204,6 +207,11 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkForUpdateSilently());
+  }
+
+  void _openNowPlayingFromExternalFile() {
+    final context = NavigationManager().context;
+    if (context.mounted) Navigator.of(context).push(createNowPlayingRoute());
   }
 
   Future<void> _checkForUpdateSilently() async {

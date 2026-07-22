@@ -28,6 +28,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:musify/extensions/l10n.dart';
 import 'package:musify/main.dart';
+import 'package:musify/utilities/playlist_dialogs.dart';
 import 'package:musify/widgets/confirmation_dialog.dart';
 import 'package:musify/widgets/no_artwork_cube.dart';
 
@@ -207,7 +208,12 @@ class _QueueWidgetState extends State<QueueWidget> {
               ],
             ),
           ),
-          if (_queue.isNotEmpty)
+          if (_queue.isNotEmpty) ...[
+            IconButton(
+              icon: const Icon(FluentIcons.album_add_24_regular),
+              tooltip: context.l10n!.addToPlaylist,
+              onPressed: () => showAddToPlaylistDialog(context, songs: _queue),
+            ),
             FilledButton.tonalIcon(
               onPressed: () => _confirmClearQueue(context),
               icon: const Icon(FluentIcons.dismiss_24_regular, size: 18),
@@ -220,6 +226,7 @@ class _QueueWidgetState extends State<QueueWidget> {
                 visualDensity: VisualDensity.compact,
               ),
             ),
+          ],
         ],
       ),
     );
@@ -282,11 +289,6 @@ class _QueueWidgetState extends State<QueueWidget> {
     );
   }
 
-  String _queueEntryKey(Map song, int index) {
-    final entryId = song['queueEntryId']?.toString() ?? song['ytid'];
-    return '${entryId}_$index';
-  }
-
   Widget _buildList(
     BuildContext context,
     ColorScheme colorScheme,
@@ -326,7 +328,11 @@ class _QueueWidgetState extends State<QueueWidget> {
       itemBuilder: (context, index) {
         final song = _queue[index];
         final isCurrentSong = index == currentIndex;
-        final queueEntryId = _queueEntryKey(song, index);
+        // The real, unique entry id - not composited with the list index,
+        // which used to make the removal lookup below never match anything.
+        final queueEntryId =
+            song['queueEntryId']?.toString() ??
+            'legacy_${song['ytid']}_$index';
         return QueueTile(
           key: ValueKey(queueEntryId),
           song: song,
@@ -346,12 +352,18 @@ class _QueueWidgetState extends State<QueueWidget> {
             final actualIndex = _queue.indexWhere(
               (item) => item['queueEntryId']?.toString() == queueEntryId,
             );
-            if (actualIndex == -1) return;
-            setState(() {
+            if (actualIndex != -1) {
+              setState(() {
+                _isDismissing = false;
+                _queue.removeAt(actualIndex);
+              });
+            } else {
               _isDismissing = false;
-              _queue.removeAt(actualIndex);
-            });
-            audioHandler.removeFromQueue(actualIndex);
+            }
+            // Resolves the real position itself, rather than trusting the
+            // index computed above against this widget's own (possibly
+            // stale) copy of the queue.
+            audioHandler.removeQueueEntry(queueEntryId);
           },
         );
       },

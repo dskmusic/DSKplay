@@ -914,9 +914,12 @@ class MusifyAudioHandler extends BaseAudioHandler {
     List<Map> songs, {
     bool replace = false,
     int? startIndex,
+    bool keepManuallyAddedSongs = true,
   }) async {
     try {
-      final manuallyAddedSongs = replace ? _getUnplayedManualSongs() : <Map>[];
+      final manuallyAddedSongs = replace && keepManuallyAddedSongs
+          ? _getUnplayedManualSongs()
+          : <Map>[];
       if (replace) {
         _queueList.clear();
         _originalQueueList.clear();
@@ -970,6 +973,18 @@ class MusifyAudioHandler extends BaseAudioHandler {
         stackTrace: stackTrace,
       );
     }
+  }
+
+  /// Removes a queue entry by its stable [queueEntryId] instead of a raw
+  /// index, resolving the current real position fresh - safe to call even
+  /// if the caller's own copy of the queue could be stale (e.g. a UI list
+  /// snapshotted from a stream a moment before).
+  Future<void> removeQueueEntry(String queueEntryId) async {
+    final index = _queueList.indexWhere(
+      (song) => song['queueEntryId']?.toString() == queueEntryId,
+    );
+    if (index == -1) return;
+    await removeFromQueue(index);
   }
 
   Future<void> removeFromQueue(int index) async {
@@ -2142,6 +2157,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
   Future<void> playPlaylistSong({
     Map<dynamic, dynamic>? playlist,
     required int songIndex,
+    bool keepManuallyAddedSongs = true,
   }) async {
     try {
       if (playlist != null && playlist['list'] != null) {
@@ -2149,6 +2165,7 @@ class MusifyAudioHandler extends BaseAudioHandler {
           List<Map>.from(playlist['list']),
           replace: true,
           startIndex: songIndex,
+          keepManuallyAddedSongs: keepManuallyAddedSongs,
         );
       }
     } catch (e, stackTrace) {
