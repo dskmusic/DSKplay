@@ -51,11 +51,13 @@ class CloudBackupService {
   Future<void> _doInit() async {
     try {
       await Firebase.initializeApp();
-      // Checked first (rather than always calling signInAnonymously) so a
-      // persisted session from a previous run is reliably reused instead of
-      // possibly racing Firebase's own session restore and getting a brand
-      // new anonymous UID on every cold start.
-      if (FirebaseAuth.instance.currentUser == null) {
+      // Waits for the SDK's own restored-session state instead of reading
+      // currentUser synchronously right after initializeApp, which can
+      // still be null while persistence restoration is in flight - reading
+      // it too early risks creating a brand new anonymous UID every cold
+      // start instead of reusing the persisted one.
+      final restoredUser = await FirebaseAuth.instance.authStateChanges().first;
+      if (restoredUser == null) {
         await FirebaseAuth.instance.signInAnonymously();
       }
       _ready = true;
