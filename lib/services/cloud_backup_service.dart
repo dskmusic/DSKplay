@@ -158,18 +158,24 @@ class CloudBackupService {
     final document = _document;
     if (document == null) return null;
 
-    try {
-      final snapshot = await document.get();
-      final timestamp = snapshot.data()?['updatedAt'];
-      return timestamp is Timestamp ? timestamp.toDate() : null;
-    } catch (e, stackTrace) {
-      logger.log(
-        'Failed to read cloud backup timestamp',
-        error: e,
-        stackTrace: stackTrace,
-      );
-      return null;
+    // Retried once: right after a cold start, the very first Firestore
+    // request can fail before the network channel is fully warmed up, even
+    // though a later request (e.g. from a manual restore) succeeds fine.
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        final snapshot = await document.get();
+        final timestamp = snapshot.data()?['updatedAt'];
+        return timestamp is Timestamp ? timestamp.toDate() : null;
+      } catch (e, stackTrace) {
+        logger.log(
+          'Failed to read cloud backup timestamp (attempt $attempt)',
+          error: e,
+          stackTrace: stackTrace,
+        );
+        if (attempt == 0) await Future.delayed(const Duration(seconds: 2));
+      }
     }
+    return null;
   }
 }
 
