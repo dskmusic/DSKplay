@@ -41,6 +41,7 @@ import 'package:dskplay/utilities/flutter_bottom_sheet.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/language_utils.dart';
 import 'package:dskplay/utilities/url_launcher.dart';
+import 'package:dskplay/widgets/backup_section.dart';
 import 'package:dskplay/widgets/bottom_sheet_bar.dart';
 import 'package:dskplay/widgets/confirmation_dialog.dart';
 import 'package:dskplay/widgets/custom_bar.dart';
@@ -344,57 +345,7 @@ class SettingsPage extends StatelessWidget {
             },
           ),
         ),
-        CustomBar(
-          context.l10n!.backupUserData,
-          FluentIcons.cloud_sync_24_regular,
-          onTap: () => _backupUserData(context),
-        ),
-        CustomBar(
-          context.l10n!.restoreUserData,
-          FluentIcons.cloud_add_24_regular,
-          onTap: () async {
-            try {
-              final result = await restoreData(context);
-              if (result.success) {
-                reloadSongLibraryStateFromStorage();
-                reloadPlaylistLibraryStateFromStorage();
-                reloadSearchHistoryFromStorage();
-                reloadRadioStationsStateFromStorage();
-                // The restored settings box may carry a different
-                // wrappedEnabled value than the one already loaded into this
-                // ValueNotifier; without resyncing it here, recording silently
-                // keeps following the pre-restore value until the next cold
-                // start, when it would suddenly flip without explanation.
-                wrappedEnabled.value =
-                    await getData(
-                          'settings',
-                          'wrappedEnabled',
-                          defaultValue: true,
-                        )
-                        as bool;
-                listeningStatsService.reload();
-              }
-              if (context.mounted) {
-                showToast(
-                  context,
-                  result.message,
-                  icon: result.success
-                      ? null
-                      : FluentIcons.error_circle_24_regular,
-                );
-              }
-            } catch (e, str) {
-              logger.log('Error restoring data', error: e, stackTrace: str);
-              if (context.mounted) {
-                showToast(
-                  context,
-                  context.l10n!.error,
-                  icon: FluentIcons.error_circle_24_regular,
-                );
-              }
-            }
-          },
-        ),
+        const BackupSection(),
         CustomBar(
           context.l10n!.exportPlaylists,
           FluentIcons.arrow_export_24_regular,
@@ -858,51 +809,4 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  Future<void> _backupUserData(BuildContext context) async {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    try {
-      await showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            icon: Icon(
-              FluentIcons.info_24_regular,
-              color: colorScheme.primary,
-              size: 32,
-            ),
-            content: Text(
-              context.l10n!.folderRestrictions,
-              style: TextStyle(color: colorScheme.onSurfaceVariant),
-              textAlign: TextAlign.center,
-            ),
-            actionsAlignment: MainAxisAlignment.center,
-            actions: <Widget>[
-              FilledButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(context.l10n!.understand),
-              ),
-            ],
-          );
-        },
-      );
-      final result = await backupData(context);
-      if (context.mounted) {
-        showToast(
-          context,
-          result.message,
-          icon: result.success ? null : FluentIcons.error_circle_24_regular,
-        );
-      }
-    } catch (e, stackTrace) {
-      logger.log('Error backing up data', error: e, stackTrace: stackTrace);
-      if (context.mounted) {
-        showToast(
-          context,
-          context.l10n!.error,
-          icon: FluentIcons.error_circle_24_regular,
-        );
-      }
-    }
-  }
 }

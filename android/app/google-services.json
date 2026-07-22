@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "887391703331",
+    "project_id": "dsk-play",
+    "storage_bucket": "dsk-play.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:887391703331:android:239975769ac04dce293c96",
+        "android_client_info": {
+          "package_name": "com.dskmusic.dskplay"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBCmUlDQNgQ8xE1dfQvjyQq_qK9lIcGqh0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -34,6 +34,7 @@ import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/localization/app_localizations.dart';
 import 'package:dskplay/screens/now_playing_page.dart';
 import 'package:dskplay/services/audio_service.dart';
+import 'package:dskplay/services/cloud_backup_service.dart';
 import 'package:dskplay/services/data_manager.dart';
 import 'package:dskplay/services/io_service.dart';
 import 'package:dskplay/services/listening_stats_service.dart';
@@ -235,6 +236,7 @@ class _DskPlayState extends State<DskPlay> with WidgetsBindingObserver {
         wasPlaying: audioHandler.audioPlayer.playing,
       );
       unawaited(listeningStatsService.flush());
+      unawaited(cloudBackupService.uploadBackup());
     }
   }
 
@@ -385,6 +387,9 @@ Future<void> initialisation() async {
       Hive.openBox('userNoBackup'),
       Hive.openBox('cache'),
     ]);
+
+    onUserDataChanged = cloudBackupService.scheduleAutoBackup;
+    unawaited(cloudBackupService.init());
 
     audioHandler = await AudioService.init(
       builder: DskPlayAudioHandler.new,
