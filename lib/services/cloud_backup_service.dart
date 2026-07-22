@@ -51,8 +51,15 @@ class CloudBackupService {
   Future<void> _doInit() async {
     try {
       await Firebase.initializeApp();
-      await FirebaseAuth.instance.signInAnonymously();
+      // Checked first (rather than always calling signInAnonymously) so a
+      // persisted session from a previous run is reliably reused instead of
+      // possibly racing Firebase's own session restore and getting a brand
+      // new anonymous UID on every cold start.
+      if (FirebaseAuth.instance.currentUser == null) {
+        await FirebaseAuth.instance.signInAnonymously();
+      }
       _ready = true;
+      logger.log('Cloud backup ready, device code: $_uid');
       _periodicTimer = Timer.periodic(
         _periodicBackupInterval,
         (_) => unawaited(uploadBackup()),

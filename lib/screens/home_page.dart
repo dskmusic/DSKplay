@@ -47,7 +47,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  late final Future<List> _suggestedPlaylistsFuture;
+  late Future<List> _suggestedPlaylistsFuture;
   late Future<List> _recommendedSongsFuture;
 
   @override
