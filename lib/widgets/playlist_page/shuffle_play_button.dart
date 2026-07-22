@@ -21,7 +21,7 @@
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
-import 'package:musify/main.dart';
+import 'package:dskplay/main.dart';
 
 class ShufflePlayButton extends StatelessWidget {
   const ShufflePlayButton({super.key, required this.songs});

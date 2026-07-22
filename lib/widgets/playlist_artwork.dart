@@ -21,8 +21,8 @@
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
-import 'package:musify/utilities/artwork_provider.dart';
-import 'package:musify/widgets/no_artwork_cube.dart';
+import 'package:dskplay/utilities/artwork_provider.dart';
+import 'package:dskplay/widgets/no_artwork_cube.dart';
 
 class PlaylistArtwork extends StatelessWidget {
   const PlaylistArtwork({

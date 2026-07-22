@@ -24,9 +24,9 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
-import 'package:musify/extensions/l10n.dart';
-import 'package:musify/main.dart' show logger;
-import 'package:musify/services/io_service.dart';
+import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/main.dart' show logger;
+import 'package:dskplay/services/io_service.dart';
 
 // Cache durations for different types of data
 const Duration songCacheDuration = Duration(hours: 1, minutes: 30);

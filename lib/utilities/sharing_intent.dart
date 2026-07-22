@@ -21,18 +21,18 @@
 
 import 'dart:io';
 
-import 'package:musify/services/audio_service.dart';
-import 'package:musify/services/common_services.dart';
-import 'package:musify/services/io_service.dart';
-import 'package:musify/services/local_files_service.dart';
-import 'package:musify/utilities/formatter.dart';
+import 'package:dskplay/services/audio_service.dart';
+import 'package:dskplay/services/common_services.dart';
+import 'package:dskplay/services/io_service.dart';
+import 'package:dskplay/services/local_files_service.dart';
+import 'package:dskplay/utilities/formatter.dart';
 import 'package:path_provider/path_provider.dart';
 
 final _youtubeLinkRegex = RegExp(r'(youtube\.com|youtu\.be)');
 
 Future<void> handleYoutubeSharedTextIntent(
   String? value, {
-  required MusifyAudioHandler audioHandler,
+  required DskPlayAudioHandler audioHandler,
   required void Function(Object error, StackTrace stackTrace) onError,
 }) async {
   if (value == null || !_youtubeLinkRegex.hasMatch(value)) {
@@ -54,7 +54,7 @@ Future<void> handleYoutubeSharedTextIntent(
 
 Future<void> consumeYoutubeSharedTextIntent(
   String? value, {
-  required MusifyAudioHandler audioHandler,
+  required DskPlayAudioHandler audioHandler,
   required void Function(Object error, StackTrace stackTrace) onError,
 }) async {
   if (value == null || value.isEmpty) {
@@ -81,7 +81,7 @@ Future<void> consumeYoutubeSharedTextIntent(
 /// (e.g. opening the full player) only when there was really something to play.
 Future<bool> consumeSharedAudioFile(
   String? path, {
-  required MusifyAudioHandler audioHandler,
+  required DskPlayAudioHandler audioHandler,
   required void Function(Object error, StackTrace stackTrace) onError,
 }) async {
   if (path == null || path.isEmpty || !isAudioFile(path)) return false;

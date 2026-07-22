@@ -21,8 +21,8 @@
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
-import 'package:musify/main.dart';
-import 'package:musify/widgets/mini_player.dart';
+import 'package:dskplay/main.dart';
+import 'package:dskplay/widgets/mini_player.dart';
 
 void showToast(
   BuildContext context,

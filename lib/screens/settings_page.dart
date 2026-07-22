@@ -23,30 +23,30 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:musify/constants/app_constants.dart';
-import 'package:musify/extensions/l10n.dart';
-import 'package:musify/main.dart';
-import 'package:musify/screens/search_page.dart';
-import 'package:musify/services/common_services.dart';
-import 'package:musify/services/data_manager.dart';
-import 'package:musify/services/listening_stats_service.dart';
-import 'package:musify/services/playlist_download_service.dart';
-import 'package:musify/services/playlists_manager.dart';
-import 'package:musify/services/router_service.dart';
-import 'package:musify/services/settings_manager.dart';
-import 'package:musify/services/update_manager.dart';
-import 'package:musify/theme/app_colors.dart';
-import 'package:musify/theme/app_themes.dart';
-import 'package:musify/utilities/flutter_bottom_sheet.dart';
-import 'package:musify/utilities/flutter_toast.dart';
-import 'package:musify/utilities/language_utils.dart';
-import 'package:musify/utilities/url_launcher.dart';
-import 'package:musify/widgets/bottom_sheet_bar.dart';
-import 'package:musify/widgets/confirmation_dialog.dart';
-import 'package:musify/widgets/custom_bar.dart';
-import 'package:musify/widgets/mini_player_bottom_space.dart';
-import 'package:musify/widgets/section_header.dart';
-import 'package:musify/widgets/update_dialog.dart';
+import 'package:dskplay/constants/app_constants.dart';
+import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/main.dart';
+import 'package:dskplay/screens/search_page.dart';
+import 'package:dskplay/services/common_services.dart';
+import 'package:dskplay/services/data_manager.dart';
+import 'package:dskplay/services/listening_stats_service.dart';
+import 'package:dskplay/services/playlist_download_service.dart';
+import 'package:dskplay/services/playlists_manager.dart';
+import 'package:dskplay/services/router_service.dart';
+import 'package:dskplay/services/settings_manager.dart';
+import 'package:dskplay/services/update_manager.dart';
+import 'package:dskplay/theme/app_colors.dart';
+import 'package:dskplay/theme/app_themes.dart';
+import 'package:dskplay/utilities/flutter_bottom_sheet.dart';
+import 'package:dskplay/utilities/flutter_toast.dart';
+import 'package:dskplay/utilities/language_utils.dart';
+import 'package:dskplay/utilities/url_launcher.dart';
+import 'package:dskplay/widgets/bottom_sheet_bar.dart';
+import 'package:dskplay/widgets/confirmation_dialog.dart';
+import 'package:dskplay/widgets/custom_bar.dart';
+import 'package:dskplay/widgets/mini_player_bottom_space.dart';
+import 'package:dskplay/widgets/section_header.dart';
+import 'package:dskplay/widgets/update_dialog.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -550,13 +550,6 @@ class SettingsPage extends StatelessWidget {
           onTap: () => NavigationManager.router.go('/settings/license'),
         ),
         CustomBar(
-          context.l10n!.translate,
-          FluentIcons.translate_24_regular,
-          description: context.l10n!.translateDescription,
-          onTap: () =>
-              launchURL(Uri.parse('https://crowdin.com/project/musify')),
-        ),
-        CustomBar(
           '${context.l10n!.copyLogs} (${logger.getLogCount()})',
           FluentIcons.error_circle_24_regular,
           onTap: () async => showToast(context, await logger.copyLogs(context)),
@@ -613,7 +606,7 @@ class SettingsPage extends StatelessWidget {
                   'accentColor',
                   color.toARGB32(),
                 );
-                Musify.updateAppState(
+                DskPlay.updateAppState(
                   context,
                   newAccentColor: color,
                   useSystemColor: false,
@@ -674,7 +667,7 @@ class SettingsPage extends StatelessWidget {
             modeNames[mode.index],
             () {
               addOrUpdateData<int>('settings', 'themeIndex', mode.index);
-              Musify.updateAppState(context, newThemeMode: mode);
+              DskPlay.updateAppState(context, newThemeMode: mode);
               Navigator.pop(context);
             },
             themeMode == mode,
@@ -715,7 +708,7 @@ class SettingsPage extends StatelessWidget {
                 'languageCode',
                 newLocaleFullCode,
               );
-              Musify.updateAppState(context, newLocale: newLocale);
+              DskPlay.updateAppState(context, newLocale: newLocale);
               showToast(context, context.l10n!.languageMsg);
               Navigator.pop(context);
             },
@@ -768,7 +761,7 @@ class SettingsPage extends StatelessWidget {
   void _toggleSystemColor(BuildContext context, bool value) {
     addOrUpdateData<bool>('settings', 'useSystemColor', value);
     useSystemColor.value = value;
-    Musify.updateAppState(
+    DskPlay.updateAppState(
       context,
       newAccentColor: primaryColorSetting,
       useSystemColor: value,
@@ -779,7 +772,7 @@ class SettingsPage extends StatelessWidget {
   void _togglePureBlack(BuildContext context, bool value) {
     addOrUpdateData<bool>('settings', 'usePureBlackColor', value);
     usePureBlackColor.value = value;
-    Musify.updateAppState(context);
+    DskPlay.updateAppState(context);
     showToast(context, context.l10n!.settingChangedMsg);
   }
 
@@ -789,7 +782,7 @@ class SettingsPage extends StatelessWidget {
     transitionsBuilder = value
         ? const PredictiveBackPageTransitionsBuilder()
         : const CupertinoPageTransitionsBuilder();
-    Musify.updateAppState(context);
+    DskPlay.updateAppState(context);
     showToast(context, context.l10n!.settingChangedMsg);
   }
 

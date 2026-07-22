@@ -25,14 +25,14 @@ import 'package:audio_service/audio_service.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:musify/extensions/l10n.dart';
-import 'package:musify/main.dart';
-import 'package:musify/services/router_service.dart';
-import 'package:musify/services/settings_manager.dart';
-import 'package:musify/utilities/app_utils.dart';
-import 'package:musify/widgets/now_playing/marquee_text_widget.dart';
-import 'package:musify/widgets/playback_icon_button.dart';
-import 'package:musify/widgets/position_slider.dart';
+import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/main.dart';
+import 'package:dskplay/services/router_service.dart';
+import 'package:dskplay/services/settings_manager.dart';
+import 'package:dskplay/utilities/app_utils.dart';
+import 'package:dskplay/widgets/now_playing/marquee_text_widget.dart';
+import 'package:dskplay/widgets/playback_icon_button.dart';
+import 'package:dskplay/widgets/position_slider.dart';
 
 class NowPlayingControls extends StatelessWidget {
   const NowPlayingControls({

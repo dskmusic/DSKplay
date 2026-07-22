@@ -24,22 +24,22 @@ import 'dart:async';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:musify/extensions/l10n.dart';
-import 'package:musify/services/artist_service.dart';
-import 'package:musify/services/common_services.dart';
-import 'package:musify/services/data_manager.dart';
-import 'package:musify/services/playlists_manager.dart';
-import 'package:musify/services/router_service.dart';
-import 'package:musify/utilities/artwork_provider.dart';
-import 'package:musify/utilities/flutter_toast.dart';
-import 'package:musify/utilities/offline_playlist_dialogs.dart';
-import 'package:musify/utilities/playlist_dialogs.dart';
-import 'package:musify/utilities/playlist_utils.dart';
-import 'package:musify/widgets/dialog_item.dart';
-import 'package:musify/widgets/edit_playlist_dialog.dart';
-import 'package:musify/widgets/overflow_menu_button.dart';
-import 'package:musify/widgets/popup_menu_item.dart';
-import 'package:musify/widgets/spinner.dart';
+import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/services/artist_service.dart';
+import 'package:dskplay/services/common_services.dart';
+import 'package:dskplay/services/data_manager.dart';
+import 'package:dskplay/services/playlists_manager.dart';
+import 'package:dskplay/services/router_service.dart';
+import 'package:dskplay/utilities/artwork_provider.dart';
+import 'package:dskplay/utilities/flutter_toast.dart';
+import 'package:dskplay/utilities/offline_playlist_dialogs.dart';
+import 'package:dskplay/utilities/playlist_dialogs.dart';
+import 'package:dskplay/utilities/playlist_utils.dart';
+import 'package:dskplay/widgets/dialog_item.dart';
+import 'package:dskplay/widgets/edit_playlist_dialog.dart';
+import 'package:dskplay/widgets/overflow_menu_button.dart';
+import 'package:dskplay/widgets/popup_menu_item.dart';
+import 'package:dskplay/widgets/spinner.dart';
 
 class PlaylistBar extends StatelessWidget {
   PlaylistBar(

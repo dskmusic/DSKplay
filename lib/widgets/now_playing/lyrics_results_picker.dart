@@ -21,9 +21,9 @@
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
-import 'package:musify/extensions/l10n.dart';
-import 'package:musify/services/lyrics_manager.dart';
-import 'package:musify/widgets/spinner.dart';
+import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/services/lyrics_manager.dart';
+import 'package:dskplay/widgets/spinner.dart';
 
 Future<void> showLyricsResultsPicker(
   BuildContext context, {

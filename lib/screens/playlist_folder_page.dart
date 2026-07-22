@@ -21,18 +21,18 @@
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
-import 'package:musify/constants/app_constants.dart';
-import 'package:musify/extensions/l10n.dart';
-import 'package:musify/services/playlists_manager.dart';
-import 'package:musify/services/settings_manager.dart';
-import 'package:musify/utilities/app_utils.dart';
-import 'package:musify/utilities/flutter_toast.dart';
-import 'package:musify/utilities/playlist_utils.dart';
-import 'package:musify/widgets/confirmation_dialog.dart';
-import 'package:musify/widgets/dialog_item.dart';
-import 'package:musify/widgets/mini_player_bottom_space.dart';
-import 'package:musify/widgets/playlist_bar.dart';
-import 'package:musify/widgets/popup_menu_item.dart';
+import 'package:dskplay/constants/app_constants.dart';
+import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/services/playlists_manager.dart';
+import 'package:dskplay/services/settings_manager.dart';
+import 'package:dskplay/utilities/app_utils.dart';
+import 'package:dskplay/utilities/flutter_toast.dart';
+import 'package:dskplay/utilities/playlist_utils.dart';
+import 'package:dskplay/widgets/confirmation_dialog.dart';
+import 'package:dskplay/widgets/dialog_item.dart';
+import 'package:dskplay/widgets/mini_player_bottom_space.dart';
+import 'package:dskplay/widgets/playlist_bar.dart';
+import 'package:dskplay/widgets/popup_menu_item.dart';
 
 class PlaylistFolderPage extends StatefulWidget {
   const PlaylistFolderPage({

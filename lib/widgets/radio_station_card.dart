@@ -21,9 +21,9 @@
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
-import 'package:musify/models/radio_model.dart';
-import 'package:musify/services/common_services.dart';
-import 'package:musify/utilities/artwork_provider.dart';
+import 'package:dskplay/models/radio_model.dart';
+import 'package:dskplay/services/common_services.dart';
+import 'package:dskplay/utilities/artwork_provider.dart';
 
 class RadioStationCard extends StatefulWidget {
   const RadioStationCard({

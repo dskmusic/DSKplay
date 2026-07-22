@@ -20,9 +20,9 @@
  */
 
 import 'package:flutter/material.dart';
-import 'package:musify/main.dart';
-import 'package:musify/models/position_data.dart';
-import 'package:musify/utilities/formatter.dart';
+import 'package:dskplay/main.dart';
+import 'package:dskplay/models/position_data.dart';
+import 'package:dskplay/utilities/formatter.dart';
 
 PositionData _positionData = PositionData(
   Duration.zero,

@@ -20,10 +20,10 @@
  */
 
 import 'package:flutter/material.dart';
-import 'package:musify/extensions/l10n.dart';
-import 'package:musify/widgets/song_bar.dart';
+import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/widgets/song_bar.dart';
 
-const _musifyIconAsset = 'assets/logo.png';
+const _dskplayIconAsset = 'assets/logo.png';
 
 class ListeningRecapCard extends StatelessWidget {
   const ListeningRecapCard({
@@ -153,7 +153,7 @@ class _RecapBrandHeader extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     ImageIcon(
-                      const AssetImage(_musifyIconAsset),
+                      const AssetImage(_dskplayIconAsset),
                       size: 16,
                       color: colorScheme.onSecondaryContainer,
                     ),

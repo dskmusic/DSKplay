@@ -24,13 +24,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:musify/constants/app_constants.dart';
-import 'package:musify/extensions/l10n.dart';
-import 'package:musify/main.dart';
-import 'package:musify/services/settings_manager.dart';
-import 'package:musify/utilities/flutter_bottom_sheet.dart'
+import 'package:dskplay/constants/app_constants.dart';
+import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/main.dart';
+import 'package:dskplay/services/settings_manager.dart';
+import 'package:dskplay/utilities/flutter_bottom_sheet.dart'
     show closeCurrentBottomSheet;
-import 'package:musify/widgets/mini_player.dart';
+import 'package:dskplay/widgets/mini_player.dart';
 
 class BottomNavigationPage extends StatefulWidget {
   const BottomNavigationPage({required this.child, super.key});

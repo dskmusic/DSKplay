@@ -19,7 +19,7 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:musify/models/radio_model.dart';
+import 'package:dskplay/models/radio_model.dart';
 
 List<RadioStation> radioStationsDB = [
   const RadioStation(

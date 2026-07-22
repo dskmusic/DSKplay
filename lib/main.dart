@@ -30,38 +30,38 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:musify/extensions/l10n.dart';
-import 'package:musify/localization/app_localizations.dart';
-import 'package:musify/screens/now_playing_page.dart';
-import 'package:musify/services/audio_service.dart';
-import 'package:musify/services/data_manager.dart';
-import 'package:musify/services/io_service.dart';
-import 'package:musify/services/listening_stats_service.dart';
-import 'package:musify/services/logger_service.dart';
-import 'package:musify/services/playlist_sharing.dart';
-import 'package:musify/services/playlists_manager.dart';
-import 'package:musify/services/router_service.dart';
-import 'package:musify/services/settings_manager.dart';
-import 'package:musify/services/update_manager.dart';
-import 'package:musify/theme/app_themes.dart';
-import 'package:musify/utilities/flutter_toast.dart';
-import 'package:musify/utilities/language_utils.dart';
-import 'package:musify/utilities/playlist_utils.dart';
-import 'package:musify/utilities/sharing_intent.dart';
-import 'package:musify/widgets/update_dialog.dart';
+import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/localization/app_localizations.dart';
+import 'package:dskplay/screens/now_playing_page.dart';
+import 'package:dskplay/services/audio_service.dart';
+import 'package:dskplay/services/data_manager.dart';
+import 'package:dskplay/services/io_service.dart';
+import 'package:dskplay/services/listening_stats_service.dart';
+import 'package:dskplay/services/logger_service.dart';
+import 'package:dskplay/services/playlist_sharing.dart';
+import 'package:dskplay/services/playlists_manager.dart';
+import 'package:dskplay/services/router_service.dart';
+import 'package:dskplay/services/settings_manager.dart';
+import 'package:dskplay/services/update_manager.dart';
+import 'package:dskplay/theme/app_themes.dart';
+import 'package:dskplay/utilities/flutter_toast.dart';
+import 'package:dskplay/utilities/language_utils.dart';
+import 'package:dskplay/utilities/playlist_utils.dart';
+import 'package:dskplay/utilities/sharing_intent.dart';
+import 'package:dskplay/widgets/update_dialog.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
-late MusifyAudioHandler audioHandler;
+late DskPlayAudioHandler audioHandler;
 late StreamSubscription<String?> sharingIntentSubscription;
 late StreamSubscription<List<SharedMediaFile>> sharedMediaSubscription;
 
 final logger = Logger();
 final appLinks = AppLinks();
 
-class Musify extends StatefulWidget {
-  const Musify({super.key});
+class DskPlay extends StatefulWidget {
+  const DskPlay({super.key});
 
   static Future<void> updateAppState(
     BuildContext context, {
@@ -70,7 +70,7 @@ class Musify extends StatefulWidget {
     Color? newAccentColor,
     bool? useSystemColor,
   }) async {
-    context.findAncestorStateOfType<_MusifyState>()!.changeSettings(
+    context.findAncestorStateOfType<_DskPlayState>()!.changeSettings(
       newThemeMode: newThemeMode,
       newLocale: newLocale,
       newAccentColor: newAccentColor,
@@ -79,10 +79,10 @@ class Musify extends StatefulWidget {
   }
 
   @override
-  _MusifyState createState() => _MusifyState();
+  _DskPlayState createState() => _DskPlayState();
 }
 
-class _MusifyState extends State<Musify> with WidgetsBindingObserver {
+class _DskPlayState extends State<DskPlay> with WidgetsBindingObserver {
   void changeSettings({
     ThemeMode? newThemeMode,
     Locale? newLocale,
@@ -323,7 +323,7 @@ class _AppBootstrapState extends State<_AppBootstrap> {
 
   @override
   Widget build(BuildContext context) {
-    return _ready ? const Musify() : const _SplashScreen();
+    return _ready ? const DskPlay() : const _SplashScreen();
   }
 }
 
@@ -387,7 +387,7 @@ Future<void> initialisation() async {
     ]);
 
     audioHandler = await AudioService.init(
-      builder: MusifyAudioHandler.new,
+      builder: DskPlayAudioHandler.new,
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'com.dskmusic.dskplay',
         androidNotificationChannelName: 'DSK Play',
@@ -474,7 +474,7 @@ Future<void> _migrateOfflineFilesToExternalStorage(
 }
 
 void handleIncomingLink(Uri? uri) async {
-  if (uri == null || uri.scheme != 'musify' || uri.host != 'playlist') return;
+  if (uri == null || uri.scheme != 'dskplay' || uri.host != 'playlist') return;
 
   if (uri.pathSegments.length < 2 || uri.pathSegments[0] != 'custom') return;
 

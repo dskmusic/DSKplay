@@ -1,7 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/widgets.dart';
-import 'package:musify/localization/app_localizations.dart';
+import 'package:dskplay/localization/app_localizations.dart';
 
 // Supported app language codes.
 const appLanguages = <String>{

@@ -22,11 +22,11 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:musify/constants/app_constants.dart';
-import 'package:musify/extensions/l10n.dart';
-import 'package:musify/main.dart';
-import 'package:musify/services/settings_manager.dart';
-import 'package:musify/widgets/mini_player_bottom_space.dart';
+import 'package:dskplay/constants/app_constants.dart';
+import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/main.dart';
+import 'package:dskplay/services/settings_manager.dart';
+import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 
 class EqualizerPage extends StatefulWidget {
   const EqualizerPage({super.key});

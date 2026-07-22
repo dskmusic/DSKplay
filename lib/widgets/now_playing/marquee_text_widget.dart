@@ -20,7 +20,7 @@
  */
 
 import 'package:flutter/material.dart';
-import 'package:musify/widgets/marquee.dart';
+import 'package:dskplay/widgets/marquee.dart';
 
 class MarqueeTextWidget extends StatelessWidget {
   const MarqueeTextWidget({

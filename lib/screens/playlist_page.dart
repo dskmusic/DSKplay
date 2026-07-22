@@ -24,32 +24,32 @@ import 'dart:async';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:musify/constants/app_constants.dart';
-import 'package:musify/extensions/l10n.dart';
-import 'package:musify/main.dart';
-import 'package:musify/services/artist_service.dart';
-import 'package:musify/services/common_services.dart';
-import 'package:musify/services/data_manager.dart';
-import 'package:musify/services/playlist_download_service.dart';
-import 'package:musify/services/playlist_sharing.dart';
-import 'package:musify/services/playlists_manager.dart';
-import 'package:musify/services/settings_manager.dart';
-import 'package:musify/utilities/app_utils.dart';
-import 'package:musify/utilities/flutter_toast.dart';
-import 'package:musify/utilities/offline_playlist_dialogs.dart';
-import 'package:musify/utilities/playlist_dialogs.dart';
-import 'package:musify/utilities/playlist_utils.dart';
-import 'package:musify/utilities/song_filtering.dart';
-import 'package:musify/utilities/sort_utils.dart';
-import 'package:musify/widgets/edit_playlist_dialog.dart';
-import 'package:musify/widgets/mini_player_bottom_space.dart';
-import 'package:musify/widgets/playlist_cube.dart';
-import 'package:musify/widgets/playlist_page/empty_playlist_state.dart';
-import 'package:musify/widgets/playlist_page/playlist_header.dart';
-import 'package:musify/widgets/playlist_page/search_bar_section.dart';
-import 'package:musify/widgets/song_bar.dart';
-import 'package:musify/widgets/sort_chips.dart';
-import 'package:musify/widgets/spinner.dart';
+import 'package:dskplay/constants/app_constants.dart';
+import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/main.dart';
+import 'package:dskplay/services/artist_service.dart';
+import 'package:dskplay/services/common_services.dart';
+import 'package:dskplay/services/data_manager.dart';
+import 'package:dskplay/services/playlist_download_service.dart';
+import 'package:dskplay/services/playlist_sharing.dart';
+import 'package:dskplay/services/playlists_manager.dart';
+import 'package:dskplay/services/settings_manager.dart';
+import 'package:dskplay/utilities/app_utils.dart';
+import 'package:dskplay/utilities/flutter_toast.dart';
+import 'package:dskplay/utilities/offline_playlist_dialogs.dart';
+import 'package:dskplay/utilities/playlist_dialogs.dart';
+import 'package:dskplay/utilities/playlist_utils.dart';
+import 'package:dskplay/utilities/song_filtering.dart';
+import 'package:dskplay/utilities/sort_utils.dart';
+import 'package:dskplay/widgets/edit_playlist_dialog.dart';
+import 'package:dskplay/widgets/mini_player_bottom_space.dart';
+import 'package:dskplay/widgets/playlist_cube.dart';
+import 'package:dskplay/widgets/playlist_page/empty_playlist_state.dart';
+import 'package:dskplay/widgets/playlist_page/playlist_header.dart';
+import 'package:dskplay/widgets/playlist_page/search_bar_section.dart';
+import 'package:dskplay/widgets/song_bar.dart';
+import 'package:dskplay/widgets/sort_chips.dart';
+import 'package:dskplay/widgets/spinner.dart';
 
 enum PlaylistSortType { default_, title, artist, dateAdded }
 
@@ -405,7 +405,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
           final encodedPlaylist = PlaylistSharingService.encodePlaylist(
             _playlist,
           );
-          final url = 'musify://playlist/custom/$encodedPlaylist';
+          final url = 'dskplay://playlist/custom/$encodedPlaylist';
           await Clipboard.setData(ClipboardData(text: url));
           if (mounted) {
             showToast(context, context.l10n!.linkCopied);

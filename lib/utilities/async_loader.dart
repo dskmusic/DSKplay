@@ -20,9 +20,9 @@
  */
 
 import 'package:flutter/material.dart';
-import 'package:musify/extensions/l10n.dart';
-import 'package:musify/main.dart';
-import 'package:musify/widgets/spinner.dart';
+import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/main.dart';
+import 'package:dskplay/widgets/spinner.dart';
 
 Widget _defaultAsyncLoaderErrorBuilder(
   BuildContext context,

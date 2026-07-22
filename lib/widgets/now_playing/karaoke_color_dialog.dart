@@ -21,9 +21,9 @@
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
-import 'package:musify/extensions/l10n.dart';
-import 'package:musify/services/settings_manager.dart';
-import 'package:musify/theme/app_colors.dart';
+import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/services/settings_manager.dart';
+import 'package:dskplay/theme/app_colors.dart';
 
 Future<void> showKaraokeColorSettingsDialog(BuildContext context) {
   return showDialog<void>(

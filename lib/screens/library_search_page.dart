@@ -21,18 +21,18 @@
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
-import 'package:musify/database/radio_stations.db.dart';
-import 'package:musify/extensions/l10n.dart';
-import 'package:musify/main.dart' show audioHandler;
-import 'package:musify/models/radio_model.dart';
-import 'package:musify/services/common_services.dart';
-import 'package:musify/services/playlist_download_service.dart';
-import 'package:musify/services/playlists_manager.dart';
-import 'package:musify/utilities/flutter_toast.dart';
-import 'package:musify/utilities/playlist_utils.dart';
-import 'package:musify/widgets/playlist_bar.dart';
-import 'package:musify/widgets/radio_station_card.dart';
-import 'package:musify/widgets/section_header.dart';
+import 'package:dskplay/database/radio_stations.db.dart';
+import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/main.dart' show audioHandler;
+import 'package:dskplay/models/radio_model.dart';
+import 'package:dskplay/services/common_services.dart';
+import 'package:dskplay/services/playlist_download_service.dart';
+import 'package:dskplay/services/playlists_manager.dart';
+import 'package:dskplay/utilities/flutter_toast.dart';
+import 'package:dskplay/utilities/playlist_utils.dart';
+import 'package:dskplay/widgets/playlist_bar.dart';
+import 'package:dskplay/widgets/radio_station_card.dart';
+import 'package:dskplay/widgets/section_header.dart';
 
 class LibrarySearchPage extends StatefulWidget {
   const LibrarySearchPage({super.key});

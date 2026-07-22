@@ -23,9 +23,9 @@ import 'dart:io';
 
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
-import 'package:musify/main.dart' show logger;
-import 'package:musify/services/common_services.dart';
-import 'package:musify/services/io_service.dart';
+import 'package:dskplay/main.dart' show logger;
+import 'package:dskplay/services/common_services.dart';
+import 'package:dskplay/services/io_service.dart';
 
 /// Kept as an alias so existing call sites/imports don't need to change.
 const String exportDirPath = downloadedMusicDirPath;

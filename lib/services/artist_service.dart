@@ -21,10 +21,10 @@
 
 import 'dart:async';
 
-import 'package:musify/main.dart' show logger;
-import 'package:musify/services/data_manager.dart';
-import 'package:musify/services/proxy_manager.dart';
-import 'package:musify/utilities/formatter.dart';
+import 'package:dskplay/main.dart' show logger;
+import 'package:dskplay/services/data_manager.dart';
+import 'package:dskplay/services/proxy_manager.dart';
+import 'package:dskplay/utilities/formatter.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:youtube_music_explode_dart/youtube_music_explode_dart.dart';
 

@@ -26,11 +26,11 @@ import 'package:audio_service/audio_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
-import 'package:musify/extensions/l10n.dart';
-import 'package:musify/main.dart';
-import 'package:musify/utilities/playlist_dialogs.dart';
-import 'package:musify/widgets/confirmation_dialog.dart';
-import 'package:musify/widgets/no_artwork_cube.dart';
+import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/main.dart';
+import 'package:dskplay/utilities/playlist_dialogs.dart';
+import 'package:dskplay/widgets/confirmation_dialog.dart';
+import 'package:dskplay/widgets/no_artwork_cube.dart';
 
 class QueueWidget extends StatefulWidget {
   const QueueWidget({super.key, this.isBottomSheet = false});

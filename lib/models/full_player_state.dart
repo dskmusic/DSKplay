@@ -20,7 +20,7 @@
  */
 
 import 'package:audio_service/audio_service.dart';
-import 'package:musify/models/position_data.dart';
+import 'package:dskplay/models/position_data.dart';
 
 class FullPlayerState {
   FullPlayerState({

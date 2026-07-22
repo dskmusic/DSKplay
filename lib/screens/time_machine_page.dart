@@ -26,18 +26,18 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:intl/intl.dart';
-import 'package:musify/constants/app_constants.dart';
-import 'package:musify/extensions/l10n.dart';
-import 'package:musify/main.dart';
-import 'package:musify/screens/user_songs_page.dart';
-import 'package:musify/services/listening_stats_service.dart';
-import 'package:musify/services/settings_manager.dart';
-import 'package:musify/utilities/app_utils.dart';
-import 'package:musify/utilities/flutter_toast.dart';
-import 'package:musify/utilities/listening_stats_utils.dart';
-import 'package:musify/widgets/listening_recap_card.dart';
-import 'package:musify/widgets/mini_player_bottom_space.dart';
-import 'package:musify/widgets/song_bar.dart';
+import 'package:dskplay/constants/app_constants.dart';
+import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/main.dart';
+import 'package:dskplay/screens/user_songs_page.dart';
+import 'package:dskplay/services/listening_stats_service.dart';
+import 'package:dskplay/services/settings_manager.dart';
+import 'package:dskplay/utilities/app_utils.dart';
+import 'package:dskplay/utilities/flutter_toast.dart';
+import 'package:dskplay/utilities/listening_stats_utils.dart';
+import 'package:dskplay/widgets/listening_recap_card.dart';
+import 'package:dskplay/widgets/mini_player_bottom_space.dart';
+import 'package:dskplay/widgets/song_bar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -205,7 +205,7 @@ class _TimeMachinePageState extends State<TimeMachinePage> {
       onShare: () => _shareRecap(
         context,
         key: shareKey,
-        fileName: 'musify-$monthKey-recap.png',
+        fileName: 'dskplay-$monthKey-recap.png',
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -239,7 +239,7 @@ class _TimeMachinePageState extends State<TimeMachinePage> {
       onShare: () => _shareRecap(
         context,
         key: _yearShareKey,
-        fileName: 'musify-$year-recap.png',
+        fileName: 'dskplay-$year-recap.png',
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

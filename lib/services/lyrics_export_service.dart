@@ -21,7 +21,7 @@
 
 import 'dart:io';
 
-import 'package:musify/main.dart' show logger;
+import 'package:dskplay/main.dart' show logger;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 

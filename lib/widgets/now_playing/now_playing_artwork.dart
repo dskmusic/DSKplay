@@ -24,19 +24,19 @@ import 'package:file_picker/file_picker.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_flip_card/flutter_flip_card.dart';
-import 'package:musify/extensions/l10n.dart';
-import 'package:musify/screens/karaoke_fullscreen_page.dart';
-import 'package:musify/services/common_services.dart';
-import 'package:musify/services/io_service.dart';
-import 'package:musify/services/lyrics_export_service.dart';
-import 'package:musify/services/lyrics_manager.dart';
-import 'package:musify/services/settings_manager.dart';
-import 'package:musify/utilities/async_loader.dart';
-import 'package:musify/utilities/flutter_toast.dart';
-import 'package:musify/widgets/now_playing/karaoke_color_dialog.dart';
-import 'package:musify/widgets/now_playing/karaoke_lyrics_view.dart';
-import 'package:musify/widgets/now_playing/lyrics_results_picker.dart';
-import 'package:musify/widgets/song_artwork.dart';
+import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/screens/karaoke_fullscreen_page.dart';
+import 'package:dskplay/services/common_services.dart';
+import 'package:dskplay/services/io_service.dart';
+import 'package:dskplay/services/lyrics_export_service.dart';
+import 'package:dskplay/services/lyrics_manager.dart';
+import 'package:dskplay/services/settings_manager.dart';
+import 'package:dskplay/utilities/async_loader.dart';
+import 'package:dskplay/utilities/flutter_toast.dart';
+import 'package:dskplay/widgets/now_playing/karaoke_color_dialog.dart';
+import 'package:dskplay/widgets/now_playing/karaoke_lyrics_view.dart';
+import 'package:dskplay/widgets/now_playing/lyrics_results_picker.dart';
+import 'package:dskplay/widgets/song_artwork.dart';
 
 class NowPlayingArtwork extends StatelessWidget {
   const NowPlayingArtwork({

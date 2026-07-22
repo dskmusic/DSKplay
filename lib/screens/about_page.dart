@@ -23,13 +23,13 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:musify/constants/app_constants.dart';
-import 'package:musify/constants/version.dart';
-import 'package:musify/extensions/l10n.dart';
-import 'package:musify/services/update_manager.dart';
-import 'package:musify/utilities/url_launcher.dart';
-import 'package:musify/widgets/confirmation_dialog.dart';
-import 'package:musify/widgets/mini_player_bottom_space.dart';
+import 'package:dskplay/constants/app_constants.dart';
+import 'package:dskplay/constants/version.dart';
+import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/services/update_manager.dart';
+import 'package:dskplay/utilities/url_launcher.dart';
+import 'package:dskplay/widgets/confirmation_dialog.dart';
+import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
@@ -178,6 +178,31 @@ class _AboutPageState extends State<AboutPage> {
                         ),
                       ),
                   ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            RichText(
+              textAlign: TextAlign.center,
+              text: TextSpan(
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 12,
+                ),
+                children: [
+                  const TextSpan(text: 'Based on the open-source '),
+                  TextSpan(
+                    text: 'Musify',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    recognizer: TapGestureRecognizer()
+                      ..onTap = () => launchURL(
+                        Uri.parse('https://github.com/gokadzev/Musify'),
+                      ),
+                  ),
+                  const TextSpan(text: ' project by Valeri Gokadze'),
                 ],
               ),
             ),

@@ -77,7 +77,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
-                    android:scheme="musify"
+                    android:scheme="dskplay"
                     android:host="playlist"
                     android:pathPattern="/custom/.*" />
             </intent-filter>

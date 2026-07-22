@@ -22,15 +22,15 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
-import 'package:musify/extensions/l10n.dart';
-import 'package:musify/main.dart';
-import 'package:musify/services/common_services.dart';
-import 'package:musify/services/settings_manager.dart';
-import 'package:musify/utilities/flutter_bottom_sheet.dart';
-import 'package:musify/utilities/flutter_toast.dart';
-import 'package:musify/utilities/mediaitem.dart';
-import 'package:musify/utilities/playlist_dialogs.dart';
-import 'package:musify/widgets/queue_list_view.dart';
+import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/main.dart';
+import 'package:dskplay/services/common_services.dart';
+import 'package:dskplay/services/settings_manager.dart';
+import 'package:dskplay/utilities/flutter_bottom_sheet.dart';
+import 'package:dskplay/utilities/flutter_toast.dart';
+import 'package:dskplay/utilities/mediaitem.dart';
+import 'package:dskplay/utilities/playlist_dialogs.dart';
+import 'package:dskplay/widgets/queue_list_view.dart';
 
 class BottomActionsRow extends StatefulWidget {
   const BottomActionsRow({

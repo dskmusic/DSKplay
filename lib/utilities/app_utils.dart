@@ -21,8 +21,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:musify/constants/app_constants.dart';
-import 'package:musify/services/settings_manager.dart';
+import 'package:dskplay/constants/app_constants.dart';
+import 'package:dskplay/services/settings_manager.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 BorderRadius getItemBorderRadius(

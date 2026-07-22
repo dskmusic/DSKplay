@@ -22,25 +22,25 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:musify/constants/version.dart';
-import 'package:musify/screens/about_page.dart';
-import 'package:musify/screens/artist_page.dart';
-import 'package:musify/screens/bottom_navigation_page.dart';
-import 'package:musify/screens/equalizer_page.dart';
-import 'package:musify/screens/home_page.dart';
-import 'package:musify/screens/library_page.dart';
-import 'package:musify/screens/library_search_page.dart';
-import 'package:musify/screens/local_files_page.dart';
-import 'package:musify/screens/playlist_folder_page.dart';
-import 'package:musify/screens/playlist_page.dart';
-import 'package:musify/screens/radio_stations_page.dart';
-import 'package:musify/screens/search_page.dart';
-import 'package:musify/screens/settings_page.dart';
-import 'package:musify/screens/time_machine_page.dart';
-import 'package:musify/screens/user_songs_page.dart';
-import 'package:musify/services/playlist_download_service.dart';
-import 'package:musify/services/settings_manager.dart';
-import 'package:musify/widgets/offline_search_placeholder.dart';
+import 'package:dskplay/constants/version.dart';
+import 'package:dskplay/screens/about_page.dart';
+import 'package:dskplay/screens/artist_page.dart';
+import 'package:dskplay/screens/bottom_navigation_page.dart';
+import 'package:dskplay/screens/equalizer_page.dart';
+import 'package:dskplay/screens/home_page.dart';
+import 'package:dskplay/screens/library_page.dart';
+import 'package:dskplay/screens/library_search_page.dart';
+import 'package:dskplay/screens/local_files_page.dart';
+import 'package:dskplay/screens/playlist_folder_page.dart';
+import 'package:dskplay/screens/playlist_page.dart';
+import 'package:dskplay/screens/radio_stations_page.dart';
+import 'package:dskplay/screens/search_page.dart';
+import 'package:dskplay/screens/settings_page.dart';
+import 'package:dskplay/screens/time_machine_page.dart';
+import 'package:dskplay/screens/user_songs_page.dart';
+import 'package:dskplay/services/playlist_download_service.dart';
+import 'package:dskplay/services/settings_manager.dart';
+import 'package:dskplay/widgets/offline_search_placeholder.dart';
 
 class NavigationManager {
   factory NavigationManager() {

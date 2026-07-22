@@ -20,10 +20,10 @@
  */
 
 import 'package:flutter/material.dart';
-import 'package:musify/main.dart';
-import 'package:musify/models/position_data.dart';
-import 'package:musify/services/lyrics_manager.dart';
-import 'package:musify/services/settings_manager.dart';
+import 'package:dskplay/main.dart';
+import 'package:dskplay/models/position_data.dart';
+import 'package:dskplay/services/lyrics_manager.dart';
+import 'package:dskplay/services/settings_manager.dart';
 
 // Shows the previous/active/next lyric line only, always centered in the
 // available space, so the highlighted line is never pinned to the bottom

@@ -21,10 +21,10 @@
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
-import 'package:musify/extensions/l10n.dart';
-import 'package:musify/services/update_manager.dart';
-import 'package:musify/utilities/flutter_toast.dart';
-import 'package:musify/utilities/url_launcher.dart';
+import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/services/update_manager.dart';
+import 'package:dskplay/utilities/flutter_toast.dart';
+import 'package:dskplay/utilities/url_launcher.dart';
 
 Future<void> showUpdateAvailableDialog(
   BuildContext context,

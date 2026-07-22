@@ -20,7 +20,7 @@
  */
 
 import 'dart:math';
-import 'package:musify/services/playlist_download_service.dart';
+import 'package:dskplay/services/playlist_download_service.dart';
 
 class PlaylistUtils {
   static bool isArtistPlaylist(dynamic playlist) =>

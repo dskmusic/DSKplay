@@ -21,14 +21,14 @@
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
-import 'package:musify/main.dart' show logger;
-import 'package:musify/screens/playlist_page.dart';
-import 'package:musify/services/artist_service.dart';
-import 'package:musify/services/playlists_manager.dart';
-import 'package:musify/services/settings_manager.dart';
-import 'package:musify/widgets/mini_player_bottom_space.dart';
-import 'package:musify/widgets/playlist_page/empty_playlist_state.dart';
-import 'package:musify/widgets/spinner.dart';
+import 'package:dskplay/main.dart' show logger;
+import 'package:dskplay/screens/playlist_page.dart';
+import 'package:dskplay/services/artist_service.dart';
+import 'package:dskplay/services/playlists_manager.dart';
+import 'package:dskplay/services/settings_manager.dart';
+import 'package:dskplay/widgets/mini_player_bottom_space.dart';
+import 'package:dskplay/widgets/playlist_page/empty_playlist_state.dart';
+import 'package:dskplay/widgets/spinner.dart';
 
 class ArtistPage extends StatefulWidget {
   const ArtistPage({super.key, required this.artistId, this.artistData});
