@@ -19,12 +19,16 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
+import 'dart:io';
+
 import 'package:audio_service/audio_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_flip_card/flutter_flip_card.dart';
+import 'package:http/http.dart' as http;
 import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/main.dart' show logger;
 import 'package:dskplay/screens/karaoke_fullscreen_page.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/io_service.dart';
@@ -86,11 +90,20 @@ class NowPlayingArtwork extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(borderRadius),
-          child: SongArtworkWidget(
-            metadata: metadata,
-            size: imageSize,
-            errorWidgetIconSize: size.width / 8,
-            borderRadius: borderRadius,
+          child: Stack(
+            children: [
+              SongArtworkWidget(
+                metadata: metadata,
+                size: imageSize,
+                errorWidgetIconSize: size.width / 8,
+                borderRadius: borderRadius,
+              ),
+              Positioned(
+                right: 8,
+                bottom: 8,
+                child: _SaveCoverButton(metadata: metadata),
+              ),
+            ],
           ),
         ),
       ),
@@ -113,6 +126,70 @@ class NowPlayingArtwork extends StatelessWidget {
           borderRadius: BorderRadius.circular(borderRadius),
           child: _LyricsBackContent(metadata: metadata),
         ),
+      ),
+    );
+  }
+}
+
+class _SaveCoverButton extends StatelessWidget {
+  const _SaveCoverButton({required this.metadata});
+  final MediaItem metadata;
+
+  String _sanitizedFileName() {
+    final name = '${metadata.title} - ${metadata.artist ?? ''}'.trim();
+    return name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+  }
+
+  Future<void> _save(BuildContext context, {required bool chooseFolder}) async {
+    final granted = await ensureExportStoragePermission();
+    if (!granted) return;
+
+    var targetDir = downloadedMusicDirPath;
+    if (chooseFolder) {
+      final picked = await FilePicker.getDirectoryPath();
+      if (picked == null) return;
+      targetDir = picked;
+    } else {
+      await Directory(targetDir).create(recursive: true);
+    }
+
+    try {
+      final bytes = metadata.artUri?.scheme == 'file'
+          ? await File(metadata.extras?['artWorkPath'] as String).readAsBytes()
+          : (await http.get(metadata.artUri!)).bodyBytes;
+
+      final file = File('$targetDir/${_sanitizedFileName()}.jpg');
+      await file.writeAsBytes(bytes);
+
+      if (context.mounted) {
+        showToast(context, 'Portada guardada en ${file.path}');
+      }
+    } catch (e, stackTrace) {
+      logger.log('Error saving cover image', error: e, stackTrace: stackTrace);
+      if (context.mounted) {
+        showToast(context, context.l10n!.error);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.black.withValues(alpha: 0.35),
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: PopupMenuButton<bool>(
+        tooltip: 'Guardar portada',
+        icon: const Icon(
+          FluentIcons.arrow_download_24_regular,
+          color: Colors.white,
+          size: 20,
+        ),
+        onSelected: (chooseFolder) => _save(context, chooseFolder: chooseFolder),
+        itemBuilder: (context) => const [
+          PopupMenuItem(value: false, child: Text('Guardar en Descargas')),
+          PopupMenuItem(value: true, child: Text('Elegir carpeta...')),
+        ],
       ),
     );
   }

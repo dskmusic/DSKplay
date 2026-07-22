@@ -72,7 +72,7 @@ class _BackupSectionState extends State<BackupSection> {
   }
 
   String _formatTimestamp(DateTime? value) {
-    if (value == null) return 'Never backed up';
+    if (value == null) return 'Nunca respaldado';
     final local = value.toLocal();
     String two(int n) => n.toString().padLeft(2, '0');
     return '${two(local.day)}/${two(local.month)}/${local.year} '
@@ -217,13 +217,13 @@ class _BackupSectionState extends State<BackupSection> {
           onTap: _busy ? null : _restoreLocal,
         ),
         CustomBar(
-          'Cloud backup',
+          'Respaldo en la nube',
           FluentIcons.cloud_sync_24_regular,
           description: _formatTimestamp(_cloudBackupAt),
           onTap: _busy ? null : _backupCloud,
         ),
         CustomBar(
-          'Cloud restore',
+          'Restaurar desde la nube',
           FluentIcons.cloud_add_24_regular,
           onTap: _busy ? null : _restoreCloud,
         ),
@@ -259,9 +259,9 @@ class _BackupSectionState extends State<BackupSection> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
           child: Text(
-            'Cloud backup uses an anonymous, random device identifier - it '
-            "doesn't collect your name, email or any other personal "
-            'information. Guarda tu código de recuperación si quieres poder '
+            'El respaldo en la nube usa un identificador anónimo y '
+            'aleatorio: no recopila tu nombre, correo ni ningún otro dato '
+            'personal. Guarda tu código de recuperación si quieres poder '
             'restaurar tras borrar los datos de la app o reinstalarla.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
