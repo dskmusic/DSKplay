@@ -1667,6 +1667,12 @@ class MusifyAudioHandler extends BaseAudioHandler {
   @override
   Future<void> onTaskRemoved() async {
     try {
+      // Swiping the app away from recents shouldn't cut off playback that's
+      // actually in progress - the foreground service + notification are
+      // already set up to keep running (androidStopForegroundOnPause:
+      // false), matching how other music players behave. Only stop (and
+      // release the audio session) when there's nothing playing anyway.
+      if (audioPlayer.playing) return;
       await stop();
       final session = await AudioSession.instance;
       await session.setActive(false);
