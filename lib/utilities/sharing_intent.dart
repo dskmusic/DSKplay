@@ -109,6 +109,11 @@ Future<bool> consumeSharedAudioFile(
         ? [file]
         : await listAudioFilesInSameFolder(file);
     final songs = await buildLocalSongMaps(siblings);
+    // Marks these so a cold app restart doesn't offer them back as "what you
+    // were playing" - see _firstPlayableSong in DskPlayAudioHandler.
+    for (final song in songs) {
+      song['externalShare'] = true;
+    }
     final index = siblings.indexWhere((f) => f.path == file.path);
     await audioHandler.playPlaylistSong(
       playlist: {'list': songs},

@@ -190,6 +190,8 @@
   "recentlyPlayed": "Baru saja diputar",
   "recentlyPlayedMsg": "Riwayat yang baru saja diputar dihapus",
   "recommendedForYou": "Direkomendasikan untuk Anda",
+  "rememberLastPlayback": "Ingat pemutaran terakhir",
+  "rememberLastPlaybackDescription": "Menampilkan lagu terakhir yang Anda putar saat membuka kembali aplikasi, mengabaikan berkas yang dibuka atau dibagikan dari aplikasi lain.",
   "remove": "Hapus",
   "removeFromFolder": "Hapus dari folder",
   "removeFromLikedPlaylists": "Hapus dari daftar putar yang disukai",

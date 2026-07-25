@@ -219,6 +219,8 @@
   "recentlyPlayed": "Recently played",
   "recentlyPlayedMsg": "Recently played history cleared",
   "recommendedForYou": "Recommended for you",
+  "rememberLastPlayback": "Remember last playback",
+  "rememberLastPlaybackDescription": "Show the last song you were playing when reopening the app, ignoring files opened or shared from other apps.",
   "remove": "Remove",
   "removeFromFolder": "Remove from folder",
   "removeFromLikedPlaylists": "Remove from liked playlists",

@@ -183,6 +183,20 @@ class SettingsPage extends StatelessWidget {
           },
         ),
         ValueListenableBuilder<bool>(
+          valueListenable: rememberLastPlayback,
+          builder: (_, value, __) {
+            return CustomBar(
+              context.l10n!.rememberLastPlayback,
+              FluentIcons.arrow_clockwise_24_regular,
+              description: context.l10n!.rememberLastPlaybackDescription,
+              trailing: Switch(
+                value: value,
+                onChanged: (value) => _toggleRememberLastPlayback(context, value),
+              ),
+            );
+          },
+        ),
+        ValueListenableBuilder<bool>(
           valueListenable: offlineMode,
           builder: (_, value, __) {
             return CustomBar(
@@ -734,6 +748,12 @@ class SettingsPage extends StatelessWidget {
         ? const PredictiveBackPageTransitionsBuilder()
         : const CupertinoPageTransitionsBuilder();
     DskPlay.updateAppState(context);
+    showToast(context, context.l10n!.settingChangedMsg);
+  }
+
+  void _toggleRememberLastPlayback(BuildContext context, bool value) {
+    addOrUpdateData<bool>('settings', 'rememberLastPlayback', value);
+    rememberLastPlayback.value = value;
     showToast(context, context.l10n!.settingChangedMsg);
   }
 

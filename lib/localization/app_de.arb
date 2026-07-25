@@ -190,6 +190,8 @@
   "recentlyPlayed": "Zuletzt gespielt",
   "recentlyPlayedMsg": "Wiedergabeverlauf gelöscht",
   "recommendedForYou": "Empfohlen für dich",
+  "rememberLastPlayback": "Letzte Wiedergabe merken",
+  "rememberLastPlaybackDescription": "Zeigt beim erneuten Öffnen der App den zuletzt abgespielten Titel, ignoriert dabei Dateien, die von anderen Apps geöffnet oder geteilt wurden.",
   "remove": "Entfernen",
   "removeFromFolder": "Aus Ordner entfernen",
   "removeFromLikedPlaylists": "Aus Favoriten entfernen",

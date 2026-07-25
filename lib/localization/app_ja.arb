@@ -190,6 +190,8 @@
   "recentlyPlayed": "最近聴いた曲",
   "recentlyPlayedMsg": "再生履歴を消去しました",
   "recommendedForYou": "あなたにおすすめ",
+  "rememberLastPlayback": "最後の再生を記憶する",
+  "rememberLastPlaybackDescription": "アプリを再度開いたときに再生していた最後の曲を表示します。他のアプリから開いたり共有されたりしたファイルは無視されます。",
   "remove": "削除",
   "removeFromFolder": "フォルダーから削除",
   "removeFromLikedPlaylists": "いいねした再生リストから削除",

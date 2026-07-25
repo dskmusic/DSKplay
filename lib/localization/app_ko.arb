@@ -190,6 +190,8 @@
   "recentlyPlayed": "최근 재생",
   "recentlyPlayedMsg": "최근 재생 기록 삭제됨",
   "recommendedForYou": "추천 항목",
+  "rememberLastPlayback": "마지막 재생 기억하기",
+  "rememberLastPlaybackDescription": "앱을 다시 열 때 재생 중이던 마지막 곡을 표시합니다. 다른 앱에서 열거나 공유한 파일은 무시합니다.",
   "remove": "제거",
   "removeFromFolder": "폴더에서 제거",
   "removeFromLikedPlaylists": "좋아요 재생목록에서 제거",

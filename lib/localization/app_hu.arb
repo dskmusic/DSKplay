@@ -190,6 +190,8 @@
   "recentlyPlayed": "Nemrég játszott",
   "recentlyPlayedMsg": "Nemrég játszott lista törölve",
   "recommendedForYou": "Neked ajánlott",
+  "rememberLastPlayback": "Utolsó lejátszás megjegyzése",
+  "rememberLastPlaybackDescription": "Az alkalmazás újranyitásakor megjeleníti az utoljára lejátszott számot, figyelmen kívül hagyva a más alkalmazásokból megnyitott vagy megosztott fájlokat.",
   "remove": "Eltávolítás",
   "removeFromFolder": "Eltávolítás a mappából",
   "removeFromLikedPlaylists": "Eltávolítás a kedvelt lejátszási listák közül",

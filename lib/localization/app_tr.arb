@@ -190,6 +190,8 @@
   "recentlyPlayed": "Son Çalınanlar",
   "recentlyPlayedMsg": "Son çalınanlar temizlendi",
   "recommendedForYou": "Önerilenler",
+  "rememberLastPlayback": "Son oynatmayı hatırla",
+  "rememberLastPlaybackDescription": "Uygulamayı yeniden açtığınızda çaldığınız son şarkıyı gösterir, diğer uygulamalardan açılan veya paylaşılan dosyaları yok sayar.",
   "remove": "Sil",
   "removeFromFolder": "Klasörden kaldır",
   "removeFromLikedPlaylists": "Beğenilen Çalma Listelerinden Çıkar",

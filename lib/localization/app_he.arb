@@ -190,6 +190,8 @@
   "recentlyPlayed": "הושמע לאחרונה",
   "recentlyPlayedMsg": "היסטוריית השמעות אחרונות נמחקה",
   "recommendedForYou": "מומלץ עבורך",
+  "rememberLastPlayback": "זכור את הניגון האחרון",
+  "rememberLastPlaybackDescription": "מציג את השיר האחרון שהיה מתנגן בעת פתיחה מחדש של האפליקציה, תוך התעלמות מקבצים שנפתחו או שותפו מאפליקציות אחרות.",
   "remove": "הסר",
   "removeFromFolder": "Remove from folder",
   "removeFromLikedPlaylists": "הסר מרשימות השמעה שאהבתי",

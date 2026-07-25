@@ -190,6 +190,8 @@
   "recentlyPlayed": "近期播放",
   "recentlyPlayedMsg": "近期播放历史记录已清除",
   "recommendedForYou": "为您推荐",
+  "rememberLastPlayback": "记住上次播放",
+  "rememberLastPlaybackDescription": "重新打开应用时显示您正在播放的最后一首歌曲，忽略从其他应用打开或分享的文件。",
   "remove": "移除",
   "removeFromFolder": "从文件夹中删除",
   "removeFromLikedPlaylists": "从喜欢的播放列表中移除",

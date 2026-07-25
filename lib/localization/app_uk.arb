@@ -190,6 +190,8 @@
   "recentlyPlayed": "Нещодавно програні",
   "recentlyPlayedMsg": "Історія нещодавно програних очищена",
   "recommendedForYou": "Рекомендовано для вас",
+  "rememberLastPlayback": "Запам'ятовувати останнє відтворення",
+  "rememberLastPlaybackDescription": "Показує останню відтворювану пісню при повторному відкритті додатка, ігноруючи файли, відкриті або надіслані з інших додатків.",
   "remove": "Видалити",
   "removeFromFolder": "Видалити з теки",
   "removeFromLikedPlaylists": "Видалити з вподобаних плейлистів",

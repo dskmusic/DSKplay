@@ -190,6 +190,8 @@
   "recentlyPlayed": "Ostatnio odtwarzane",
   "recentlyPlayedMsg": "Wyczyszczono historię ostatnio odtworzonych utworów",
   "recommendedForYou": "Polecane dla Ciebie",
+  "rememberLastPlayback": "Zapamiętaj ostatnie odtwarzanie",
+  "rememberLastPlaybackDescription": "Pokazuje ostatnio odtwarzany utwór po ponownym otwarciu aplikacji, ignorując pliki otwarte lub udostępnione z innych aplikacji.",
   "remove": "Usuń",
   "removeFromFolder": "Usuń z folderu",
   "removeFromLikedPlaylists": "Usuń z polubionych list odtwarzania",

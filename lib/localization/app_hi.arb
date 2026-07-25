@@ -190,6 +190,8 @@
   "recentlyPlayed": "हाल ही में बजाया गया",
   "recentlyPlayedMsg": "हाल ही में बजाए गए गाने साफ़ किए गए",
   "recommendedForYou": "आपके लिए अनुशंसित",
+  "rememberLastPlayback": "अंतिम प्लेबैक याद रखें",
+  "rememberLastPlaybackDescription": "ऐप को फिर से खोलने पर आप जो आखिरी गाना चला रहे थे उसे दिखाता है, अन्य ऐप्स से खोली या साझा की गई फ़ाइलों को नज़रअंदाज़ करते हुए।",
   "remove": "हटाएं",
   "removeFromFolder": "Remove from folder",
   "removeFromLikedPlaylists": "पसंदीदा प्लेलिस्ट से हटाएं",

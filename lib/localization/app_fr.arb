@@ -190,6 +190,8 @@
   "recentlyPlayed": "Lectures récentes",
   "recentlyPlayedMsg": "Historique de lecture effacé",
   "recommendedForYou": "Recommandations",
+  "rememberLastPlayback": "Se souvenir de la dernière lecture",
+  "rememberLastPlaybackDescription": "Affiche la dernière chanson en cours de lecture à la réouverture de l'application, en ignorant les fichiers ouverts ou partagés depuis d'autres applications.",
   "remove": "Supprimer",
   "removeFromFolder": "Supprimer du dossier",
   "removeFromLikedPlaylists": "Supprimer des playlists favorites",

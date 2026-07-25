@@ -219,6 +219,8 @@
   "recentlyPlayed": "Reproducido recientemente",
   "recentlyPlayedMsg": "Historial de reproducción reciente borrado",
   "recommendedForYou": "Recomendado para ti",
+  "rememberLastPlayback": "Recordar última reproducción",
+  "rememberLastPlaybackDescription": "Muestra la última canción que estabas reproduciendo al volver a abrir la app, ignorando los archivos abiertos o compartidos desde otras apps.",
   "remove": "Eliminar",
   "removeFromFolder": "Eliminar de la carpeta",
   "removeFromLikedPlaylists": "Eliminar de las listas de reproducción favoritas",

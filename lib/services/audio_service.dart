@@ -1455,6 +1455,10 @@ class DskPlayAudioHandler extends BaseAudioHandler {
 
   Map? _firstPlayableSong(Iterable songs) {
     for (final song in songs.whereType<Map>()) {
+      // A file opened/shared from another app shouldn't be offered back as
+      // "what you were playing" on the next cold start - only genuine
+      // in-app listening should seed that.
+      if (song['externalShare'] == true) continue;
       if (_songYtid(song) != null) {
         return song;
       }
@@ -1493,6 +1497,8 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   }
 
   Map? _latestResumableSong() {
+    if (!rememberLastPlayback.value) return null;
+
     final activeSong = currentSong;
     if (activeSong != null && _songYtid(activeSong) != null) {
       return activeSong;

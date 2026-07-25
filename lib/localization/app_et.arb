@@ -190,6 +190,8 @@
   "recentlyPlayed": "Hiljuti mängitud",
   "recentlyPlayedMsg": "Hiljuti mängitud ajalugu tühjendatud",
   "recommendedForYou": "Sulle soovitatud",
+  "rememberLastPlayback": "Jäta viimane esitus meelde",
+  "rememberLastPlaybackDescription": "Kuvab rakenduse uuesti avamisel viimati mängitud loo, eirates teistest rakendustest avatud või jagatud faile.",
   "remove": "Eemalda",
   "removeFromFolder": "Eemalda kaustast",
   "removeFromLikedPlaylists": "Eemalda lemmiknimekirjadest",

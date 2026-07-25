@@ -190,6 +190,8 @@
   "recentlyPlayed": "Recentemente riprodotti",
   "recentlyPlayedMsg": "Cronologia recenti cancellata",
   "recommendedForYou": "Raccomandato per te",
+  "rememberLastPlayback": "Ricorda l'ultima riproduzione",
+  "rememberLastPlaybackDescription": "Mostra l'ultimo brano in riproduzione alla riapertura dell'app, ignorando i file aperti o condivisi da altre app.",
   "remove": "Rimuovi",
   "removeFromFolder": "Rimuovi dalla cartella",
   "removeFromLikedPlaylists": "Rimuovi dalle playlist aggiunte ai preferiti",
