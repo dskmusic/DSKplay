@@ -367,9 +367,51 @@ class DskPlayAudioHandler extends BaseAudioHandler {
 
       // Initialize equalizer once at startup
       unawaited(_ensureEqualizerConfigured());
+
+      _restoreLastPlayedForDisplay();
     } catch (e, stackTrace) {
       logger.log(
         'Error initializing audio session',
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  /// Shows the last played song (local, playlist or online) in the mini
+  /// player on a cold start, without loading or starting audio - so the user
+  /// can resume with a tap instead of searching for it again. A share/open-with
+  /// intent naturally overrides this: it calls playSong/playPlaylistSong,
+  /// which replace this seeded state with the real, actually-playing song.
+  void _restoreLastPlayedForDisplay() {
+    try {
+      if (mediaItem.valueOrNull != null) return;
+
+      final song = _latestResumableSong();
+      if (song == null) return;
+
+      final item = _mediaItemForResumption(song);
+      if (item == null) return;
+
+      mediaItem.add(item);
+      queue.add([item]);
+      playbackState.add(
+        PlaybackState(
+          controls: _controls(false),
+          systemActions: const {
+            MediaAction.seek,
+            MediaAction.seekForward,
+            MediaAction.seekBackward,
+          },
+          androidCompactActionIndices: const [0, 1, 3],
+          processingState: AudioProcessingState.ready,
+          queueIndex: 0,
+          updateTime: DateTime.now(),
+        ),
+      );
+    } catch (e, stackTrace) {
+      logger.log(
+        'Error restoring last played song for display',
         error: e,
         stackTrace: stackTrace,
       );
