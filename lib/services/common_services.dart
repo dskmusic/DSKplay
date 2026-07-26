@@ -22,7 +22,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:audiotags/audiotags.dart';
 import 'package:flutter/widgets.dart';
 import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
@@ -798,7 +800,6 @@ Future<bool> makeSongOffline(dynamic song) async {
 
     final audioPath = FilePaths.getAudioPath(ytid);
     final audioFile = File(audioPath);
-    final artworkPath = FilePaths.getArtworkPath(ytid);
 
     await audioFile.parent.create(recursive: true);
 
@@ -832,24 +833,46 @@ Future<bool> makeSongOffline(dynamic song) async {
     }
 
     try {
-      if (offlineSong['highResImage'] != null &&
-          offlineSong['highResImage'].toString().isNotEmpty) {
-        final _artworkFile = await _downloadAndSaveArtworkFile(
-          offlineSong['highResImage'],
-          artworkPath,
-        );
+      final coverUrl = offlineSong['highResImage']?.toString();
+      final coverBytes = (coverUrl != null && coverUrl.isNotEmpty)
+          ? await _fetchArtworkBytes(coverUrl)
+          : null;
 
-        if (_artworkFile != null && await _artworkFile.exists()) {
-          offlineSong['artworkPath'] = artworkPath;
-        } else {
-          logger.log(
-            'Artwork download failed or file does not exist for $ytid',
-          );
-          offlineSong['artworkPath'] = null;
-        }
+      // Embed title/artist/album/cover directly into the downloaded audio
+      // file's tag instead of saving the cover as a separate image file:
+      // that file lived in a public, gallery-scanned folder, so deleting it
+      // from the gallery silently broke the song's artwork in the app.
+      await AudioTags.write(
+        audioFile.path,
+        Tag(
+          title: offlineSong['title']?.toString(),
+          trackArtist: offlineSong['artist']?.toString(),
+          album: offlineSong['album']?.toString(),
+          pictures: coverBytes != null
+              ? [
+                  Picture(
+                    pictureType: PictureType.coverFront,
+                    mimeType: MimeType.jpeg,
+                    bytes: coverBytes,
+                  ),
+                ]
+              : [],
+        ),
+      );
+
+      if (coverBytes != null) {
+        final cachedPath = await offlineArtworkCachePath(ytid);
+        await File(cachedPath).writeAsBytes(coverBytes, flush: true);
+        offlineSong['artworkPath'] = cachedPath;
+      } else {
+        offlineSong['artworkPath'] = null;
       }
     } catch (e, stackTrace) {
-      logger.log('Error downloading artwork', error: e, stackTrace: stackTrace);
+      logger.log(
+        'Error embedding cover art into offline file',
+        error: e,
+        stackTrace: stackTrace,
+      );
       offlineSong['artworkPath'] = null;
     }
 
@@ -895,8 +918,10 @@ Future<bool> removeSongFromOffline(dynamic songId) async {
   try {
     final audioPath = FilePaths.getAudioPath(songId);
     final audioFile = File(audioPath);
-    final artworkPath = FilePaths.getArtworkPath(songId);
-    final artworkFile = File(artworkPath);
+    // Legacy public artwork file (pre-embedded-cover versions of the app);
+    // harmless no-op if it doesn't exist.
+    final artworkFile = File(FilePaths.getArtworkPath(songId));
+    final cachedArtworkFile = File(await offlineArtworkCachePath(songId));
 
     try {
       if (await audioFile.exists()) await audioFile.delete(recursive: true);
@@ -909,6 +934,18 @@ Future<bool> removeSongFromOffline(dynamic songId) async {
     } catch (e, stackTrace) {
       logger.log(
         'Error deleting artwork file',
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
+
+    try {
+      if (await cachedArtworkFile.exists()) {
+        await cachedArtworkFile.delete(recursive: true);
+      }
+    } catch (e, stackTrace) {
+      logger.log(
+        'Error deleting cached artwork file',
         error: e,
         stackTrace: stackTrace,
       );
@@ -943,33 +980,16 @@ Future<bool> removeSongFromOffline(dynamic songId) async {
   }
 }
 
-Future<File?> _downloadAndSaveArtworkFile(String url, String filePath) async {
+Future<Uint8List?> _fetchArtworkBytes(String url) async {
   try {
     final response = await ProxyManager().getProxiedResponse(Uri.parse(url));
 
-    if (response.statusCode == 200) {
-      final file = File(filePath);
-      await file.parent.create(recursive: true);
-      await file.writeAsBytes(response.bodyBytes);
-
-      // Validate that the file was actually written
-      if (await file.exists() && await file.length() > 0) {
-        return file;
-      } else {
-        logger.log('Artwork file was not written properly: $filePath');
-        return null;
-      }
-    } else {
-      logger.log(
-        'Failed to download file. Status code: ${response.statusCode}',
-      );
+    if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+      return response.bodyBytes;
     }
+    logger.log('Failed to download artwork. Status code: ${response.statusCode}');
   } catch (e, stackTrace) {
-    logger.log(
-      'Error downloading and saving file',
-      error: e,
-      stackTrace: stackTrace,
-    );
+    logger.log('Error downloading artwork', error: e, stackTrace: stackTrace);
   }
 
   return null;

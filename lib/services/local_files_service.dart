@@ -320,10 +320,10 @@ Future<String?> _extractAndCacheArtwork(String filePath, Tag tag) async {
     final dir = await _artworkCacheDirectory();
     final key = filePath.hashCode.toUnsigned(32).toRadixString(16);
     final path = '${dir.path}/$key${_artworkExtension(picture.mimeType)}';
-    final file = File(path);
-    if (!await file.exists()) {
-      await file.writeAsBytes(picture.bytes, flush: true);
-    }
+    // Always overwrite: the file's tag can change (e.g. edited via the
+    // "edit tags" dialog), so a stale cache hit would keep showing the old
+    // cover under the same cache key.
+    await File(path).writeAsBytes(picture.bytes, flush: true);
     return path;
   } catch (_) {
     return null;

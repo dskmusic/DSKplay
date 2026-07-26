@@ -27,6 +27,7 @@ import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/services/io_service.dart';
 import 'package:dskplay/services/local_files_service.dart';
+import 'package:dskplay/utilities/edit_tags_dialog.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/playlist_dialogs.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
@@ -892,6 +893,12 @@ class _LocalFileRowState extends State<_LocalFileRow> {
                   label: l10n.share,
                   colorScheme: colorScheme,
                 ),
+                buildPopupMenuItem<String>(
+                  value: 'edit_tags',
+                  icon: FluentIcons.edit_24_regular,
+                  label: 'Editar etiquetas',
+                  colorScheme: colorScheme,
+                ),
               ],
             ),
     );
@@ -925,6 +932,10 @@ class _LocalFileRowState extends State<_LocalFileRow> {
         await SharePlus.instance.share(
           ShareParams(files: [XFile(widget.file.path)]),
         );
+      case 'edit_tags':
+        if (mounted) {
+          showEditTagsDialog(context, widget.file, onSaved: _loadTags);
+        }
     }
   }
 }

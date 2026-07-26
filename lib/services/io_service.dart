@@ -21,6 +21,7 @@
 
 import 'dart:io';
 
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 /// Public app folder on external storage. Kept outside the app's private
@@ -41,6 +42,20 @@ Future<bool> ensureExportStoragePermission() async {
   if (await Permission.manageExternalStorage.isGranted) return true;
   final status = await Permission.manageExternalStorage.request();
   return status.isGranted;
+}
+
+/// Private, app-scoped cache for cover art embedded in offline/downloaded
+/// songs' audio tags. Not scanned by the system gallery: the audio file's
+/// tag is the source of truth, this is only a fast-read cache derived from
+/// it for display, regenerated on demand if missing.
+Future<String> offlineArtworkCachePath(
+  String songId, {
+  String extension = '.jpg',
+}) async {
+  final tempDir = await getTemporaryDirectory();
+  final dir = Directory('${tempDir.path}/offline_artwork');
+  if (!await dir.exists()) await dir.create(recursive: true);
+  return '${dir.path}/$songId$extension';
 }
 
 class FilePaths {

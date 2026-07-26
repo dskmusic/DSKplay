@@ -66,8 +66,12 @@ Future<String?> exportSongToDevice(dynamic song, {required bool asMp3}) async {
 
     if (asMp3) {
       final destPath = '$exportDirPath/$baseName.mp3';
+      // -map 0:v? (optional) carries over the embedded cover art as the
+      // mp3's ID3 attached picture instead of -vn, which would strip it;
+      // metadata (title/artist/album) is copied along by default too.
       final session = await FFmpegKit.execute(
-        '-y -i "$sourcePath" -vn -ar 44100 -ac 2 -b:a 192k "$destPath"',
+        '-y -i "$sourcePath" -map 0:a -map 0:v? -c:a libmp3lame -ar 44100 '
+        '-ac 2 -b:a 192k -c:v copy -id3v2_version 3 "$destPath"',
       );
       final returnCode = await session.getReturnCode();
       if (!ReturnCode.isSuccess(returnCode)) {
