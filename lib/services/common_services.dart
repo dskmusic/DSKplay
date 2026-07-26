@@ -24,7 +24,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:audiotags/audiotags.dart';
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:flutter/widgets.dart';
 import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
@@ -800,6 +801,7 @@ Future<bool> makeSongOffline(dynamic song) async {
 
     final audioPath = FilePaths.getAudioPath(ytid);
     final audioFile = File(audioPath);
+    final rawDownloadFile = File('$audioPath.part');
 
     await audioFile.parent.create(recursive: true);
 
@@ -812,7 +814,7 @@ Future<bool> makeSongOffline(dynamic song) async {
       }
 
       final stream = ytClient.videos.streamsClient.get(audioManifest);
-      fileStream = audioFile.openWrite();
+      fileStream = rawDownloadFile.openWrite();
       await stream.pipe(fileStream);
       await fileStream.flush();
       await fileStream.close();
@@ -826,39 +828,60 @@ Future<bool> makeSongOffline(dynamic song) async {
       try {
         await fileStream?.close();
       } catch (_) {}
-      if (await audioFile.exists()) {
-        await audioFile.delete();
+      if (await rawDownloadFile.exists()) {
+        await rawDownloadFile.delete();
       }
       return false;
     }
 
+    Uint8List? coverBytes;
+    File? coverTempFile;
     try {
       final coverUrl = offlineSong['highResImage']?.toString();
-      final coverBytes = (coverUrl != null && coverUrl.isNotEmpty)
+      coverBytes = (coverUrl != null && coverUrl.isNotEmpty)
           ? await _fetchArtworkBytes(coverUrl)
           : null;
 
-      // Embed title/artist/album/cover directly into the downloaded audio
-      // file's tag instead of saving the cover as a separate image file:
-      // that file lived in a public, gallery-scanned folder, so deleting it
-      // from the gallery silently broke the song's artwork in the app.
-      await AudioTags.write(
-        audioFile.path,
-        Tag(
-          title: offlineSong['title']?.toString(),
-          trackArtist: offlineSong['artist']?.toString(),
-          album: offlineSong['album']?.toString(),
-          pictures: coverBytes != null
-              ? [
-                  Picture(
-                    pictureType: PictureType.coverFront,
-                    mimeType: MimeType.jpeg,
-                    bytes: coverBytes,
-                  ),
-                ]
-              : [],
-        ),
-      );
+      if (coverBytes != null) {
+        coverTempFile = File('${rawDownloadFile.path}_cover.jpg');
+        await coverTempFile.writeAsBytes(coverBytes, flush: true);
+      }
+
+      // Remux the raw stream into a real .m4a container and embed
+      // title/artist/album/cover in the same pass via ffmpeg, instead of
+      // relying on a tag-writing library and saving the cover as a
+      // separate image file. YouTube's audio-only streams are sometimes
+      // Opus-in-WebM even though the file is saved as .m4a, which a plain
+      // tag writer can't parse; this stream-copy remux makes the file's
+      // contents genuinely match its extension. It also drops the
+      // separate public cover file, whose deletion from the gallery used
+      // to silently break the song's artwork in the app.
+      final metadataArgs = [
+        if ((offlineSong['title']?.toString() ?? '').isNotEmpty)
+          '-metadata title="${_ffmpegEscape(offlineSong['title'].toString())}"',
+        if ((offlineSong['artist']?.toString() ?? '').isNotEmpty)
+          '-metadata artist="${_ffmpegEscape(offlineSong['artist'].toString())}"',
+        if ((offlineSong['album']?.toString() ?? '').isNotEmpty)
+          '-metadata album="${_ffmpegEscape(offlineSong['album'].toString())}"',
+      ].join(' ');
+
+      final command = coverTempFile != null
+          ? '-y -i "${rawDownloadFile.path}" -i "${coverTempFile.path}" '
+              '-map 0:a -map 1:0 -c:a copy -c:v mjpeg -disposition:v attached_pic '
+              '$metadataArgs "${audioFile.path}"'
+          : '-y -i "${rawDownloadFile.path}" -map 0:a -c:a copy '
+              '$metadataArgs "${audioFile.path}"';
+
+      final session = await FFmpegKit.execute(command);
+      final returnCode = await session.getReturnCode();
+      if (!ReturnCode.isSuccess(returnCode)) {
+        logger.log(
+          'makeSongOffline: ffmpeg remux/tag failed for $ytid, '
+          'saving raw stream instead',
+        );
+        if (await audioFile.exists()) await audioFile.delete();
+        await rawDownloadFile.copy(audioFile.path);
+      }
 
       if (coverBytes != null) {
         final cachedPath = await offlineArtworkCachePath(ytid);
@@ -874,6 +897,18 @@ Future<bool> makeSongOffline(dynamic song) async {
         stackTrace: stackTrace,
       );
       offlineSong['artworkPath'] = null;
+      if (!await audioFile.exists() && await rawDownloadFile.exists()) {
+        await rawDownloadFile.copy(audioFile.path);
+      }
+    } finally {
+      try {
+        if (await rawDownloadFile.exists()) await rawDownloadFile.delete();
+      } catch (_) {}
+      try {
+        if (coverTempFile != null && await coverTempFile.exists()) {
+          await coverTempFile.delete();
+        }
+      } catch (_) {}
     }
 
     offlineSong['audioPath'] = audioFile.path;
@@ -979,6 +1014,11 @@ Future<bool> removeSongFromOffline(dynamic songId) async {
     return false;
   }
 }
+
+/// Escapes a value for safe interpolation inside a double-quoted ffmpeg
+/// `-metadata key="value"` argument.
+String _ffmpegEscape(String value) =>
+    value.replaceAll('\\', r'\\').replaceAll('"', r'\"');
 
 Future<Uint8List?> _fetchArtworkBytes(String url) async {
   try {
