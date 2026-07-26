@@ -791,7 +791,6 @@ Future<bool> _downloadAndTagAudioFile(
   String ytid,
   File audioFile,
 ) async {
-  final rawDownloadFile = File('${audioFile.path}.part');
   await audioFile.parent.create(recursive: true);
 
   IOSink? fileStream;
@@ -803,7 +802,7 @@ Future<bool> _downloadAndTagAudioFile(
     }
 
     final stream = ytClient.videos.streamsClient.get(audioManifest);
-    fileStream = rawDownloadFile.openWrite();
+    fileStream = audioFile.openWrite();
     await stream.pipe(fileStream);
     await fileStream.flush();
     await fileStream.close();
@@ -817,93 +816,100 @@ Future<bool> _downloadAndTagAudioFile(
     try {
       await fileStream?.close();
     } catch (_) {}
-    if (await rawDownloadFile.exists()) {
-      await rawDownloadFile.delete();
+    if (await audioFile.exists()) {
+      await audioFile.delete();
     }
     return false;
   }
 
-  // YouTube's audio-only streams are sometimes Opus-in-WebM even though
-  // the file is saved as .m4a; a tag-writing library can't parse that
-  // mismatched container, so remux (stream copy, no re-encode, via
-  // executeWithArguments to avoid any command-string quoting issues) into
-  // a real MP4/M4A container first. This guarantees the file's contents
-  // genuinely match its extension before it's tagged below.
+  final coverUrl = song['highResImage']?.toString();
+  final coverBytes = (coverUrl != null && coverUrl.isNotEmpty)
+      ? await _fetchArtworkBytes(coverUrl)
+      : null;
+
+  // Embed title/artist/album/cover directly into the audio file's tag,
+  // instead of saving the cover as a separate image file: that file lived
+  // in a public, gallery-scanned folder, so deleting it from the gallery
+  // silently broke the song's artwork in the app.
+  final tag = Tag(
+    title: song['title']?.toString(),
+    trackArtist: song['artist']?.toString(),
+    album: song['album']?.toString(),
+    pictures: coverBytes != null
+        ? [
+            Picture(
+              pictureType: PictureType.coverFront,
+              mimeType: MimeType.jpeg,
+              bytes: coverBytes,
+            ),
+          ]
+        : [],
+  );
+
+  var tagged = false;
   try {
-    final session = await FFmpegKit.executeWithArguments([
-      '-y',
-      '-i',
-      rawDownloadFile.path,
-      '-map',
-      '0:a',
-      '-c:a',
-      'copy',
-      audioFile.path,
-    ]);
-    if (!ReturnCode.isSuccess(await session.getReturnCode())) {
-      logger.log(
-        '_downloadAndTagAudioFile: ffmpeg remux failed for $ytid, '
-        'using raw stream',
-      );
-      if (await audioFile.exists()) await audioFile.delete();
-      await rawDownloadFile.copy(audioFile.path);
-    }
+    await AudioTags.write(audioFile.path, tag);
+    tagged = true;
   } catch (e, stackTrace) {
     logger.log(
-      'Error remuxing audio file',
+      'Tag write failed on the raw stream for $ytid, remuxing to a real '
+      'MP4/M4A container and retrying',
       error: e,
       stackTrace: stackTrace,
     );
-    if (!await audioFile.exists()) await rawDownloadFile.copy(audioFile.path);
-  } finally {
+  }
+
+  if (!tagged) {
+    // YouTube's audio-only streams are sometimes Opus-in-WebM even though
+    // the file is saved as .m4a; audiotags can't parse that mismatched
+    // container, so remux (stream copy, no re-encode) into a real MP4/M4A
+    // container and retry the tag write.
+    final rawFile = File('${audioFile.path}.part');
     try {
-      if (await rawDownloadFile.exists()) await rawDownloadFile.delete();
-    } catch (_) {}
-  }
-
-  try {
-    final coverUrl = song['highResImage']?.toString();
-    final coverBytes = (coverUrl != null && coverUrl.isNotEmpty)
-        ? await _fetchArtworkBytes(coverUrl)
-        : null;
-
-    // Embed title/artist/album/cover directly into the (now guaranteed
-    // valid MP4/M4A) audio file's tag, instead of saving the cover as a
-    // separate image file: that file lived in a public, gallery-scanned
-    // folder, so deleting it from the gallery silently broke the song's
-    // artwork in the app.
-    await AudioTags.write(
-      audioFile.path,
-      Tag(
-        title: song['title']?.toString(),
-        trackArtist: song['artist']?.toString(),
-        album: song['album']?.toString(),
-        pictures: coverBytes != null
-            ? [
-                Picture(
-                  pictureType: PictureType.coverFront,
-                  mimeType: MimeType.jpeg,
-                  bytes: coverBytes,
-                ),
-              ]
-            : [],
-      ),
-    );
-
-    if (coverBytes != null) {
-      final cachedPath = await offlineArtworkCachePath(ytid);
-      await File(cachedPath).writeAsBytes(coverBytes, flush: true);
+      await audioFile.copy(rawFile.path);
+      final session = await FFmpegKit.executeWithArguments([
+        '-y',
+        '-i',
+        rawFile.path,
+        '-map',
+        '0:a',
+        '-c:a',
+        'copy',
+        audioFile.path,
+      ]);
+      if (ReturnCode.isSuccess(await session.getReturnCode())) {
+        try {
+          await AudioTags.write(audioFile.path, tag);
+          tagged = true;
+        } catch (e, stackTrace) {
+          logger.log(
+            'Tag write failed after remux for $ytid',
+            error: e,
+            stackTrace: stackTrace,
+          );
+        }
+      } else {
+        logger.log('_downloadAndTagAudioFile: ffmpeg remux failed for $ytid');
+      }
+    } catch (e, stackTrace) {
+      logger.log(
+        'Error remuxing audio file',
+        error: e,
+        stackTrace: stackTrace,
+      );
+    } finally {
+      try {
+        if (await rawFile.exists()) await rawFile.delete();
+      } catch (_) {}
     }
-
-    await scanMediaFile(audioFile.path);
-  } catch (e, stackTrace) {
-    logger.log(
-      'Error embedding cover art into audio file',
-      error: e,
-      stackTrace: stackTrace,
-    );
   }
 
+  if (tagged && coverBytes != null) {
+    final cachedPath = await offlineArtworkCachePath(ytid);
+    await File(cachedPath).writeAsBytes(coverBytes, flush: true);
+  }
+
+  await scanMediaFile(audioFile.path);
   return true;
 }
 
