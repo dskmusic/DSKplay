@@ -30,6 +30,7 @@ import 'package:go_router/go_router.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/services/common_services.dart';
+import 'package:dskplay/services/download_notification_service.dart';
 import 'package:dskplay/services/playlists_manager.dart';
 import 'package:dskplay/services/router_service.dart';
 import 'package:dskplay/services/settings_manager.dart';
@@ -262,18 +263,44 @@ Future<void> _handleSongMenuAction({
 }
 
 Future<void> _exportSongToDeviceFlow(BuildContext context, dynamic song) async {
-  final asMp3 = await showDialog<bool>(
-    context: context,
-    builder: (context) => const _ExportFormatDialog(),
-  );
-  if (asMp3 == null || !context.mounted) return;
+  final title = song is Map ? (song['title']?.toString() ?? '') : '';
+  final notificationTitle = title.isEmpty
+      ? 'Descargando canción'
+      : 'Descargando: $title';
+  final notifications = DownloadNotificationService();
+  final notificationId = notifications.nextId();
 
   showToast(
     context,
     context.l10n!.downloadingToDevice,
     duration: const Duration(seconds: 1),
   );
-  final path = await exportSongToDevice(song, asMp3: asMp3);
+
+  unawaited(
+    notifications.showProgress(notificationId, notificationTitle, progress: 0),
+  );
+  var lastReportedPercent = -1;
+  final path = await exportSongToDevice(
+    song,
+    onProgress: (progress) {
+      final percent = (progress * 100).clamp(0, 100).round();
+      if (percent == lastReportedPercent) return;
+      lastReportedPercent = percent;
+      unawaited(
+        notifications.showProgress(
+          notificationId,
+          notificationTitle,
+          progress: percent,
+        ),
+      );
+    },
+  );
+  await notifications.showResult(
+    notificationId,
+    notificationTitle,
+    success: path != null,
+  );
+
   if (!context.mounted) return;
 
   showToast(
@@ -350,7 +377,7 @@ Future<void> _shareSongFlow(
     ),
   );
 
-  final path = await exportSongToDevice(song, asMp3: true);
+  final path = await exportSongToDevice(song);
 
   if (context.mounted) {
     Navigator.of(context, rootNavigator: true).pop();
@@ -371,51 +398,6 @@ Future<void> _shareSongFlow(
   );
 }
 
-class _ExportFormatDialog extends StatefulWidget {
-  const _ExportFormatDialog();
-
-  @override
-  State<_ExportFormatDialog> createState() => _ExportFormatDialogState();
-}
-
-class _ExportFormatDialogState extends State<_ExportFormatDialog> {
-  bool _asMp3 = true;
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(context.l10n!.downloadToDevice),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          RadioListTile<bool>(
-            title: const Text('MP3'),
-            value: true,
-            groupValue: _asMp3,
-            onChanged: (value) => setState(() => _asMp3 = value!),
-          ),
-          RadioListTile<bool>(
-            title: const Text('M4A (original)'),
-            value: false,
-            groupValue: _asMp3,
-            onChanged: (value) => setState(() => _asMp3 = value!),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(context.l10n!.cancel),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(_asMp3),
-          child: Text(context.l10n!.download),
-        ),
-      ],
-    );
-  }
-}
-
 Future<void> _toggleSongOfflineStatus(
   BuildContext context,
   dynamic song,
@@ -433,7 +415,42 @@ Future<void> _toggleSongOfflineStatus(
         showToast(context, context.l10n!.songRemovedFromOffline);
       }
     } else {
-      success = await makeSongOffline(song);
+      final title = song is Map ? (song['title']?.toString() ?? '') : '';
+      final notificationTitle = title.isEmpty
+          ? 'Disponible sin conexión'
+          : 'Sin conexión: $title';
+      final notifications = DownloadNotificationService();
+      final notificationId = notifications.nextId();
+
+      unawaited(
+        notifications.showProgress(
+          notificationId,
+          notificationTitle,
+          progress: 0,
+        ),
+      );
+      var lastReportedPercent = -1;
+      success = await makeSongOffline(
+        song,
+        onProgress: (progress) {
+          final percent = (progress * 100).clamp(0, 100).round();
+          if (percent == lastReportedPercent) return;
+          lastReportedPercent = percent;
+          unawaited(
+            notifications.showProgress(
+              notificationId,
+              notificationTitle,
+              progress: percent,
+            ),
+          );
+        },
+      );
+      await notifications.showResult(
+        notificationId,
+        notificationTitle,
+        success: success,
+      );
+
       if (success && context.mounted) {
         showToast(context, context.l10n!.songAddedToOffline);
       }

@@ -30,6 +30,7 @@ import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:flutter/widgets.dart';
 import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:dskplay/constants/clients.dart';
 import 'package:dskplay/main.dart' show logger;
 import 'package:dskplay/models/radio_model.dart';
@@ -789,8 +790,10 @@ LyricsResult cleanLyricsResult(LyricsResult result) {
 Future<bool> _downloadAndTagAudioFile(
   Map song,
   String ytid,
-  File audioFile,
-) async {
+  File audioFile, {
+  void Function(double progress)? onProgress,
+}) async {
+  final rawFile = File('${audioFile.path}.raw');
   await audioFile.parent.create(recursive: true);
 
   IOSink? fileStream;
@@ -802,8 +805,14 @@ Future<bool> _downloadAndTagAudioFile(
     }
 
     final stream = ytClient.videos.streamsClient.get(audioManifest);
-    fileStream = audioFile.openWrite();
-    await stream.pipe(fileStream);
+    fileStream = rawFile.openWrite();
+    final totalBytes = audioManifest.size.totalBytes;
+    var receivedBytes = 0;
+    await for (final chunk in stream) {
+      fileStream.add(chunk);
+      receivedBytes += chunk.length;
+      if (totalBytes > 0) onProgress?.call(receivedBytes / totalBytes);
+    }
     await fileStream.flush();
     await fileStream.close();
     fileStream = null;
@@ -816,25 +825,59 @@ Future<bool> _downloadAndTagAudioFile(
     try {
       await fileStream?.close();
     } catch (_) {}
-    if (await audioFile.exists()) {
-      await audioFile.delete();
+    if (await rawFile.exists()) {
+      await rawFile.delete();
     }
     return false;
   }
 
-  // The download itself succeeded and audioFile is already playable at
-  // this point; tagging below is best-effort on top of it and must never
-  // leave audioFile missing/corrupted if it fails.
+  // Always transcode to MP3 with libmp3lame, regardless of the source
+  // codec/container (YouTube serves anything from AAC-in-MP4 to
+  // Opus-in-WebM): it's the one format that has proven to both embed and
+  // read back cover art reliably here, everything else was a gamble on
+  // whether a given source codec could even be stream-copied into the
+  // destination container.
+  try {
+    final session = await FFmpegKit.executeWithArguments([
+      '-y',
+      '-i',
+      rawFile.path,
+      '-map',
+      '0:a',
+      '-c:a',
+      'libmp3lame',
+      '-b:a',
+      '192k',
+      audioFile.path,
+    ]);
+    if (!ReturnCode.isSuccess(await session.getReturnCode())) {
+      logger.log('_downloadAndTagAudioFile: mp3 transcode failed for $ytid');
+      return false;
+    }
+  } catch (e, stackTrace) {
+    logger.log(
+      'Error transcoding audio file to mp3',
+      error: e,
+      stackTrace: stackTrace,
+    );
+    return false;
+  } finally {
+    try {
+      if (await rawFile.exists()) await rawFile.delete();
+    } catch (_) {}
+  }
+
+  // Tagging below is best-effort on top of the now-guaranteed-valid mp3
+  // and must never leave audioFile missing/corrupted if it fails.
   await _tagAudioFile(song, ytid, audioFile);
   await scanMediaFile(audioFile.path);
   return true;
 }
 
-/// Best-effort tagging of an already-downloaded [audioFile]: writes
-/// title/artist/album/cover to a temp copy first and only replaces the
-/// original once that succeeds, so a tag-write failure (e.g. an
-/// unparseable container) can never corrupt or delete the already-working,
-/// playable audio file.
+/// Best-effort tagging of an already-downloaded, already-mp3 [audioFile]:
+/// writes title/artist/album/cover to a temp copy first and only replaces
+/// the original once that succeeds, so a tag-write failure can never
+/// corrupt or delete the already-working, playable audio file.
 Future<void> _tagAudioFile(Map song, String ytid, File audioFile) async {
   final coverUrl = song['highResImage']?.toString();
   final coverBytes = (coverUrl != null && coverUrl.isNotEmpty)
@@ -856,62 +899,22 @@ Future<void> _tagAudioFile(Map song, String ytid, File audioFile) async {
         : [],
   );
 
-  final workingCopy = File('${audioFile.path}.tagging');
-  var tagged = false;
+  // Must keep a real .mp3 extension: audiotags relies on it to pick the
+  // right format parser, so an extension-less/mismatched temp name (e.g.
+  // ".tagging") makes it fail with "No format could be determined" even
+  // though the file's actual content is a perfectly valid MP3.
+  final workingCopy = File('${audioFile.path}.tagging.mp3');
   try {
     await audioFile.copy(workingCopy.path);
     await AudioTags.write(workingCopy.path, tag);
-    tagged = true;
-  } catch (e, stackTrace) {
-    logger.log(
-      'Tag write failed for $ytid, remuxing to a real MP4/M4A container '
-      'and retrying',
-      error: e,
-      stackTrace: stackTrace,
-    );
-
-    // YouTube's audio-only streams are sometimes Opus-in-WebM even though
-    // the file is saved as .m4a; audiotags can't parse that mismatched
-    // container, so remux (stream copy, no re-encode, from the untouched
-    // original) into a real MP4/M4A container and retry, still only on
-    // the working copy.
-    try {
-      final session = await FFmpegKit.executeWithArguments([
-        '-y',
-        '-i',
-        audioFile.path,
-        '-map',
-        '0:a',
-        '-c:a',
-        'copy',
-        workingCopy.path,
-      ]);
-      if (ReturnCode.isSuccess(await session.getReturnCode())) {
-        await AudioTags.write(workingCopy.path, tag);
-        tagged = true;
-      } else {
-        logger.log('_tagAudioFile: ffmpeg remux failed for $ytid');
-      }
-    } catch (e, stackTrace) {
-      logger.log(
-        'Error remuxing/tagging audio file for $ytid',
-        error: e,
-        stackTrace: stackTrace,
-      );
-    }
-  }
-
-  try {
-    if (tagged) {
-      await workingCopy.copy(audioFile.path);
-      if (coverBytes != null) {
-        final cachedPath = await offlineArtworkCachePath(ytid);
-        await File(cachedPath).writeAsBytes(coverBytes, flush: true);
-      }
+    await workingCopy.copy(audioFile.path);
+    if (coverBytes != null) {
+      final cachedPath = await offlineArtworkCachePath(ytid);
+      await File(cachedPath).writeAsBytes(coverBytes, flush: true);
     }
   } catch (e, stackTrace) {
     logger.log(
-      'Error promoting tagged audio file for $ytid',
+      'Error embedding cover art into audio file for $ytid',
       error: e,
       stackTrace: stackTrace,
     );
@@ -922,28 +925,44 @@ Future<void> _tagAudioFile(Map song, String ytid, File audioFile) async {
   }
 }
 
-/// Downloads and tags [song]'s audio into the shared local cache
-/// (`FilePaths.getAudioPath`), embedding cover/title/artist/album, without
-/// registering it in the user's offline library. Used by the "export to
-/// device" (MP3/M4A) feature; [makeSongOffline] additionally registers the
-/// song as available offline on top of this.
-Future<bool> downloadAndTagAudioFile(dynamic song) async {
+/// Downloads and tags [song]'s audio into a private temp file — never the
+/// shared offline cache/library — and returns its path, or null on
+/// failure. Used by the "export to device" (MP3) feature, which must not
+/// leave anything under the public offline folder; only the explicit
+/// "make available offline" action ([makeSongOffline]) does that.
+Future<String?> downloadAndTagAudioFile(
+  dynamic song, {
+  void Function(double progress)? onProgress,
+}) async {
   final String? ytid = song['ytid'];
   if (ytid == null || ytid.isEmpty) {
     logger.log('downloadAndTagAudioFile: song["ytid"] is null or empty');
-    return false;
+    return null;
   }
 
   if (!await ensureExportStoragePermission()) {
     logger.log('downloadAndTagAudioFile: storage permission denied');
-    return false;
+    return null;
   }
 
-  final audioFile = File(FilePaths.getAudioPath(ytid));
-  return _downloadAndTagAudioFile(song as Map, ytid, audioFile);
+  final tempDir = await getTemporaryDirectory();
+  final cacheDir = Directory('${tempDir.path}/export_cache');
+  if (!await cacheDir.exists()) await cacheDir.create(recursive: true);
+  final audioFile = File('${cacheDir.path}/$ytid.mp3');
+
+  final success = await _downloadAndTagAudioFile(
+    song as Map,
+    ytid,
+    audioFile,
+    onProgress: onProgress,
+  );
+  return success ? audioFile.path : null;
 }
 
-Future<bool> makeSongOffline(dynamic song) async {
+Future<bool> makeSongOffline(
+  dynamic song, {
+  void Function(double progress)? onProgress,
+}) async {
   try {
     final String? ytid = song['ytid'];
 
@@ -968,7 +987,12 @@ Future<bool> makeSongOffline(dynamic song) async {
 
     final audioFile = File(FilePaths.getAudioPath(ytid));
 
-    if (!await _downloadAndTagAudioFile(offlineSong, ytid, audioFile)) {
+    if (!await _downloadAndTagAudioFile(
+      offlineSong,
+      ytid,
+      audioFile,
+      onProgress: onProgress,
+    )) {
       return false;
     }
 

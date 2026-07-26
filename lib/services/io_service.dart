@@ -77,7 +77,11 @@ Future<String> offlineArtworkCachePath(
 
 class FilePaths {
   // File extensions
-  static const String audioExtension = '.m4a';
+  // MP3 is the only format written for downloads/offline: it's the one
+  // format we've confirmed reads and writes embedded cover art reliably
+  // (via ffmpeg transcode + audiotags) across YouTube's varied source
+  // codecs/containers.
+  static const String audioExtension = '.mp3';
   static const String artworkExtension = '.jpg';
 
   // Directory names
