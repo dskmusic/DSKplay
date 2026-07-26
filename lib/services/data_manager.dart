@@ -30,7 +30,11 @@ import 'package:dskplay/main.dart' show logger;
 import 'package:dskplay/services/io_service.dart';
 
 /// Boxes included in a user backup (local file or cloud), in this order.
-const List<String> backedUpBoxNames = ['user', 'settings'];
+/// Export order only (Map key order -> JSON key order); import looks each
+/// box up by name, so this doesn't affect restoring. Settings first so the
+/// app config is readable at the top of the exported JSON instead of after
+/// all the collected user data.
+const List<String> backedUpBoxNames = ['settings', 'user'];
 
 /// Set by app bootstrap to trigger a debounced cloud auto-backup whenever
 /// backed-up data changes, without a circular import between this file and

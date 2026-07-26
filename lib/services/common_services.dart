@@ -1032,6 +1032,7 @@ Future<bool> makeSongOffline(
       );
     }
 
+    notifyLocalFilesChanged();
     return true;
   } catch (e, stackTrace) {
     logger.log('Error making song offline', error: e, stackTrace: stackTrace);

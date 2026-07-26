@@ -30,6 +30,7 @@ import 'package:dskplay/services/local_files_service.dart';
 import 'package:dskplay/utilities/edit_tags_dialog.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/playlist_dialogs.dart';
+import 'package:dskplay/widgets/confirmation_dialog.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:dskplay/widgets/overflow_menu_button.dart';
 import 'package:dskplay/widgets/popup_menu_item.dart';
@@ -72,12 +73,22 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
     super.initState();
     _checkPermission();
     _loadFavorites();
+    localFilesRefreshTick.addListener(_onExternalFilesChanged);
   }
 
   @override
   void dispose() {
+    localFilesRefreshTick.removeListener(_onExternalFilesChanged);
     _searchController.dispose();
     super.dispose();
+  }
+
+  /// A download/offline-export elsewhere in the app just wrote a file to
+  /// disk; refresh the currently-viewed folder so it shows up without the
+  /// user having to leave and come back.
+  void _onExternalFilesChanged() {
+    if (!mounted || _hasPermission != true || _isSearching) return;
+    _loadCurrentDirectory();
   }
 
   Future<void> _loadFavorites() async {
@@ -529,6 +540,7 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
             onAddToQueue: () => _addFolderToQueue(entry),
             onAddToPlaylist: () => _addFolderToPlaylist(entry),
             onToggleFavorite: () => _toggleFavorite(entry.path),
+            onDeleted: () => setState(() => _entries.remove(entry)),
           );
         }
 
@@ -540,6 +552,7 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
           onTap: () =>
               _selectionMode ? _toggleSelected(file.path) : _playFile(file),
           onLongPress: () => _enterSelectionMode(file.path),
+          onDeleted: () => setState(() => _entries.remove(file)),
         );
       },
     );
@@ -583,6 +596,9 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
           onAddToQueue: () => _addFolderToQueue(directory),
           onAddToPlaylist: () => _addFolderToPlaylist(directory),
           onToggleFavorite: () => _toggleFavorite(directory.path),
+          // Already a favorite here, so this un-favorites it too (and
+          // reloads the favorites list) since the folder no longer exists.
+          onDeleted: () => _toggleFavorite(directory.path),
         );
       },
     );
@@ -659,6 +675,7 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
             onAddToQueue: () => _addFolderToQueue(entry),
             onAddToPlaylist: () => _addFolderToPlaylist(entry),
             onToggleFavorite: () => _toggleFavorite(entry.path),
+            onDeleted: () => setState(() => _searchResults?.remove(entry)),
           );
         }
 
@@ -669,6 +686,7 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
           isSelected: false,
           onTap: () => _playFoundFile(file),
           onLongPress: () {},
+          onDeleted: () => setState(() => _searchResults?.remove(file)),
         );
       },
     );
@@ -687,6 +705,7 @@ class _FolderRow extends StatelessWidget {
     required this.onAddToQueue,
     required this.onAddToPlaylist,
     required this.onToggleFavorite,
+    required this.onDeleted,
   });
 
   final Directory directory;
@@ -699,6 +718,31 @@ class _FolderRow extends StatelessWidget {
   final VoidCallback onAddToQueue;
   final VoidCallback onAddToPlaylist;
   final VoidCallback onToggleFavorite;
+  final VoidCallback onDeleted;
+
+  Future<void> _confirmAndDelete(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => ConfirmationDialog(
+        confirmationMessage:
+            '¿Eliminar la carpeta "${fileNameFromPath(directory.path)}" y '
+            'todo su contenido? Esta acción no se puede deshacer.',
+        submitMessage: context.l10n!.delete,
+        isDangerous: true,
+        onCancel: () => Navigator.of(context).pop(false),
+        onSubmit: () => Navigator.of(context).pop(true),
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await directory.delete(recursive: true);
+      onDeleted();
+    } catch (e, stackTrace) {
+      logger.log('Error deleting folder', error: e, stackTrace: stackTrace);
+      if (context.mounted) showToast(context, context.l10n!.error);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -728,7 +772,7 @@ class _FolderRow extends StatelessWidget {
       trailing: selectionMode
           ? Checkbox(value: isSelected, onChanged: (_) => onTap())
           : OverflowMenuButton<String>(
-              onSelected: (value) {
+              onSelected: (value) async {
                 switch (value) {
                   case 'play':
                     onPlay();
@@ -738,6 +782,8 @@ class _FolderRow extends StatelessWidget {
                     onAddToPlaylist();
                   case 'toggle_favorite':
                     onToggleFavorite();
+                  case 'delete':
+                    await _confirmAndDelete(context);
                 }
               },
               itemBuilder: (context) => [
@@ -769,6 +815,12 @@ class _FolderRow extends StatelessWidget {
                       : 'Añadir a favoritos',
                   colorScheme: colorScheme,
                 ),
+                buildPopupMenuItem<String>(
+                  value: 'delete',
+                  icon: FluentIcons.delete_24_regular,
+                  label: l10n.delete,
+                  colorScheme: colorScheme,
+                ),
               ],
             ),
     );
@@ -782,6 +834,7 @@ class _LocalFileRow extends StatefulWidget {
     required this.isSelected,
     required this.onTap,
     required this.onLongPress,
+    required this.onDeleted,
   });
 
   final File file;
@@ -789,6 +842,7 @@ class _LocalFileRow extends StatefulWidget {
   final bool isSelected;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
+  final VoidCallback onDeleted;
 
   @override
   State<_LocalFileRow> createState() => _LocalFileRowState();
@@ -899,9 +953,39 @@ class _LocalFileRowState extends State<_LocalFileRow> {
                   label: 'Editar etiquetas',
                   colorScheme: colorScheme,
                 ),
+                buildPopupMenuItem<String>(
+                  value: 'delete',
+                  icon: FluentIcons.delete_24_regular,
+                  label: l10n.delete,
+                  colorScheme: colorScheme,
+                ),
               ],
             ),
     );
+  }
+
+  Future<void> _deleteFile() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => ConfirmationDialog(
+        confirmationMessage:
+            '¿Eliminar "${fileNameFromPath(widget.file.path)}"? '
+            'Esta acción no se puede deshacer.',
+        submitMessage: context.l10n!.delete,
+        isDangerous: true,
+        onCancel: () => Navigator.of(context).pop(false),
+        onSubmit: () => Navigator.of(context).pop(true),
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await widget.file.delete();
+      widget.onDeleted();
+    } catch (e, stackTrace) {
+      logger.log('Error deleting local file', error: e, stackTrace: stackTrace);
+      if (mounted) showToast(context, context.l10n!.error);
+    }
   }
 
   Future<void> _handleMenuAction(String value) async {
@@ -936,6 +1020,8 @@ class _LocalFileRowState extends State<_LocalFileRow> {
         if (mounted) {
           showEditTagsDialog(context, widget.file, onSaved: _loadTags);
         }
+      case 'delete':
+        await _deleteFile();
     }
   }
 }

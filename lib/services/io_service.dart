@@ -21,6 +21,7 @@
 
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -28,6 +29,15 @@ import 'package:permission_handler/permission_handler.dart';
 const MethodChannel _mediaScannerChannel = MethodChannel(
   'dskplay/media_scanner',
 );
+
+/// Bumped whenever a file is downloaded/exported to disk (manual MP3
+/// download or "make available offline"), so the local files browser can
+/// refresh itself instead of showing a stale listing.
+final ValueNotifier<int> localFilesRefreshTick = ValueNotifier<int>(0);
+
+void notifyLocalFilesChanged() {
+  localFilesRefreshTick.value++;
+}
 
 /// Tells Android's MediaStore to (re)index [path]. Files written directly
 /// to disk (as every download/export/tag-edit here does) don't show up —

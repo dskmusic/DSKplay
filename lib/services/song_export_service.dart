@@ -72,6 +72,7 @@ Future<String?> exportSongToDevice(
     final destPath = '$exportDirPath/$baseName.mp3';
     await File(tempSourcePath).copy(destPath);
     await scanMediaFile(destPath);
+    notifyLocalFilesChanged();
     return destPath;
   } catch (e, stackTrace) {
     logger.log('Error exporting song to device', error: e, stackTrace: stackTrace);
