@@ -822,15 +822,25 @@ Future<bool> _downloadAndTagAudioFile(
     return false;
   }
 
+  // The download itself succeeded and audioFile is already playable at
+  // this point; tagging below is best-effort on top of it and must never
+  // leave audioFile missing/corrupted if it fails.
+  await _tagAudioFile(song, ytid, audioFile);
+  await scanMediaFile(audioFile.path);
+  return true;
+}
+
+/// Best-effort tagging of an already-downloaded [audioFile]: writes
+/// title/artist/album/cover to a temp copy first and only replaces the
+/// original once that succeeds, so a tag-write failure (e.g. an
+/// unparseable container) can never corrupt or delete the already-working,
+/// playable audio file.
+Future<void> _tagAudioFile(Map song, String ytid, File audioFile) async {
   final coverUrl = song['highResImage']?.toString();
   final coverBytes = (coverUrl != null && coverUrl.isNotEmpty)
       ? await _fetchArtworkBytes(coverUrl)
       : null;
 
-  // Embed title/artist/album/cover directly into the audio file's tag,
-  // instead of saving the cover as a separate image file: that file lived
-  // in a public, gallery-scanned folder, so deleting it from the gallery
-  // silently broke the song's artwork in the app.
   final tag = Tag(
     title: song['title']?.toString(),
     trackArtist: song['artist']?.toString(),
@@ -846,71 +856,70 @@ Future<bool> _downloadAndTagAudioFile(
         : [],
   );
 
+  final workingCopy = File('${audioFile.path}.tagging');
   var tagged = false;
   try {
-    await AudioTags.write(audioFile.path, tag);
+    await audioFile.copy(workingCopy.path);
+    await AudioTags.write(workingCopy.path, tag);
     tagged = true;
   } catch (e, stackTrace) {
     logger.log(
-      'Tag write failed on the raw stream for $ytid, remuxing to a real '
-      'MP4/M4A container and retrying',
+      'Tag write failed for $ytid, remuxing to a real MP4/M4A container '
+      'and retrying',
       error: e,
       stackTrace: stackTrace,
     );
-  }
 
-  if (!tagged) {
     // YouTube's audio-only streams are sometimes Opus-in-WebM even though
     // the file is saved as .m4a; audiotags can't parse that mismatched
-    // container, so remux (stream copy, no re-encode) into a real MP4/M4A
-    // container and retry the tag write.
-    final rawFile = File('${audioFile.path}.part');
+    // container, so remux (stream copy, no re-encode, from the untouched
+    // original) into a real MP4/M4A container and retry, still only on
+    // the working copy.
     try {
-      await audioFile.copy(rawFile.path);
       final session = await FFmpegKit.executeWithArguments([
         '-y',
         '-i',
-        rawFile.path,
+        audioFile.path,
         '-map',
         '0:a',
         '-c:a',
         'copy',
-        audioFile.path,
+        workingCopy.path,
       ]);
       if (ReturnCode.isSuccess(await session.getReturnCode())) {
-        try {
-          await AudioTags.write(audioFile.path, tag);
-          tagged = true;
-        } catch (e, stackTrace) {
-          logger.log(
-            'Tag write failed after remux for $ytid',
-            error: e,
-            stackTrace: stackTrace,
-          );
-        }
+        await AudioTags.write(workingCopy.path, tag);
+        tagged = true;
       } else {
-        logger.log('_downloadAndTagAudioFile: ffmpeg remux failed for $ytid');
+        logger.log('_tagAudioFile: ffmpeg remux failed for $ytid');
       }
     } catch (e, stackTrace) {
       logger.log(
-        'Error remuxing audio file',
+        'Error remuxing/tagging audio file for $ytid',
         error: e,
         stackTrace: stackTrace,
       );
-    } finally {
-      try {
-        if (await rawFile.exists()) await rawFile.delete();
-      } catch (_) {}
     }
   }
 
-  if (tagged && coverBytes != null) {
-    final cachedPath = await offlineArtworkCachePath(ytid);
-    await File(cachedPath).writeAsBytes(coverBytes, flush: true);
+  try {
+    if (tagged) {
+      await workingCopy.copy(audioFile.path);
+      if (coverBytes != null) {
+        final cachedPath = await offlineArtworkCachePath(ytid);
+        await File(cachedPath).writeAsBytes(coverBytes, flush: true);
+      }
+    }
+  } catch (e, stackTrace) {
+    logger.log(
+      'Error promoting tagged audio file for $ytid',
+      error: e,
+      stackTrace: stackTrace,
+    );
+  } finally {
+    try {
+      if (await workingCopy.exists()) await workingCopy.delete();
+    } catch (_) {}
   }
-
-  await scanMediaFile(audioFile.path);
-  return true;
 }
 
 /// Downloads and tags [song]'s audio into the shared local cache
