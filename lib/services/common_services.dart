@@ -777,6 +777,155 @@ LyricsResult cleanLyricsResult(LyricsResult result) {
   );
 }
 
+/// Downloads [song]'s audio stream and writes it to [audioFile] as a real,
+/// taggable MP4/M4A container with title/artist/album/cover embedded
+/// directly in the file's tag (cached separately too, for fast display).
+///
+/// This is the shared core behind both [makeSongOffline] (which also marks
+/// the song as available offline in the user's library) and
+/// [downloadAndTagAudioFile] (which doesn't) — kept separate so exporting a
+/// one-off MP3/M4A copy never has the side effect of adding the song to the
+/// offline library.
+Future<bool> _downloadAndTagAudioFile(
+  Map song,
+  String ytid,
+  File audioFile,
+) async {
+  final rawDownloadFile = File('${audioFile.path}.part');
+  await audioFile.parent.create(recursive: true);
+
+  IOSink? fileStream;
+  try {
+    final audioManifest = await fetchBestAudioStream(ytid);
+    if (audioManifest == null) {
+      logger.log('_downloadAndTagAudioFile: audioManifest is null for $ytid');
+      return false;
+    }
+
+    final stream = ytClient.videos.streamsClient.get(audioManifest);
+    fileStream = rawDownloadFile.openWrite();
+    await stream.pipe(fileStream);
+    await fileStream.flush();
+    await fileStream.close();
+    fileStream = null;
+  } catch (e, stackTrace) {
+    logger.log(
+      'Error downloading audio file',
+      error: e,
+      stackTrace: stackTrace,
+    );
+    try {
+      await fileStream?.close();
+    } catch (_) {}
+    if (await rawDownloadFile.exists()) {
+      await rawDownloadFile.delete();
+    }
+    return false;
+  }
+
+  // YouTube's audio-only streams are sometimes Opus-in-WebM even though
+  // the file is saved as .m4a; a tag-writing library can't parse that
+  // mismatched container, so remux (stream copy, no re-encode, via
+  // executeWithArguments to avoid any command-string quoting issues) into
+  // a real MP4/M4A container first. This guarantees the file's contents
+  // genuinely match its extension before it's tagged below.
+  try {
+    final session = await FFmpegKit.executeWithArguments([
+      '-y',
+      '-i',
+      rawDownloadFile.path,
+      '-map',
+      '0:a',
+      '-c:a',
+      'copy',
+      audioFile.path,
+    ]);
+    if (!ReturnCode.isSuccess(await session.getReturnCode())) {
+      logger.log(
+        '_downloadAndTagAudioFile: ffmpeg remux failed for $ytid, '
+        'using raw stream',
+      );
+      if (await audioFile.exists()) await audioFile.delete();
+      await rawDownloadFile.copy(audioFile.path);
+    }
+  } catch (e, stackTrace) {
+    logger.log(
+      'Error remuxing audio file',
+      error: e,
+      stackTrace: stackTrace,
+    );
+    if (!await audioFile.exists()) await rawDownloadFile.copy(audioFile.path);
+  } finally {
+    try {
+      if (await rawDownloadFile.exists()) await rawDownloadFile.delete();
+    } catch (_) {}
+  }
+
+  try {
+    final coverUrl = song['highResImage']?.toString();
+    final coverBytes = (coverUrl != null && coverUrl.isNotEmpty)
+        ? await _fetchArtworkBytes(coverUrl)
+        : null;
+
+    // Embed title/artist/album/cover directly into the (now guaranteed
+    // valid MP4/M4A) audio file's tag, instead of saving the cover as a
+    // separate image file: that file lived in a public, gallery-scanned
+    // folder, so deleting it from the gallery silently broke the song's
+    // artwork in the app.
+    await AudioTags.write(
+      audioFile.path,
+      Tag(
+        title: song['title']?.toString(),
+        trackArtist: song['artist']?.toString(),
+        album: song['album']?.toString(),
+        pictures: coverBytes != null
+            ? [
+                Picture(
+                  pictureType: PictureType.coverFront,
+                  mimeType: MimeType.jpeg,
+                  bytes: coverBytes,
+                ),
+              ]
+            : [],
+      ),
+    );
+
+    if (coverBytes != null) {
+      final cachedPath = await offlineArtworkCachePath(ytid);
+      await File(cachedPath).writeAsBytes(coverBytes, flush: true);
+    }
+  } catch (e, stackTrace) {
+    logger.log(
+      'Error embedding cover art into audio file',
+      error: e,
+      stackTrace: stackTrace,
+    );
+  }
+
+  return true;
+}
+
+/// Downloads and tags [song]'s audio into the shared local cache
+/// (`FilePaths.getAudioPath`), embedding cover/title/artist/album, without
+/// registering it in the user's offline library. Used by the "export to
+/// device" (MP3/M4A) feature; [makeSongOffline] additionally registers the
+/// song as available offline on top of this.
+Future<bool> downloadAndTagAudioFile(dynamic song) async {
+  final String? ytid = song['ytid'];
+  if (ytid == null || ytid.isEmpty) {
+    logger.log('downloadAndTagAudioFile: song["ytid"] is null or empty');
+    return false;
+  }
+
+  if (!await ensureExportStoragePermission()) {
+    logger.log('downloadAndTagAudioFile: storage permission denied');
+    return false;
+  }
+
+  final audioFile = File(FilePaths.getAudioPath(ytid));
+  return _downloadAndTagAudioFile(song as Map, ytid, audioFile);
+}
+
 Future<bool> makeSongOffline(dynamic song) async {
   try {
     final String? ytid = song['ytid'];
@@ -800,122 +949,16 @@ Future<bool> makeSongOffline(dynamic song) async {
 
     final offlineSong = Map<String, dynamic>.from(song as Map);
 
-    final audioPath = FilePaths.getAudioPath(ytid);
-    final audioFile = File(audioPath);
-    final rawDownloadFile = File('$audioPath.part');
+    final audioFile = File(FilePaths.getAudioPath(ytid));
 
-    await audioFile.parent.create(recursive: true);
-
-    IOSink? fileStream;
-    try {
-      final audioManifest = await fetchBestAudioStream(ytid);
-      if (audioManifest == null) {
-        logger.log('makeSongOffline: audioManifest is null for $ytid');
-        return false;
-      }
-
-      final stream = ytClient.videos.streamsClient.get(audioManifest);
-      fileStream = rawDownloadFile.openWrite();
-      await stream.pipe(fileStream);
-      await fileStream.flush();
-      await fileStream.close();
-      fileStream = null;
-    } catch (e, stackTrace) {
-      logger.log(
-        'Error downloading audio file',
-        error: e,
-        stackTrace: stackTrace,
-      );
-      try {
-        await fileStream?.close();
-      } catch (_) {}
-      if (await rawDownloadFile.exists()) {
-        await rawDownloadFile.delete();
-      }
+    if (!await _downloadAndTagAudioFile(offlineSong, ytid, audioFile)) {
       return false;
     }
 
-    // YouTube's audio-only streams are sometimes Opus-in-WebM even though
-    // the file is saved as .m4a; a tag-writing library can't parse that
-    // mismatched container, so remux (stream copy, no re-encode, via
-    // executeWithArguments to avoid any command-string quoting issues)
-    // into a real MP4/M4A container first. This guarantees the file's
-    // contents genuinely match its extension before it's tagged below.
-    try {
-      final session = await FFmpegKit.executeWithArguments([
-        '-y',
-        '-i',
-        rawDownloadFile.path,
-        '-map',
-        '0:a',
-        '-c:a',
-        'copy',
-        audioFile.path,
-      ]);
-      if (!ReturnCode.isSuccess(await session.getReturnCode())) {
-        logger.log(
-          'makeSongOffline: ffmpeg remux failed for $ytid, using raw stream',
-        );
-        if (await audioFile.exists()) await audioFile.delete();
-        await rawDownloadFile.copy(audioFile.path);
-      }
-    } catch (e, stackTrace) {
-      logger.log(
-        'Error remuxing offline audio file',
-        error: e,
-        stackTrace: stackTrace,
-      );
-      if (!await audioFile.exists()) await rawDownloadFile.copy(audioFile.path);
-    } finally {
-      try {
-        if (await rawDownloadFile.exists()) await rawDownloadFile.delete();
-      } catch (_) {}
-    }
-
-    try {
-      final coverUrl = offlineSong['highResImage']?.toString();
-      final coverBytes = (coverUrl != null && coverUrl.isNotEmpty)
-          ? await _fetchArtworkBytes(coverUrl)
-          : null;
-
-      // Embed title/artist/album/cover directly into the (now guaranteed
-      // valid MP4/M4A) audio file's tag, instead of saving the cover as a
-      // separate image file: that file lived in a public, gallery-scanned
-      // folder, so deleting it from the gallery silently broke the song's
-      // artwork in the app.
-      await AudioTags.write(
-        audioFile.path,
-        Tag(
-          title: offlineSong['title']?.toString(),
-          trackArtist: offlineSong['artist']?.toString(),
-          album: offlineSong['album']?.toString(),
-          pictures: coverBytes != null
-              ? [
-                  Picture(
-                    pictureType: PictureType.coverFront,
-                    mimeType: MimeType.jpeg,
-                    bytes: coverBytes,
-                  ),
-                ]
-              : [],
-        ),
-      );
-
-      if (coverBytes != null) {
-        final cachedPath = await offlineArtworkCachePath(ytid);
-        await File(cachedPath).writeAsBytes(coverBytes, flush: true);
-        offlineSong['artworkPath'] = cachedPath;
-      } else {
-        offlineSong['artworkPath'] = null;
-      }
-    } catch (e, stackTrace) {
-      logger.log(
-        'Error embedding cover art into offline file',
-        error: e,
-        stackTrace: stackTrace,
-      );
-      offlineSong['artworkPath'] = null;
-    }
+    final cachedArtworkPath = await offlineArtworkCachePath(ytid);
+    offlineSong['artworkPath'] = await File(cachedArtworkPath).exists()
+        ? cachedArtworkPath
+        : null;
 
     offlineSong['audioPath'] = audioFile.path;
     offlineSong['dateAdded'] = DateTime.now().millisecondsSinceEpoch;

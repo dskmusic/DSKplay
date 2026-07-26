@@ -48,8 +48,11 @@ Future<String?> exportSongToDevice(dynamic song, {required bool asMp3}) async {
       return null;
     }
 
-    // Reuses the existing offline-download pipeline instead of duplicating it.
-    if (!isSongAlreadyOffline(ytid) && !await makeSongOffline(song)) {
+    // Downloads/refreshes a locally cached, tagged copy of the audio
+    // without registering it in the offline library — that should only
+    // happen via the explicit "download offline" action, not from
+    // exporting a one-off MP3/M4A copy.
+    if (!await downloadAndTagAudioFile(song)) {
       return null;
     }
     final sourcePath = FilePaths.getAudioPath(ytid);
