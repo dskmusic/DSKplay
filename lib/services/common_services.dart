@@ -894,6 +894,8 @@ Future<bool> _downloadAndTagAudioFile(
       final cachedPath = await offlineArtworkCachePath(ytid);
       await File(cachedPath).writeAsBytes(coverBytes, flush: true);
     }
+
+    await scanMediaFile(audioFile.path);
   } catch (e, stackTrace) {
     logger.log(
       'Error embedding cover art into audio file',

@@ -140,6 +140,7 @@ class _EditTagsDialogState extends State<_EditTagsDialog> {
           pictures: _picture != null ? [_picture!] : [],
         ),
       );
+      await scanMediaFile(widget.file.path);
       if (mounted) {
         Navigator.pop(context);
         widget.onSaved?.call();

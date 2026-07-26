@@ -21,8 +21,25 @@
 
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+
+const MethodChannel _mediaScannerChannel = MethodChannel(
+  'dskplay/media_scanner',
+);
+
+/// Tells Android's MediaStore to (re)index [path]. Files written directly
+/// to disk (as every download/export/tag-edit here does) don't show up —
+/// or keep showing stale cover art — in other apps (file managers, other
+/// players) until the system rescans them; this makes that happen right
+/// away instead of waiting for whatever periodic scan the OS/OEM runs.
+Future<void> scanMediaFile(String path) async {
+  if (!Platform.isAndroid) return;
+  try {
+    await _mediaScannerChannel.invokeMethod('scanFile', {'path': path});
+  } catch (_) {}
+}
 
 /// Public app folder on external storage. Kept outside the app's private
 /// storage so offline downloads survive an uninstall/reinstall and manual

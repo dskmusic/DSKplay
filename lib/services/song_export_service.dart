@@ -81,11 +81,13 @@ Future<String?> exportSongToDevice(dynamic song, {required bool asMp3}) async {
         logger.log('exportSongToDevice: ffmpeg conversion failed for $ytid');
         return null;
       }
+      await scanMediaFile(destPath);
       return destPath;
     }
 
     final destPath = '$exportDirPath/$baseName.m4a';
     await File(sourcePath).copy(destPath);
+    await scanMediaFile(destPath);
     return destPath;
   } catch (e, stackTrace) {
     logger.log('Error exporting song to device', error: e, stackTrace: stackTrace);
