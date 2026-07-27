@@ -31,12 +31,14 @@ class ConfirmationDialog extends StatelessWidget {
     required this.onCancel,
     required this.onSubmit,
     this.isDangerous = false,
+    this.cancelMessage,
   });
   final String? confirmationMessage;
   final String submitMessage;
   final VoidCallback? onCancel;
   final VoidCallback? onSubmit;
   final bool isDangerous;
+  final String? cancelMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -74,7 +76,7 @@ class ConfirmationDialog extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
           ),
-          child: Text(context.l10n!.cancel),
+          child: Text(cancelMessage ?? context.l10n!.cancel),
         ),
         FilledButton(
           onPressed: onSubmit,

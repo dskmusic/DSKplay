@@ -285,6 +285,7 @@ class _DskPlayState extends State<DskPlay> with WidgetsBindingObserver {
           builder: (dialogContext) => ConfirmationDialog(
             confirmationMessage: dialogContext.l10n!.cloudBackupSkipWarning,
             submitMessage: dialogContext.l10n!.cloudBackupContinueWithoutRestoring,
+            cancelMessage: dialogContext.l10n!.restoreUserData,
             isDangerous: true,
             onCancel: () => Navigator.of(dialogContext).pop(false),
             onSubmit: () => Navigator.of(dialogContext).pop(true),
