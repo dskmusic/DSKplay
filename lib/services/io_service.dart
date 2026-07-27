@@ -25,6 +25,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:dskplay/main.dart' show logger;
 
 const MethodChannel _mediaScannerChannel = MethodChannel(
   'dskplay/media_scanner',
@@ -49,6 +50,25 @@ Future<void> scanMediaFile(String path) async {
   try {
     await _mediaScannerChannel.invokeMethod('scanFile', {'path': path});
   } catch (_) {}
+}
+
+/// Android's `Settings.Secure.ANDROID_ID`: stable across an uninstall and
+/// reinstall of this same app (same signing key, same device/user profile),
+/// unlike a Firebase anonymous auth uid. Used as the cloud-backup device
+/// code. Returns null off Android or if the platform call fails.
+Future<String?> getAndroidDeviceId() async {
+  if (!Platform.isAndroid) return null;
+  try {
+    final id = await _mediaScannerChannel.invokeMethod<String>('getAndroidId');
+    if (id == null || id.isEmpty) {
+      logger.log('getAndroidDeviceId: platform returned null/empty ANDROID_ID');
+      return null;
+    }
+    return id;
+  } catch (e, stackTrace) {
+    logger.log('getAndroidDeviceId: platform call failed', error: e, stackTrace: stackTrace);
+    return null;
+  }
 }
 
 /// Public app folder on external storage. Kept outside the app's private

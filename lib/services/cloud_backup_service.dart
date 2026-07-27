@@ -26,10 +26,18 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:dskplay/main.dart' show logger;
 import 'package:dskplay/services/data_manager.dart';
+import 'package:dskplay/services/io_service.dart';
 
-/// Anonymous, no-personal-data cloud backup: each install gets a random
-/// Firebase UID (no name/email/Google account involved) and its backup
-/// snapshot is stored in a single Firestore document keyed by that UID.
+/// Anonymous, no-personal-data cloud backup: sign-in is anonymous (no
+/// name/email/Google account involved), but the backup document itself is
+/// keyed by this Android install's stable `ANDROID_ID` (see
+/// [getAndroidDeviceId]) rather than the anonymous auth uid, so the same
+/// device code keeps working across an uninstall/reinstall. Firestore
+/// security rules must allow any authenticated (incl. anonymous) user to
+/// read/write `/backups/{userId}` for this to work - there's no way to
+/// verify from the client alone that a given ANDROID_ID "belongs" to the
+/// caller, so this trades a bit of write security (anyone with the code
+/// could overwrite that backup) for the code surviving reinstalls.
 class CloudBackupService {
   CloudBackupService._();
 
@@ -39,6 +47,7 @@ class CloudBackupService {
   static const _periodicBackupInterval = Duration(hours: 6);
 
   bool _ready = false;
+  String? _deviceId;
   Timer? _debounceTimer;
   Timer? _periodicTimer;
   Future<void>? _initFuture;
@@ -60,8 +69,9 @@ class CloudBackupService {
       if (restoredUser == null) {
         await FirebaseAuth.instance.signInAnonymously();
       }
+      _deviceId = await getAndroidDeviceId();
       _ready = true;
-      logger.log('Cloud backup ready, device code: $_uid');
+      logger.log('Cloud backup ready, device code: $_backupKey');
       _periodicTimer = Timer.periodic(
         _periodicBackupInterval,
         (_) => unawaited(uploadBackup()),
@@ -77,17 +87,22 @@ class CloudBackupService {
 
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
-  /// This device's own backup identifier, shareable as a recovery code to
-  /// restore this backup from a different install (e.g. after clearing app
-  /// data, which resets the anonymous Firebase session and thus this ID).
-  String? get deviceCode => _uid;
+  /// The Firestore document key for this device: its stable ANDROID_ID
+  /// when available (survives uninstall/reinstall), falling back to the
+  /// anonymous auth uid off Android or if reading ANDROID_ID failed.
+  String? get _backupKey => _deviceId ?? _uid;
 
-  DocumentReference<Map<String, dynamic>>? _documentFor(String? uid) {
-    if (uid == null) return null;
-    return FirebaseFirestore.instance.collection('backups').doc(uid);
+  /// This device's own backup identifier, shareable as a recovery code to
+  /// restore this backup from a different install.
+  String? get deviceCode => _backupKey;
+
+  DocumentReference<Map<String, dynamic>>? _documentFor(String? key) {
+    if (key == null) return null;
+    return FirebaseFirestore.instance.collection('backups').doc(key);
   }
 
-  DocumentReference<Map<String, dynamic>>? get _document => _documentFor(_uid);
+  DocumentReference<Map<String, dynamic>>? get _document =>
+      _documentFor(_backupKey);
 
   /// Debounced auto-backup: called on every backed-up data change, but only
   /// actually uploads once the changes settle for a few seconds, so a burst
@@ -131,7 +146,7 @@ class CloudBackupService {
     String? code,
   }) async {
     await init();
-    final document = _documentFor(code ?? _uid);
+    final document = _documentFor(code ?? _backupKey);
     if (document == null) return (data: null, updatedAt: null);
 
     try {

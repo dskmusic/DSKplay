@@ -33,8 +33,10 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/localization/app_localizations.dart';
 import 'package:dskplay/screens/now_playing_page.dart';
+import 'package:dskplay/screens/search_page.dart' show reloadSearchHistoryFromStorage;
 import 'package:dskplay/services/audio_service.dart';
 import 'package:dskplay/services/cloud_backup_service.dart';
+import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/data_manager.dart';
 import 'package:dskplay/services/io_service.dart';
 import 'package:dskplay/services/listening_stats_service.dart';
@@ -214,6 +216,83 @@ class _DskPlayState extends State<DskPlay> with WidgetsBindingObserver {
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkForUpdateSilently());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _offerCloudRestoreIfAvailable(),
+    );
+  }
+
+  /// Runs once per install: if the local library is empty (fresh install,
+  /// or a reinstall that lost local data) and this device's code has a
+  /// cloud backup, offers to restore it instead of silently starting empty.
+  Future<void> _offerCloudRestoreIfAvailable() async {
+    try {
+      final alreadyPrompted =
+          await getData(
+                'userNoBackup',
+                'cloudRestorePromptShown',
+                defaultValue: false,
+              )
+              as bool;
+      if (alreadyPrompted) return;
+
+      final hasLocalData =
+          userLikedSongsList.value.isNotEmpty ||
+          userCustomPlaylists.value.isNotEmpty ||
+          userOfflineSongs.value.isNotEmpty;
+      // Never overwrite existing local data automatically/silently.
+      if (hasLocalData) {
+        await addOrUpdateData('userNoBackup', 'cloudRestorePromptShown', true);
+        return;
+      }
+
+      await cloudBackupService.init();
+      final result = await cloudBackupService.downloadBackup();
+      await addOrUpdateData('userNoBackup', 'cloudRestorePromptShown', true);
+      if (result.data == null) return;
+
+      final context = NavigationManager().context;
+      if (!context.mounted) return;
+
+      final shouldRestore = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(dialogContext.l10n!.cloudBackupFoundTitle),
+          content: Text(dialogContext.l10n!.cloudBackupFoundMessage),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(dialogContext.l10n!.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(dialogContext.l10n!.restoreUserData),
+            ),
+          ],
+        ),
+      );
+      if (shouldRestore != true || !context.mounted) return;
+
+      await applyBackupSnapshot(result.data!);
+      reloadSongLibraryStateFromStorage();
+      reloadPlaylistLibraryStateFromStorage();
+      reloadSearchHistoryFromStorage();
+      reloadRadioStationsStateFromStorage();
+      wrappedEnabled.value =
+          await getData('settings', 'wrappedEnabled', defaultValue: true)
+              as bool;
+      listeningStatsService.reload();
+
+      if (context.mounted) {
+        showToast(context, context.l10n!.restoredSuccess);
+      }
+    } catch (e, stackTrace) {
+      logger.log(
+        'Error offering cloud restore on startup',
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   void _openNowPlayingFromExternalFile() {

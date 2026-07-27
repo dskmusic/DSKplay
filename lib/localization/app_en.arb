@@ -45,6 +45,8 @@
   "clear": "Clear",
   "clearCache": "Clear cache",
   "close": "Close",
+  "cloudBackupFoundMessage": "We found a cloud backup for this device. Do you want to restore it?",
+  "cloudBackupFoundTitle": "Cloud backup found",
   "clearQueue": "Clear queue",
   "clearQueueQuestion": "Are you sure you want to clear the queue?",
   "clearRecentlyPlayed": "Clear recently played",

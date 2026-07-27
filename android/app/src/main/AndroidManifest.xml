@@ -47,9 +47,11 @@
         android:extractNativeLibs="true"
         tools:replace="android:extractNativeLibs">
 
-        <!-- AudioServiceActivity -->
+        <!-- Custom MainActivity (extends AudioServiceActivity) so our own
+             platform channels (configureFlutterEngine in MainActivity.kt)
+             actually run; see MainActivity.kt for why it must extend it. -->
         <activity
-            android:name="com.ryanheise.audioservice.AudioServiceActivity"
+            android:name="com.dskmusic.dskplay.MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:allowCrossUidActivitySwitchFromBelow="false"

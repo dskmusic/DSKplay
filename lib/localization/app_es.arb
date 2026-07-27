@@ -45,6 +45,8 @@
   "clear": "Borrar",
   "clearCache": "Borrar caché",
   "close": "Cerrar",
+  "cloudBackupFoundMessage": "Hemos encontrado un respaldo en la nube para este dispositivo. ¿Quieres restaurarlo?",
+  "cloudBackupFoundTitle": "Respaldo en la nube encontrado",
   "clearQueue": "Borrar cola",
   "clearQueueQuestion": "¿Borrar lista de reproducción?",
   "clearRecentlyPlayed": "Borrar reproducido recientemente",
