@@ -26,6 +26,7 @@ import 'package:audiotags/audiotags.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/main.dart' show audioHandler;
 import 'package:dskplay/services/io_service.dart';
 import 'package:dskplay/services/local_files_service.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
@@ -116,6 +117,7 @@ class _EditTagsDialogState extends State<_EditTagsDialog> {
     ).replaceAll(RegExp(r'\.[^.]+$'), '');
     final coverFile = File('$androidDownloadsDirPath/$baseName.jpg');
     await coverFile.writeAsBytes(picture.bytes);
+    await scanMediaFile(coverFile.path);
     if (mounted) showToast(context, 'Portada guardada en ${coverFile.path}');
   }
 
@@ -141,6 +143,21 @@ class _EditTagsDialogState extends State<_EditTagsDialog> {
         ),
       );
       await scanMediaFile(widget.file.path);
+
+      // The cached cover file gets overwritten in place at the same path
+      // (see _extractAndCacheArtwork), so Flutter's image cache would keep
+      // serving the old decoded bytes for that same path without this.
+      PaintingBinding.instance.imageCache
+        ..clear()
+        ..clearLiveImages();
+
+      // If this file is currently playing (or queued), push the refreshed
+      // title/artist/artwork into the mini player/now playing screen/queue
+      // right away instead of waiting for a reload or app restart.
+      final ytid = '$localFileIdPrefix${widget.file.path}';
+      final updatedSong = await buildLocalSongMap(widget.file);
+      audioHandler.refreshSongMetadata(ytid, updatedSong);
+
       if (mounted) {
         Navigator.pop(context);
         widget.onSaved?.call();
@@ -210,13 +227,13 @@ class _EditTagsDialogState extends State<_EditTagsDialog> {
                       TextButton.icon(
                         onPressed: _changeCover,
                         icon: const Icon(FluentIcons.image_add_20_regular),
-                        label: const Text('Cambiar portada'),
+                        label: const Text('Cambiar'),
                       ),
                       if (_picture != null)
                         TextButton.icon(
                           onPressed: _saveCoverToDownloads,
                           icon: const Icon(FluentIcons.arrow_download_24_regular),
-                          label: const Text('Guardar portada'),
+                          label: const Text('Guardar'),
                         ),
                     ],
                   ),

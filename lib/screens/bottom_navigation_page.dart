@@ -38,6 +38,19 @@ class BottomNavigationPage extends StatefulWidget {
 
   final StatefulNavigationShell child;
 
+  /// The shared "close picker -> go to Home tab -> confirm exit" back
+  /// handling below, exposed so any tab-root page can call it directly
+  /// from its own [PopScope] when it has nothing more specific of its own
+  /// to do. This is needed because each tab is its own nested Navigator:
+  /// a back press only reaches this shell's own [PopScope] when the
+  /// currently active branch has something to pop, otherwise Flutter's
+  /// default "nothing left to pop" behavior closes the app before ever
+  /// reaching here.
+  static void handleBackPress(BuildContext context) {
+    context.findAncestorStateOfType<_BottomNavigationPageState>()
+        ?._handleBackPress(context);
+  }
+
   @override
   State<BottomNavigationPage> createState() => _BottomNavigationPageState();
 }
@@ -57,6 +70,33 @@ class _BottomNavigationPageState extends State<BottomNavigationPage> {
   /// window before actually exiting the app.
   DateTime? _lastBackPressAt;
 
+  void _handleBackPress(BuildContext context) {
+    // Step 1: close any open picker/bottom sheet (accent color, theme
+    // mode, language, audio quality, etc.) instead of jumping past it.
+    if (hasOpenBottomSheet) {
+      closeCurrentBottomSheet();
+      return;
+    }
+
+    // Step 2: go back to the Home tab.
+    final currentIndex = widget.child.currentIndex;
+    if (currentIndex != 0) {
+      widget.child.goBranch(0);
+      return;
+    }
+
+    // Step 3: already home with nothing open — require a second back
+    // press within 2 seconds before actually exiting the app.
+    final now = DateTime.now();
+    if (_lastBackPressAt != null &&
+        now.difference(_lastBackPressAt!) < const Duration(seconds: 2)) {
+      SystemNavigator.pop();
+    } else {
+      _lastBackPressAt = now;
+      showToast(context, context.l10n!.pressBackAgainToExit);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -66,31 +106,7 @@ class _BottomNavigationPageState extends State<BottomNavigationPage> {
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-
-        // Step 1: close any open picker/bottom sheet (accent color, theme
-        // mode, language, audio quality, etc.) instead of jumping past it.
-        if (hasOpenBottomSheet) {
-          closeCurrentBottomSheet();
-          return;
-        }
-
-        // Step 2: go back to the Home tab.
-        final currentIndex = widget.child.currentIndex;
-        if (currentIndex != 0) {
-          widget.child.goBranch(0);
-          return;
-        }
-
-        // Step 3: already home with nothing open — require a second back
-        // press within 2 seconds before actually exiting the app.
-        final now = DateTime.now();
-        if (_lastBackPressAt != null &&
-            now.difference(_lastBackPressAt!) < const Duration(seconds: 2)) {
-          SystemNavigator.pop();
-        } else {
-          _lastBackPressAt = now;
-          showToast(context, context.l10n!.pressBackAgainToExit);
-        }
+        _handleBackPress(context);
       },
       child: ValueListenableBuilder<bool>(
         valueListenable: offlineMode,

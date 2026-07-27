@@ -30,6 +30,7 @@ import 'package:dskplay/database/radio_stations.db.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/models/radio_model.dart';
+import 'package:dskplay/screens/bottom_navigation_page.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/data_manager.dart';
 import 'package:dskplay/services/playlists_manager.dart';
@@ -197,7 +198,12 @@ class _SearchPageState extends State<SearchPage> {
   @override
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.primary;
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) BottomNavigationPage.handleBackPress(context);
+      },
+      child: Scaffold(
       appBar: AppBar(title: Text(context.l10n!.search)),
       body: SingleChildScrollView(
         padding: commonSingleChildScrollViewPadding,
@@ -335,6 +341,7 @@ class _SearchPageState extends State<SearchPage> {
             const MiniPlayerBottomSpace(),
           ],
         ),
+      ),
       ),
     );
   }

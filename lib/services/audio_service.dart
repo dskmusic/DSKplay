@@ -257,6 +257,57 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     return mapToMediaItem(song).copyWith(id: _queueEntryIds.ensureId(song));
   }
 
+  /// Pushes [updatedSong]'s metadata (title/artist/artwork) into the
+  /// currently-playing item and/or queue slot matching [ytid], if any -
+  /// used after a local file's tags are edited in place, so the mini
+  /// player/now playing screen/queue reflect the change immediately
+  /// instead of only after the song is reloaded or the app restarts.
+  void refreshSongMetadata(String ytid, Map updatedSong) {
+    try {
+      final currentItem = mediaItem.valueOrNull;
+      if (currentItem != null &&
+          currentItem.extras?['ytid']?.toString() == ytid) {
+        mediaItem.add(
+          _getMediaItemForQueue(
+            updatedSong,
+          ).copyWith(id: currentItem.id, duration: currentItem.duration),
+        );
+      }
+
+      final existingQueue = queue.valueOrNull;
+      if (existingQueue != null) {
+        final index = existingQueue.indexWhere(
+          (item) => item.extras?['ytid']?.toString() == ytid,
+        );
+        if (index != -1) {
+          final updatedQueue = List<MediaItem>.from(existingQueue);
+          updatedQueue[index] = _getMediaItemForQueue(updatedSong).copyWith(
+            id: existingQueue[index].id,
+            duration: existingQueue[index].duration,
+          );
+          queue.add(updatedQueue);
+        }
+      }
+
+      for (var i = 0; i < _queueList.length; i++) {
+        if (_queueList[i]['ytid']?.toString() == ytid) {
+          _queueList[i] = Map<String, dynamic>.from(updatedSong);
+        }
+      }
+      for (var i = 0; i < _originalQueueList.length; i++) {
+        if (_originalQueueList[i]['ytid']?.toString() == ytid) {
+          _originalQueueList[i] = Map<String, dynamic>.from(updatedSong);
+        }
+      }
+    } catch (e, stackTrace) {
+      logger.log(
+        'Error refreshing song metadata',
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
   List<MediaItem> _buildQueueMediaItems() =>
       _queueList.map(_getMediaItemForQueue).toList(growable: false);
 

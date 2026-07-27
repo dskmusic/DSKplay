@@ -26,6 +26,7 @@ import 'package:flutter/material.dart';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart' show logger;
+import 'package:dskplay/screens/bottom_navigation_page.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/playlist_download_service.dart';
 import 'package:dskplay/services/playlists_manager.dart';
@@ -52,6 +53,16 @@ class LibraryPage extends StatefulWidget {
 class _LibraryPageState extends State<LibraryPage> {
   @override
   Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) BottomNavigationPage.handleBackPress(context);
+      },
+      child: _buildScaffold(context),
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     // Show offline mode message if there is no content

@@ -25,6 +25,7 @@ import 'package:go_router/go_router.dart';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
+import 'package:dskplay/screens/bottom_navigation_page.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/listening_stats_service.dart';
 import 'package:dskplay/services/playlists_manager.dart';
@@ -92,7 +93,12 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final playlistHeight = MediaQuery.sizeOf(context).height * 0.25 / 1.1;
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) BottomNavigationPage.handleBackPress(context);
+      },
+      child: Scaffold(
       appBar: AppBar(
         title: const Column(
           mainAxisSize: MainAxisSize.min,
@@ -137,6 +143,7 @@ class _HomePageState extends State<HomePage> {
             const MiniPlayerBottomSpace(),
           ],
         ),
+      ),
       ),
     );
   }

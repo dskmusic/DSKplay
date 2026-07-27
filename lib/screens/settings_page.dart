@@ -27,6 +27,7 @@ import 'package:go_router/go_router.dart';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
+import 'package:dskplay/screens/bottom_navigation_page.dart';
 import 'package:dskplay/screens/search_page.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/data_manager.dart';
@@ -59,7 +60,12 @@ class SettingsPage extends StatelessWidget {
     final activatedColor = Theme.of(context).colorScheme.secondaryContainer;
     final inactivatedColor = Theme.of(context).colorScheme.surfaceContainerHigh;
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) BottomNavigationPage.handleBackPress(context);
+      },
+      child: Scaffold(
       appBar: AppBar(title: Text(context.l10n!.settings)),
       body: SingleChildScrollView(
         padding: commonSingleChildScrollViewPadding,
@@ -77,6 +83,7 @@ class SettingsPage extends StatelessWidget {
             const MiniPlayerBottomSpace(),
           ],
         ),
+      ),
       ),
     );
   }

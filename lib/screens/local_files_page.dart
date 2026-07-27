@@ -19,12 +19,15 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
+import 'package:dskplay/screens/bottom_navigation_page.dart';
+import 'package:dskplay/services/data_manager.dart';
 import 'package:dskplay/services/io_service.dart';
 import 'package:dskplay/services/local_files_service.dart';
 import 'package:dskplay/utilities/edit_tags_dialog.dart';
@@ -207,14 +210,59 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
     final granted = await Permission.manageExternalStorage.isGranted;
     if (!mounted) return;
     setState(() => _hasPermission = granted);
-    if (granted) await _loadCurrentDirectory();
+    if (granted) {
+      await _restoreLastPath();
+      await _loadCurrentDirectory();
+    }
   }
 
   Future<void> _requestPermission() async {
     final granted = await ensureExportStoragePermission();
     if (!mounted) return;
     setState(() => _hasPermission = granted);
-    if (granted) await _loadCurrentDirectory();
+    if (granted) {
+      await _restoreLastPath();
+      await _loadCurrentDirectory();
+    }
+  }
+
+  /// Reopens whatever folder the user was last browsing, so the explorer
+  /// doesn't reset to the root every time this tab is left and revisited.
+  Future<void> _restoreLastPath() async {
+    final saved =
+        await getData('userNoBackup', 'lastLocalFilesPath') as String?;
+    if (saved == null ||
+        saved == defaultLocalFilesRoot ||
+        !await Directory(saved).exists()) {
+      return;
+    }
+
+    _currentPath = saved;
+    _folderStack
+      ..clear()
+      ..addAll(_ancestorPathsOf(saved));
+  }
+
+  /// Every ancestor folder path between [defaultLocalFilesRoot] and (but
+  /// not including) [path], in the order `_goUp()` expects to pop them.
+  List<String> _ancestorPathsOf(String path) {
+    if (!path.startsWith('$defaultLocalFilesRoot/')) return [];
+
+    final relative = path.substring(defaultLocalFilesRoot.length + 1);
+    final segments = relative.split('/');
+    final stack = <String>[defaultLocalFilesRoot];
+    var current = defaultLocalFilesRoot;
+    for (var i = 0; i < segments.length - 1; i++) {
+      current = '$current/${segments[i]}';
+      stack.add(current);
+    }
+    return stack;
+  }
+
+  void _persistCurrentPath() {
+    unawaited(
+      addOrUpdateData('userNoBackup', 'lastLocalFilesPath', _currentPath),
+    );
   }
 
   Future<void> _loadCurrentDirectory() async {
@@ -234,6 +282,7 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
       _exitSelectionModeSilently();
     });
     _loadCurrentDirectory();
+    _persistCurrentPath();
   }
 
   void _goUp() {
@@ -243,6 +292,18 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
       _exitSelectionModeSilently();
     });
     _loadCurrentDirectory();
+    _persistCurrentPath();
+  }
+
+  void _goHome() {
+    if (!_canGoUp) return;
+    setState(() {
+      _folderStack.clear();
+      _currentPath = defaultLocalFilesRoot;
+      _exitSelectionModeSilently();
+    });
+    _loadCurrentDirectory();
+    _persistCurrentPath();
   }
 
   void _exitSelectionModeSilently() {
@@ -388,7 +449,11 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: !_canGoUp && !_selectionMode && !_inOverlayMode,
+      // Always intercept: once none of this screen's own back-states apply
+      // (below), control falls through to the shared shell-level handling
+      // instead of relying on the pop bubbling to it on its own, which
+      // Flutter/go_router don't do across nested tab Navigators.
+      canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         if (_selectionMode) {
@@ -399,6 +464,8 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
           setState(() => _showingFavorites = false);
         } else if (_canGoUp) {
           _goUp();
+        } else {
+          BottomNavigationPage.handleBackPress(context);
         }
       },
       child: Scaffold(
@@ -413,16 +480,34 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
   }
 
   PreferredSizeWidget _buildAppBar() {
+    // When browsing a subfolder, leading shows two icons (home + up) to
+    // match the two icons on the actions side - keeping both sides the
+    // same width is what keeps the centered title visually centered
+    // relative to them instead of drifting toward whichever side is
+    // narrower.
+    final showFolderNav = !_showingFavorites && _canGoUp;
+
     return AppBar(
+      leadingWidth: showFolderNav ? 96 : null,
       leading: _showingFavorites
           ? IconButton(
               icon: const Icon(FluentIcons.arrow_left_24_regular),
               onPressed: () => setState(() => _showingFavorites = false),
             )
-          : _canGoUp
-          ? IconButton(
-              icon: const Icon(FluentIcons.arrow_left_24_regular),
-              onPressed: _goUp,
+          : showFolderNav
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(FluentIcons.home_24_regular),
+                  tooltip: context.l10n!.home,
+                  onPressed: _goHome,
+                ),
+                IconButton(
+                  icon: const Icon(FluentIcons.arrow_left_24_regular),
+                  onPressed: _goUp,
+                ),
+              ],
             )
           : null,
       title: Text(

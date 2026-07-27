@@ -173,6 +173,7 @@ class _SaveCoverButton extends StatelessWidget {
 
       final file = File('$targetDir/${_sanitizedFileName()}.jpg');
       await file.writeAsBytes(bytes);
+      await scanMediaFile(file.path);
 
       if (context.mounted) {
         showToast(context, 'Portada guardada en ${file.path}');
