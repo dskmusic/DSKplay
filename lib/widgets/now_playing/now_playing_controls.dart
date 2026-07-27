@@ -456,6 +456,7 @@ class _PlaybackControlsRow extends StatelessWidget {
                         repeatMode != AudioServiceRepeatMode.none,
                     tooltip: context.l10n!.skipToPrevious,
                     onPressed: () => audioHandler.skipToPrevious(),
+                    seekDirection: -1,
                     colorScheme: colorScheme,
                     buttonConstraints: buttonConstraints,
                     buttonPadding: buttonPadding,
@@ -479,6 +480,7 @@ class _PlaybackControlsRow extends StatelessWidget {
                     onPressed: () => repeatMode == AudioServiceRepeatMode.one
                         ? audioHandler.playAgain()
                         : audioHandler.skipToNext(),
+                    seekDirection: 1,
                     colorScheme: colorScheme,
                     buttonConstraints: buttonConstraints,
                     buttonPadding: buttonPadding,
@@ -495,7 +497,7 @@ class _PlaybackControlsRow extends StatelessWidget {
   }
 }
 
-class _PlaybackControlButton extends StatelessWidget {
+class _PlaybackControlButton extends StatefulWidget {
   const _PlaybackControlButton({
     required this.icon,
     required this.isEnabled,
@@ -506,6 +508,7 @@ class _PlaybackControlButton extends StatelessWidget {
     required this.buttonPadding,
     required this.controlIconSize,
     required this.minButtonSize,
+    this.seekDirection,
   });
 
   final IconData icon;
@@ -518,26 +521,79 @@ class _PlaybackControlButton extends StatelessWidget {
   final double controlIconSize;
   final double minButtonSize;
 
+  /// -1 to rewind and +1 to fast-forward continuously while the button is
+  /// held down (still playing); null disables press-and-hold seeking,
+  /// leaving only the normal tap action.
+  final int? seekDirection;
+
+  @override
+  State<_PlaybackControlButton> createState() =>
+      _PlaybackControlButtonState();
+}
+
+class _PlaybackControlButtonState extends State<_PlaybackControlButton> {
+  static const _seekStep = Duration(seconds: 3);
+  static const _seekInterval = Duration(milliseconds: 400);
+  Timer? _seekTimer;
+
+  void _seekOnce() {
+    final direction = widget.seekDirection;
+    if (direction == null) return;
+
+    final player = audioHandler.audioPlayer;
+    final duration = player.duration ?? Duration.zero;
+    var target = player.position + _seekStep * direction;
+    if (target < Duration.zero) target = Duration.zero;
+    if (target > duration) target = duration;
+    audioHandler.seek(target);
+  }
+
+  void _startSeeking() {
+    if (widget.seekDirection == null) return;
+    _seekOnce();
+    _seekTimer = Timer.periodic(_seekInterval, (_) => _seekOnce());
+  }
+
+  void _stopSeeking() {
+    _seekTimer?.cancel();
+    _seekTimer = null;
+  }
+
+  @override
+  void dispose() {
+    _seekTimer?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return IconButton(
+    final button = IconButton(
       icon: Icon(
-        icon,
-        color: isEnabled
-            ? colorScheme.onSurface
-            : colorScheme.onSurface.withValues(alpha: 0.3),
+        widget.icon,
+        color: widget.isEnabled
+            ? widget.colorScheme.onSurface
+            : widget.colorScheme.onSurface.withValues(alpha: 0.3),
       ),
-      tooltip: tooltip,
-      constraints: buttonConstraints,
-      iconSize: controlIconSize * 0.65,
-      onPressed: isEnabled ? onPressed : null,
+      tooltip: widget.tooltip,
+      constraints: widget.buttonConstraints,
+      iconSize: widget.controlIconSize * 0.65,
+      onPressed: widget.isEnabled ? widget.onPressed : null,
       style: IconButton.styleFrom(
-        backgroundColor: colorScheme.surfaceContainerHighest,
-        disabledBackgroundColor: colorScheme.surfaceContainerHighest,
+        backgroundColor: widget.colorScheme.surfaceContainerHighest,
+        disabledBackgroundColor: widget.colorScheme.surfaceContainerHighest,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        padding: buttonPadding,
-        minimumSize: Size(minButtonSize, minButtonSize),
+        padding: widget.buttonPadding,
+        minimumSize: Size(widget.minButtonSize, widget.minButtonSize),
       ),
+    );
+
+    if (widget.seekDirection == null || !widget.isEnabled) return button;
+
+    return GestureDetector(
+      onLongPressStart: (_) => _startSeeking(),
+      onLongPressEnd: (_) => _stopSeeking(),
+      onLongPressCancel: _stopSeeking,
+      child: button,
     );
   }
 }

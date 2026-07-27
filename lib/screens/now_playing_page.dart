@@ -113,6 +113,7 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           IconButton(
             iconSize: 26,
@@ -124,6 +125,20 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
               ),
             ),
             onPressed: () => Navigator.pop(context),
+          ),
+          IconButton(
+            iconSize: 26,
+            icon: const Icon(FluentIcons.dismiss_24_regular),
+            style: IconButton.styleFrom(
+              backgroundColor: colorScheme.surfaceContainerHighest,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            onPressed: () async {
+              await audioHandler.stopAndClearNowPlaying();
+              if (context.mounted) Navigator.pop(context);
+            },
           ),
         ],
       ),

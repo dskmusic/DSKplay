@@ -29,7 +29,8 @@ import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/utilities/flutter_bottom_sheet.dart'
-    show closeCurrentBottomSheet;
+    show closeCurrentBottomSheet, hasOpenBottomSheet;
+import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/widgets/mini_player.dart';
 
 class BottomNavigationPage extends StatefulWidget {
@@ -51,18 +52,44 @@ class _BottomNavigationPageState extends State<BottomNavigationPage> {
   /// Track the previously selected tab index to detect double-taps on the same tab.
   int? _previousTabIndex;
 
+  /// Timestamp of the last back press while already on the Home tab with
+  /// nothing else open, used to require a second press within a short
+  /// window before actually exiting the app.
+  DateTime? _lastBackPressAt;
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: widget.child.currentIndex == 0,
+      // Always intercept: this only ever gets a real chance to act once
+      // the currently focused nested Navigator/route has nothing left of
+      // its own to pop (its own screens/dialogs are handled first).
+      canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
 
+        // Step 1: close any open picker/bottom sheet (accent color, theme
+        // mode, language, audio quality, etc.) instead of jumping past it.
+        if (hasOpenBottomSheet) {
+          closeCurrentBottomSheet();
+          return;
+        }
+
+        // Step 2: go back to the Home tab.
         final currentIndex = widget.child.currentIndex;
         if (currentIndex != 0) {
           widget.child.goBranch(0);
-        } else {
+          return;
+        }
+
+        // Step 3: already home with nothing open — require a second back
+        // press within 2 seconds before actually exiting the app.
+        final now = DateTime.now();
+        if (_lastBackPressAt != null &&
+            now.difference(_lastBackPressAt!) < const Duration(seconds: 2)) {
           SystemNavigator.pop();
+        } else {
+          _lastBackPressAt = now;
+          showToast(context, context.l10n!.pressBackAgainToExit);
         }
       },
       child: ValueListenableBuilder<bool>(

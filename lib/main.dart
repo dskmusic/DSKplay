@@ -39,6 +39,7 @@ import 'package:dskplay/services/data_manager.dart';
 import 'package:dskplay/services/io_service.dart';
 import 'package:dskplay/services/listening_stats_service.dart';
 import 'package:dskplay/services/logger_service.dart';
+import 'package:dskplay/services/playlist_download_service.dart';
 import 'package:dskplay/services/playlist_sharing.dart';
 import 'package:dskplay/services/playlists_manager.dart';
 import 'package:dskplay/services/router_service.dart';
@@ -71,7 +72,12 @@ class DskPlay extends StatefulWidget {
     Color? newAccentColor,
     bool? useSystemColor,
   }) async {
-    context.findAncestorStateOfType<_DskPlayState>()!.changeSettings(
+    final state = context.findAncestorStateOfType<_DskPlayState>();
+    if (state == null) {
+      logger.log('DskPlay.updateAppState: no _DskPlayState ancestor found');
+      return;
+    }
+    state.changeSettings(
       newThemeMode: newThemeMode,
       newLocale: newLocale,
       newAccentColor: newAccentColor,
@@ -260,11 +266,6 @@ class _DskPlayState extends State<DskPlay> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return DynamicColorBuilder(
       builder: (lightColorScheme, darkColorScheme) {
-        final colorScheme = getAppColorScheme(
-          lightColorScheme,
-          darkColorScheme,
-        );
-
         return AnnotatedRegion<SystemUiOverlayStyle>(
           value: SystemUiOverlayStyle(
             statusBarColor: Colors.transparent,
@@ -289,8 +290,20 @@ class _DskPlayState extends State<DskPlay> with WidgetsBindingObserver {
           ),
           child: MaterialApp.router(
             themeMode: themeMode,
-            darkTheme: getAppTheme(colorScheme),
-            theme: getAppTheme(colorScheme),
+            theme: getAppTheme(
+              getAppColorScheme(
+                lightColorScheme,
+                darkColorScheme,
+                Brightness.light,
+              ),
+            ),
+            darkTheme: getAppTheme(
+              getAppColorScheme(
+                lightColorScheme,
+                darkColorScheme,
+                Brightness.dark,
+              ),
+            ),
             localizationsDelegates: const [
               AppLocalizations.delegate,
               GlobalMaterialLocalizations.delegate,
@@ -437,6 +450,9 @@ Future<void> initialisation() async {
     if (await Permission.manageExternalStorage.isGranted) {
       await FilePaths.ensureDirectoriesExist();
       await _migrateOfflineFilesToExternalStorage(oldInternalDirPath);
+      // Re-check on every launch in case offline files were deleted
+      // outside the app (file manager, storage cleaner, etc).
+      unawaited(offlinePlaylistService.validateOfflineLibrary());
     }
   } catch (e, stackTrace) {
     logger.log(

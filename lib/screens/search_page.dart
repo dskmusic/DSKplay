@@ -87,13 +87,7 @@ class _SearchPageState extends State<SearchPage> {
   // null = show all categories
   String? _selectedCategory;
 
-  static const _categories = <String, String>{
-    'songs': 'Songs',
-    'artists': 'Artists',
-    'albums': 'Albums',
-    'playlists': 'Playlists',
-    'radio': 'Radio',
-  };
+  static const _categoryKeys = ['songs', 'artists', 'albums', 'playlists', 'radio'];
 
   Future<void> _submitSearch([String? query]) async {
     if (query != null) {
@@ -345,6 +339,24 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
+  String _categoryLabel(BuildContext context, String key) {
+    final l10n = context.l10n!;
+    switch (key) {
+      case 'songs':
+        return l10n.songs;
+      case 'artists':
+        return l10n.artists;
+      case 'albums':
+        return l10n.albums;
+      case 'playlists':
+        return l10n.playlists;
+      case 'radio':
+        return l10n.radioStations;
+      default:
+        return key;
+    }
+  }
+
   Widget _buildCategoryFilter() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -355,19 +367,18 @@ class _SearchPageState extends State<SearchPage> {
             Padding(
               padding: const EdgeInsets.only(right: 6),
               child: ChoiceChip(
-                label: const Text('All'),
+                label: Text(context.l10n!.all),
                 selected: _selectedCategory == null,
                 onSelected: (_) => setState(() => _selectedCategory = null),
               ),
             ),
-            for (final entry in _categories.entries)
+            for (final key in _categoryKeys)
               Padding(
                 padding: const EdgeInsets.only(right: 6),
                 child: ChoiceChip(
-                  label: Text(entry.value),
-                  selected: _selectedCategory == entry.key,
-                  onSelected: (_) =>
-                      setState(() => _selectedCategory = entry.key),
+                  label: Text(_categoryLabel(context, key)),
+                  selected: _selectedCategory == key,
+                  onSelected: (_) => setState(() => _selectedCategory = key),
                 ),
               ),
           ],
@@ -519,7 +530,7 @@ class _SearchPageState extends State<SearchPage> {
         _radioStationsSearchResult.isNotEmpty) {
       widgets.add(
         SectionTitle(
-          'Radio Stations',
+          context.l10n!.radioStations,
           primaryColor,
           icon: FluentIcons.speaker_2_24_filled,
         ),

@@ -73,15 +73,36 @@ dynamic _fromJsonSafe(dynamic value) {
   return value;
 }
 
+/// Within the 'user' box, these keys (general stats + small preference-like
+/// lists) are placed first in the exported JSON; every other key in that
+/// box — the bulk song/playlist library data — is pushed after them.
+const List<String> _userBoxFrontKeys = [
+  'wrappedListeningStats',
+  'searchHistory',
+  'pinnedPlaylistIds',
+  'hiddenRadioStationIds',
+  'hiddenRecommendationIds',
+  'favoriteLocalFolders',
+];
+
+Map<String, dynamic> _orderedBoxEntries(String boxName, Box box) {
+  final allKeys = box.keys.map((k) => k.toString()).toList();
+  final ordered = boxName == 'user'
+      ? [
+          ..._userBoxFrontKeys.where(allKeys.contains),
+          ...allKeys.where((k) => !_userBoxFrontKeys.contains(k)),
+        ]
+      : allKeys;
+  return {for (final key in ordered) key: _toJsonSafe(box.get(key))};
+}
+
 /// Builds a single JSON-safe snapshot of every backed-up box, shared by the
 /// local file export and the cloud backup upload so both stay in sync.
 Future<Map<String, dynamic>> buildBackupSnapshot() async {
   final snapshot = <String, dynamic>{};
   for (final boxName in backedUpBoxNames) {
     final box = await _openBox(boxName);
-    snapshot[boxName] = {
-      for (final key in box.keys) key.toString(): _toJsonSafe(box.get(key)),
-    };
+    snapshot[boxName] = _orderedBoxEntries(boxName, box);
   }
   return snapshot;
 }

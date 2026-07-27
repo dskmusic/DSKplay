@@ -28,19 +28,17 @@ import 'package:dskplay/services/io_service.dart';
 /// Kept as an alias so existing call sites/imports don't need to change.
 const String exportDirPath = downloadedMusicDirPath;
 
-String _sanitizeFileName(String name) {
-  final sanitized = name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
-  return sanitized.isEmpty ? 'song' : sanitized;
-}
-
-/// Downloads and copies a song into [exportDirPath] as .mp3. Uses a
-/// private temp cache for the download/tagging step (see
+/// Downloads and copies a song into [exportDirPath] as .mp3 (or, when
+/// [folder] is given, into a subfolder of it — used for playlist/album
+/// exports so their songs land together instead of in the Descargas root).
+/// Uses a private temp cache for the download/tagging step (see
 /// [downloadAndTagAudioFile]) rather than the shared offline cache, so a
 /// manual "download to device" never leaves anything under the public
 /// offline folder. Returns the saved file path, or null on failure.
 Future<String?> exportSongToDevice(
   dynamic song, {
   void Function(double progress)? onProgress,
+  String? folder,
 }) async {
   String? tempSourcePath;
   try {
@@ -60,16 +58,19 @@ Future<String?> exportSongToDevice(
       return null;
     }
 
-    final exportDir = Directory(exportDirPath);
+    final destDirPath = (folder != null && folder.isNotEmpty)
+        ? '$exportDirPath/$folder'
+        : exportDirPath;
+    final exportDir = Directory(destDirPath);
     if (!await exportDir.exists()) await exportDir.create(recursive: true);
 
-    final title = _sanitizeFileName(song['title']?.toString() ?? ytid);
+    final title = sanitizeFileName(song['title']?.toString() ?? ytid);
     final artist = song['artist']?.toString().trim() ?? '';
     final baseName = artist.isEmpty
         ? title
-        : _sanitizeFileName('$artist - $title');
+        : sanitizeFileName('$artist - $title');
 
-    final destPath = '$exportDirPath/$baseName.mp3';
+    final destPath = '$destDirPath/$baseName.mp3';
     await File(tempSourcePath).copy(destPath);
     await scanMediaFile(destPath);
     notifyLocalFilesChanged();
@@ -84,4 +85,31 @@ Future<String?> exportSongToDevice(
       }
     } catch (_) {}
   }
+}
+
+/// Sequentially exports every song in [playlist]'s `list` into a subfolder
+/// of [exportDirPath] named after the playlist/album title. Returns the
+/// number of songs saved vs. failed.
+Future<({int completed, int failed})> exportPlaylistToDevice(
+  Map playlist, {
+  void Function(int completed, int total)? onProgress,
+}) async {
+  final songs = List<dynamic>.from(playlist['list'] as List? ?? []);
+  if (songs.isEmpty) return (completed: 0, failed: 0);
+
+  final folder = sanitizeFileName(
+    playlist['title']?.toString() ?? 'Playlist',
+  );
+  var completed = 0;
+  var failed = 0;
+  for (final song in songs) {
+    final path = await exportSongToDevice(song, folder: folder);
+    if (path != null) {
+      completed++;
+    } else {
+      failed++;
+    }
+    onProgress?.call(completed + failed, songs.length);
+  }
+  return (completed: completed, failed: failed);
 }

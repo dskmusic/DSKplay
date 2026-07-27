@@ -53,6 +53,7 @@ List<PopupMenuEntry<String>> _buildSongMenuItems({
   bool isRecentSong = false,
   bool canRename = false,
   bool canRemove = false,
+  bool showDismissSuggestion = false,
   bool showGoToArtist = false,
 }) {
   final l10n = context.l10n!;
@@ -139,6 +140,13 @@ List<PopupMenuEntry<String>> _buildSongMenuItems({
         label: removeFromRecentlyPlayedText,
         colorScheme: colorScheme,
       ),
+    if (showDismissSuggestion)
+      buildPopupMenuItem<String>(
+        value: 'dismiss_suggestion',
+        icon: FluentIcons.eye_off_24_regular,
+        label: l10n.dismissSuggestion,
+        colorScheme: colorScheme,
+      ),
     if (!offlineMode.value || songOfflineStatus.value)
       PopupMenuItem<String>(
         value: 'offline',
@@ -186,6 +194,7 @@ Future<void> _handleSongMenuAction({
   required ValueNotifier<bool> songLikeStatus,
   required ValueNotifier<bool> songOfflineStatus,
   VoidCallback? onRemove,
+  VoidCallback? onDismissSuggestion,
   FutureOr<void> Function()? onRename,
 }) async {
   switch (value) {
@@ -236,6 +245,9 @@ Future<void> _handleSongMenuAction({
       break;
     case 'remove':
       onRemove?.call();
+      break;
+    case 'dismiss_suggestion':
+      onDismissSuggestion?.call();
       break;
     case 'rename':
       await onRename?.call();
@@ -477,6 +489,7 @@ class SongBar extends StatefulWidget {
     this.onPlay,
     this.isRecentSong,
     this.onRemove,
+    this.onDismissSuggestion,
     this.borderRadius = BorderRadius.zero,
     this.isFromLikedSongs = false,
     this.showQueueActions = true,
@@ -492,6 +505,7 @@ class SongBar extends StatefulWidget {
   final bool clearPlaylist;
   final Color? backgroundColor;
   final VoidCallback? onRemove;
+  final VoidCallback? onDismissSuggestion;
   final VoidCallback? onPlay;
   final bool? isRecentSong;
   final bool showMusicDuration;
@@ -641,6 +655,7 @@ class _SongBarState extends State<SongBar> {
                   songLikeStatus: _songLikeStatus,
                   songOfflineStatus: _songOfflineStatus,
                   onRemove: widget.onRemove,
+                  onDismissSuggestion: widget.onDismissSuggestion,
                   onRename: () => _handleRenameSong(context),
                 ),
                 itemBuilder: (context) => _buildMenuItems(context, colorScheme),
@@ -753,6 +768,7 @@ class _SongBarState extends State<SongBar> {
       isRecentSong: widget.isRecentSong == true,
       canRename: canRename,
       canRemove: widget.onRemove != null,
+      showDismissSuggestion: widget.onDismissSuggestion != null,
       showGoToArtist: _songArtist.isNotEmpty,
     );
   }

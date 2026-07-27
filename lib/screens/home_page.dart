@@ -73,6 +73,13 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  Future<void> _dismissSuggestion(dynamic song) async {
+    final ytid = song['ytid']?.toString();
+    if (ytid == null || ytid.isEmpty) return;
+    await hideSongFromRecommendations(ytid);
+    _refreshRecommendedSongs();
+  }
+
   void _refreshSuggestedPlaylists() {
     if (!mounted) return;
     setState(() {
@@ -338,7 +345,12 @@ class _HomePageState extends State<HomePage> {
             final borderRadius = getItemBorderRadius(index, data.length);
             return RepaintBoundary(
               key: listItemKey('home_recommended', index, data[index]),
-              child: SongBar(data[index], true, borderRadius: borderRadius),
+              child: SongBar(
+                data[index],
+                true,
+                borderRadius: borderRadius,
+                onDismissSuggestion: () => _dismissSuggestion(data[index]),
+              ),
             );
           },
         ),

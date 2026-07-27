@@ -127,6 +127,24 @@ void reloadRadioStationsStateFromStorage() {
   );
 }
 
+// Songs the user dismissed from "Recommended for you"; recommendations are
+// computed fresh every time (not cached), so this is filtered back out of
+// the result rather than mutated at the source.
+ValueNotifier<List<String>> userHiddenRecommendationIds =
+    ValueNotifier<List<String>>(
+      List<String>.from(
+        Hive.box('user').get('hiddenRecommendationIds', defaultValue: []),
+      ),
+    );
+
+Future<void> hideSongFromRecommendations(String ytid) async {
+  if (userHiddenRecommendationIds.value.contains(ytid)) return;
+
+  final updated = [...userHiddenRecommendationIds.value, ytid];
+  userHiddenRecommendationIds.value = updated;
+  await addOrUpdateData<List>('user', 'hiddenRecommendationIds', updated);
+}
+
 ValueNotifier<List> userRecentlyPlayed = ValueNotifier<List>(
   Hive.box('user').get('recentlyPlayedSongs', defaultValue: []),
 );
@@ -162,6 +180,9 @@ void reloadSongLibraryStateFromStorage() {
   );
   userRecentlyPlayed.value = List.from(
     userBox.get('recentlyPlayedSongs', defaultValue: []),
+  );
+  userHiddenRecommendationIds.value = List<String>.from(
+    userBox.get('hiddenRecommendationIds', defaultValue: []),
   );
 }
 
@@ -250,11 +271,15 @@ Future<List> fetchSongsList(String searchQuery) async {
 
 Future<List> getRecommendedSongs() async {
   try {
-    if (externalRecommendations.value && userRecentlyPlayed.value.isNotEmpty) {
-      return await _getRecommendationsFromRecentlyPlayed();
-    } else {
-      return await _getRecommendationsFromMixedSources();
-    }
+    final recommendations =
+        externalRecommendations.value && userRecentlyPlayed.value.isNotEmpty
+        ? await _getRecommendationsFromRecentlyPlayed()
+        : await _getRecommendationsFromMixedSources();
+
+    if (userHiddenRecommendationIds.value.isEmpty) return recommendations;
+    return recommendations
+        .where((s) => !userHiddenRecommendationIds.value.contains(s['ytid']))
+        .toList();
   } catch (e, stackTrace) {
     logger.log(
       'Error in getRecommendedSongs',
@@ -962,6 +987,7 @@ Future<String?> downloadAndTagAudioFile(
 Future<bool> makeSongOffline(
   dynamic song, {
   void Function(double progress)? onProgress,
+  String? folder,
 }) async {
   try {
     final String? ytid = song['ytid'];
@@ -977,7 +1003,9 @@ Future<bool> makeSongOffline(
     }
 
     if (isSongAlreadyOffline(ytid)) {
-      final existingPath = FilePaths.getAudioPath(ytid);
+      final existingPath =
+          getOfflineSongByYtid(ytid)['audioPath'] as String? ??
+          FilePaths.getAudioPath(ytid);
       if (await File(existingPath).exists()) {
         return true;
       }
@@ -985,7 +1013,7 @@ Future<bool> makeSongOffline(
 
     final offlineSong = Map<String, dynamic>.from(song as Map);
 
-    final audioFile = File(FilePaths.getAudioPath(ytid));
+    final audioFile = File(FilePaths.getAudioPath(ytid, folder: folder));
 
     if (!await _downloadAndTagAudioFile(
       offlineSong,
@@ -1042,7 +1070,12 @@ Future<bool> makeSongOffline(
 
 Future<bool> removeSongFromOffline(dynamic songId) async {
   try {
-    final audioPath = FilePaths.getAudioPath(songId);
+    // Look up the actual recorded path first: playlist/album downloads are
+    // saved under a subfolder, so recomputing a root-only path here would
+    // miss them.
+    final audioPath =
+        getOfflineSongByYtid(songId.toString())['audioPath'] as String? ??
+        FilePaths.getAudioPath(songId);
     final audioFile = File(audioPath);
     // Legacy public artwork file (pre-embedded-cover versions of the app);
     // harmless no-op if it doesn't exist.

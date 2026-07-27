@@ -46,7 +46,11 @@ class _PositionSliderState extends State<PositionSlider> {
     return StreamBuilder<PositionData>(
       stream: audioHandler.positionDataStream,
       builder: (context, snapshot) {
-        if (snapshot.data != null && snapshot.data!.position.inSeconds > 0) {
+        // Also accept position == 0 (song just started, or seeked back to
+        // the start on repeat/completion): skipping it here left the stale
+        // position from whatever song was playing before on screen until
+        // playback ticked past 1 second again.
+        if (snapshot.data != null) {
           _positionData = snapshot.data!;
         }
 

@@ -133,6 +133,10 @@ class OfflinePlaylistService {
       ..value = DownloadProgress(total: songsList.length);
     activeDownloads.add(playlistId);
 
+    final folderName = sanitizeFileName(
+      playlist['title']?.toString() ?? playlistId,
+    );
+
     try {
       final songQueue = Queue<dynamic>.from(songsList);
       const maxConcurrent = 3;
@@ -142,7 +146,7 @@ class OfflinePlaylistService {
 
       await Future.wait([
         for (var i = 0; i < workerCount; i++)
-          _processDownloadQueue(songQueue, progressNotifier),
+          _processDownloadQueue(songQueue, progressNotifier, folderName),
       ]).timeout(
         Duration(minutes: songsList.length * 2),
         onTimeout: () {
@@ -410,6 +414,69 @@ class OfflinePlaylistService {
     }
   }
 
+  /// Prunes offline songs/playlists whose backing audio file no longer
+  /// exists on disk (e.g. deleted via a file manager outside the app), so
+  /// the library doesn't keep pointing at ghost entries. Meant to run once
+  /// at every app startup.
+  Future<void> validateOfflineLibrary() async {
+    try {
+      final missingIds = <String>{};
+      for (final song in List<Map>.from(userOfflineSongs.value)) {
+        final ytid = song['ytid']?.toString();
+        final path = song['audioPath'] as String?;
+        if (ytid == null) continue;
+        if (path == null || !await File(path).exists()) {
+          missingIds.add(ytid);
+        }
+      }
+      if (missingIds.isEmpty) return;
+
+      userOfflineSongs.value = userOfflineSongs.value
+          .where((s) => !missingIds.contains(s['ytid']?.toString()))
+          .toList();
+      await addOrUpdateData<List>(
+        'userNoBackup',
+        'offlineSongs',
+        userOfflineSongs.value,
+      );
+
+      final updatedPlaylists = <Map>[];
+      var playlistsChanged = false;
+      for (final playlist in List<Map>.from(offlinePlaylists.value)) {
+        final songs = List.from(playlist['list'] as List? ?? []);
+        final remaining = songs
+            .where((s) => !missingIds.contains(s['ytid']?.toString()))
+            .toList();
+        if (remaining.length == songs.length) {
+          updatedPlaylists.add(playlist);
+        } else {
+          playlistsChanged = true;
+          if (remaining.isNotEmpty) {
+            updatedPlaylists.add({...playlist, 'list': remaining});
+          }
+        }
+      }
+      if (playlistsChanged) {
+        offlinePlaylists.value = updatedPlaylists;
+        await addOrUpdateData<List>(
+          'userNoBackup',
+          'offlinePlaylists',
+          updatedPlaylists,
+        );
+      }
+
+      logger.log(
+        'Startup offline validation: removed ${missingIds.length} missing song(s)',
+      );
+    } catch (e, stackTrace) {
+      logger.log(
+        'Error validating offline library at startup',
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
   Future<void> deleteAllDownloads() async {
     // Cancel all active downloads first and wait for them to stop
     final activeIds = List<String>.from(activeDownloads);
@@ -433,16 +500,12 @@ class OfflinePlaylistService {
     }
 
     try {
-      final tracksDir = Directory('$applicationDirPath/${FilePaths.tracksDir}');
-      final artworksDir = Directory(
-        '$applicationDirPath/${FilePaths.artworksDir}',
-      );
-
-      if (await tracksDir.exists()) {
-        await tracksDir.delete(recursive: true);
-      }
-      if (await artworksDir.exists()) {
-        await artworksDir.delete(recursive: true);
+      // Wipe everything under the offline root: legacy tracks/artworks
+      // subfolders, root-level single-song files, and playlist/album
+      // subfolders alike.
+      final offlineRoot = Directory(applicationDirPath);
+      if (await offlineRoot.exists()) {
+        await offlineRoot.delete(recursive: true);
       }
 
       await FilePaths.ensureDirectoriesExist();
@@ -489,6 +552,7 @@ class OfflinePlaylistService {
   Future<void> _processDownloadQueue(
     Queue<dynamic> songQueue,
     ValueNotifier<DownloadProgress> progressNotifier,
+    String folder,
   ) async {
     while (songQueue.isNotEmpty && !progressNotifier.value.isCancelled) {
       final song = songQueue.removeFirst();
@@ -516,7 +580,7 @@ class OfflinePlaylistService {
           progressNotifier.value.completed++;
           progressNotifier.notifyListeners();
         } else {
-          final success = await makeSongOffline(song);
+          final success = await makeSongOffline(song, folder: folder);
           if (success) {
             progressNotifier.value.completed++;
           } else {

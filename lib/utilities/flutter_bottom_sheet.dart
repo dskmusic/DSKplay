@@ -90,3 +90,8 @@ void closeCurrentBottomSheet() {
   } catch (_) {}
   _currentBottomSheetController = null;
 }
+
+/// Whether a sheet opened via [showCustomBottomSheet] is currently showing.
+/// Used to make the Android back button close it first, one step at a
+/// time, instead of jumping straight past it (e.g. back to the Home tab).
+bool get hasOpenBottomSheet => _currentBottomSheetController != null;

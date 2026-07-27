@@ -21,6 +21,8 @@
 
 import 'dart:io';
 
+import 'dart:async';
+
 import 'package:audio_service/audio_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -31,12 +33,15 @@ import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart' show logger;
 import 'package:dskplay/screens/karaoke_fullscreen_page.dart';
 import 'package:dskplay/services/common_services.dart';
+import 'package:dskplay/services/download_notification_service.dart';
 import 'package:dskplay/services/io_service.dart';
 import 'package:dskplay/services/lyrics_export_service.dart';
 import 'package:dskplay/services/lyrics_manager.dart';
 import 'package:dskplay/services/settings_manager.dart';
+import 'package:dskplay/services/song_export_service.dart';
 import 'package:dskplay/utilities/async_loader.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
+import 'package:dskplay/utilities/mediaitem.dart';
 import 'package:dskplay/widgets/now_playing/karaoke_color_dialog.dart';
 import 'package:dskplay/widgets/now_playing/karaoke_lyrics_view.dart';
 import 'package:dskplay/widgets/now_playing/lyrics_results_picker.dart';
@@ -99,9 +104,14 @@ class NowPlayingArtwork extends StatelessWidget {
                 borderRadius: borderRadius,
               ),
               Positioned(
-                right: 8,
+                left: 8,
                 bottom: 8,
                 child: _SaveCoverButton(metadata: metadata),
+              ),
+              Positioned(
+                right: 8,
+                bottom: 8,
+                child: _SaveMp3Button(metadata: metadata),
               ),
             ],
           ),
@@ -179,20 +189,119 @@ class _SaveCoverButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.black.withValues(alpha: 0.35),
-      shape: const CircleBorder(),
+      borderRadius: BorderRadius.circular(8),
       clipBehavior: Clip.antiAlias,
       child: PopupMenuButton<bool>(
         tooltip: 'Guardar portada',
-        icon: const Icon(
-          FluentIcons.arrow_download_24_regular,
-          color: Colors.white,
-          size: 20,
-        ),
         onSelected: (chooseFolder) => _save(context, chooseFolder: chooseFolder),
         itemBuilder: (context) => const [
           PopupMenuItem(value: false, child: Text('Guardar en Descargas')),
           PopupMenuItem(value: true, child: Text('Elegir carpeta...')),
         ],
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                FluentIcons.arrow_download_24_regular,
+                color: Colors.white,
+                size: 16,
+              ),
+              SizedBox(width: 6),
+              Text(
+                'Cover',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SaveMp3Button extends StatelessWidget {
+  const _SaveMp3Button({required this.metadata});
+  final MediaItem metadata;
+
+  Future<void> _download(BuildContext context) async {
+    final song = mediaItemToMap(metadata);
+    final notifications = DownloadNotificationService();
+    final notificationId = notifications.nextId();
+    final notificationTitle = 'Descargando: ${metadata.title}';
+
+    unawaited(
+      notifications.showProgress(notificationId, notificationTitle, progress: 0),
+    );
+    var lastReportedPercent = -1;
+    final path = await exportSongToDevice(
+      song,
+      onProgress: (progress) {
+        final percent = (progress * 100).clamp(0, 100).round();
+        if (percent == lastReportedPercent) return;
+        lastReportedPercent = percent;
+        unawaited(
+          notifications.showProgress(
+            notificationId,
+            notificationTitle,
+            progress: percent,
+          ),
+        );
+      },
+    );
+    await notifications.showResult(
+      notificationId,
+      notificationTitle,
+      success: path != null,
+    );
+
+    if (context.mounted) {
+      showToast(
+        context,
+        path != null
+            ? '${context.l10n!.savedToDevice} $exportDirPath'
+            : context.l10n!.downloadFailed,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.black.withValues(alpha: 0.35),
+      borderRadius: BorderRadius.circular(8),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _download(context),
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                FluentIcons.arrow_download_24_regular,
+                color: Colors.white,
+                size: 16,
+              ),
+              SizedBox(width: 6),
+              Text(
+                'MP3',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

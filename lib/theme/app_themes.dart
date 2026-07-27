@@ -54,8 +54,9 @@ ThemeMode getThemeMode(int themeModeIndex) {
 
 ColorScheme getAppColorScheme(
   ColorScheme? lightColorScheme,
-  ColorScheme? darkColorScheme,
-) {
+  ColorScheme? darkColorScheme, [
+  Brightness? forBrightness,
+]) {
   if (useSystemColor.value &&
       lightColorScheme != null &&
       darkColorScheme != null) {
@@ -67,7 +68,8 @@ ColorScheme getAppColorScheme(
     );
   }
 
-  final selectedScheme = (brightness == Brightness.light)
+  final resolvedBrightness = forBrightness ?? brightness;
+  final selectedScheme = (resolvedBrightness == Brightness.light)
       ? lightColorScheme
       : darkColorScheme;
 
@@ -76,7 +78,7 @@ ColorScheme getAppColorScheme(
   } else {
     return ColorScheme.fromSeed(
       seedColor: primaryColorSetting,
-      brightness: brightness,
+      brightness: resolvedBrightness,
     ).harmonized();
   }
 }

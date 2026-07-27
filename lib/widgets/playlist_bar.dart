@@ -28,8 +28,11 @@ import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/services/artist_service.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/data_manager.dart';
+import 'package:dskplay/services/download_notification_service.dart';
+import 'package:dskplay/services/playlist_download_service.dart';
 import 'package:dskplay/services/playlists_manager.dart';
 import 'package:dskplay/services/router_service.dart';
+import 'package:dskplay/services/song_export_service.dart';
 import 'package:dskplay/utilities/artwork_provider.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/offline_playlist_dialogs.dart';
@@ -216,6 +219,12 @@ class PlaylistBar extends StatelessWidget {
                           );
                         }
                         break;
+                      case 'make_offline':
+                        _handleMakeOffline(context);
+                        break;
+                      case 'export_device':
+                        _handleExportToDevice(context);
+                        break;
                     }
                   },
                   itemBuilder: (BuildContext context) {
@@ -271,6 +280,20 @@ class PlaylistBar extends StatelessWidget {
                           label: context.l10n!.removeOffline,
                           colorScheme: colorScheme,
                           iconColor: colorScheme.error,
+                        ),
+                      if (!isFolder && !isArtist && !isOffline && _resolvedPlaylistId != null)
+                        buildPopupMenuItem<String>(
+                          value: 'make_offline',
+                          icon: FluentIcons.cloud_arrow_down_24_regular,
+                          label: context.l10n!.makeOffline,
+                          colorScheme: colorScheme,
+                        ),
+                      if (!isFolder && !isArtist && _resolvedPlaylistId != null)
+                        buildPopupMenuItem<String>(
+                          value: 'export_device',
+                          icon: FluentIcons.arrow_download_24_regular,
+                          label: context.l10n!.downloadToDevice,
+                          colorScheme: colorScheme,
                         ),
                       if (playlistData != null &&
                           !isFolder &&
@@ -565,10 +588,19 @@ class PlaylistBar extends StatelessWidget {
     return NavigationManager.homePath;
   }
 
-  Future<void> _handleAddPlaylistToPlaylist(BuildContext context) async {
+  /// Resolves the full playlist/album map (with its `list` of songs),
+  /// fetching it from the network with a spinner dialog if [playlistData]
+  /// only carries a preview without songs. Shared by every action that
+  /// needs the complete song list: add-to-playlist, make-offline, export.
+  Future<Map?> _resolveFullPlaylist(BuildContext context) async {
     if (_resolvedPlaylistId == null) {
       showToast(context, context.l10n!.error);
-      return;
+      return null;
+    }
+
+    final existingList = playlistData?['list'] as List?;
+    if (existingList != null && existingList.isNotEmpty) {
+      return playlistData;
     }
 
     final navContext = NavigationManager().context;
@@ -589,26 +621,87 @@ class PlaylistBar extends StatelessWidget {
         preferredVerified:
             isArtist && playlistData?['isVerifiedArtist'] == true,
       );
-      if (!navContext.mounted) return;
+      if (!navContext.mounted) return null;
       Navigator.pop(navContext);
 
       if (fullPlaylist == null || fullPlaylist['list'] == null) {
         showToast(navContext, navContext.l10n!.error);
-        return;
+        return null;
       }
 
       final tracks = fullPlaylist['list'] as List<dynamic>;
       if (tracks.isEmpty) {
         showToast(navContext, navContext.l10n!.noSongsInPlaylist);
-        return;
+        return null;
       }
 
-      showAddToPlaylistDialog(navContext, songs: tracks);
+      return fullPlaylist;
     } catch (e) {
       if (navContext.mounted) {
         Navigator.pop(navContext);
         showToast(navContext, navContext.l10n!.error);
       }
+      return null;
+    }
+  }
+
+  Future<void> _handleAddPlaylistToPlaylist(BuildContext context) async {
+    final fullPlaylist = await _resolveFullPlaylist(context);
+    if (fullPlaylist == null) return;
+
+    final navContext = NavigationManager().context;
+    if (!navContext.mounted) return;
+    showAddToPlaylistDialog(
+      navContext,
+      songs: List<dynamic>.from(fullPlaylist['list'] as List),
+    );
+  }
+
+  Future<void> _handleMakeOffline(BuildContext context) async {
+    final fullPlaylist = await _resolveFullPlaylist(context);
+    if (fullPlaylist == null || !context.mounted) return;
+    await offlinePlaylistService.downloadPlaylist(context, fullPlaylist);
+  }
+
+  Future<void> _handleExportToDevice(BuildContext context) async {
+    final fullPlaylist = await _resolveFullPlaylist(context);
+    if (fullPlaylist == null || !context.mounted) return;
+
+    final title = fullPlaylist['title']?.toString() ?? '';
+    final notifications = DownloadNotificationService();
+    final notificationId = notifications.nextId();
+    final notificationTitle = title.isEmpty
+        ? 'Descargando lista'
+        : 'Descargando: $title';
+
+    unawaited(
+      notifications.showProgress(notificationId, notificationTitle, progress: 0),
+    );
+    final result = await exportPlaylistToDevice(
+      fullPlaylist,
+      onProgress: (done, total) {
+        if (total == 0) return;
+        unawaited(
+          notifications.showProgress(
+            notificationId,
+            notificationTitle,
+            progress: (done * 100 / total).round(),
+          ),
+        );
+      },
+    );
+    await notifications.showResult(
+      notificationId,
+      notificationTitle,
+      success: result.failed == 0,
+    );
+
+    if (context.mounted) {
+      showToast(
+        context,
+        '${context.l10n!.playlistDownloaded}: '
+        '${result.completed}/${result.completed + result.failed}',
+      );
     }
   }
 

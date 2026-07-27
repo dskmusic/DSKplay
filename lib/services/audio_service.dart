@@ -1794,6 +1794,19 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     await super.stop();
   }
 
+  /// Stops playback and clears the current song/queue entirely, so the mini
+  /// player and full player act as if nothing had ever played - unlike
+  /// [stop] alone, which leaves `mediaItem`/`queue` populated with the last
+  /// track (by design, so a plain pause/stop can resume where it left off).
+  Future<void> stopAndClearNowPlaying() async {
+    await stop();
+    _queueList.clear();
+    _originalQueueList.clear();
+    _currentQueueIndex = 0;
+    queue.add([]);
+    mediaItem.add(null);
+  }
+
   /// Returns unplayed manually added songs after the current queue index.
   List<Map> _getUnplayedManualSongs() {
     return _queueList

@@ -311,6 +311,46 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
     _exitSelectionMode();
   }
 
+  Future<void> _deleteSelection() async {
+    final entities = _entries
+        .where((e) => _selectedPaths.contains(e.path))
+        .toList();
+    if (entities.isEmpty) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => ConfirmationDialog(
+        confirmationMessage:
+            '¿Eliminar ${entities.length} elemento(s) seleccionado(s)? '
+            'Esta acción no se puede deshacer.',
+        submitMessage: context.l10n!.delete,
+        isDangerous: true,
+        onCancel: () => Navigator.of(context).pop(false),
+        onSubmit: () => Navigator.of(context).pop(true),
+      ),
+    );
+    if (confirmed != true) return;
+
+    for (final entity in entities) {
+      try {
+        await entity.delete(recursive: true);
+      } catch (e, stackTrace) {
+        logger.log(
+          'Error deleting selected item',
+          error: e,
+          stackTrace: stackTrace,
+        );
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _entries.removeWhere((e) => _selectedPaths.contains(e.path));
+      _selectionMode = false;
+      _selectedPaths.clear();
+    });
+  }
+
   Future<void> _playFile(File file) async {
     final siblings = _siblingAudioFiles();
     final index = siblings.indexWhere((f) => f.path == file.path);
@@ -405,6 +445,7 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
                 tooltip: 'Favoritos',
                 onPressed: _toggleFavoritesView,
               ),
+              const SizedBox(width: 8),
             ],
     );
   }
@@ -455,6 +496,11 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
           icon: const Icon(FluentIcons.album_add_24_regular),
           tooltip: context.l10n!.addToPlaylist,
           onPressed: _addSelectionToPlaylist,
+        ),
+        IconButton(
+          icon: const Icon(FluentIcons.delete_24_regular),
+          tooltip: context.l10n!.delete,
+          onPressed: _deleteSelection,
         ),
       ],
     );

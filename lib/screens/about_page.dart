@@ -79,10 +79,13 @@ class _AboutPageState extends State<AboutPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(context.l10n!.about)),
-      body: SingleChildScrollView(
-        padding: commonSingleChildScrollViewPadding,
-        child: Column(
-          children: <Widget>[
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: commonSingleChildScrollViewPadding,
+              child: Column(
+                children: <Widget>[
             const SizedBox(height: 14),
             Center(
               child: Column(
@@ -181,8 +184,15 @@ class _AboutPageState extends State<AboutPage> {
                 ],
               ),
             ),
-            const SizedBox(height: 6),
-            RichText(
+                ],
+              ),
+            ),
+          ),
+          // Pinned above the bottom nav bar / mini player instead of
+          // scrolling with the rest of the content.
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: RichText(
               textAlign: TextAlign.center,
               text: TextSpan(
                 style: TextStyle(
@@ -206,9 +216,9 @@ class _AboutPageState extends State<AboutPage> {
                 ],
               ),
             ),
-            const MiniPlayerBottomSpace(),
-          ],
-        ),
+          ),
+          const MiniPlayerBottomSpace(),
+        ],
       ),
     );
   }

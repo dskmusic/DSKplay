@@ -94,30 +94,41 @@ class FilePaths {
   static const String audioExtension = '.mp3';
   static const String artworkExtension = '.jpg';
 
-  // Directory names
+  // Legacy subdirectory names, kept only so old installs' files (and the
+  // one-time migration in main.dart) can still be found/cleaned up. New
+  // downloads are written directly under [applicationDirPath] instead:
+  // single songs in the Offline root, playlist/album songs in a subfolder
+  // named after the playlist/album (see [getAudioPath]'s `folder` param).
   static const String tracksDir = 'tracks';
   static const String artworksDir = 'artworks';
 
-  // Get full paths for various file types
-  static String getAudioPath(String songId) {
-    return '$applicationDirPath/$tracksDir/$songId$audioExtension';
+  // Get full paths for various file types. [folder], when provided, nests
+  // the file under a subdirectory of the offline root (used for
+  // playlist/album downloads); singles keep using the root directly.
+  static String getAudioPath(String songId, {String? folder}) {
+    final base = (folder != null && folder.isNotEmpty)
+        ? '$applicationDirPath/$folder'
+        : applicationDirPath;
+    return '$base/$songId$audioExtension';
   }
 
   static String getArtworkPath(String songId) {
     return '$applicationDirPath/$artworksDir/$songId$artworkExtension';
   }
 
-  // Ensure directories exist
+  // Ensure the offline root directory exists.
   static Future<void> ensureDirectoriesExist() async {
-    final tracksDirectory = Directory('$applicationDirPath/$tracksDir');
-    final artworksDirectory = Directory('$applicationDirPath/$artworksDir');
-
-    if (!await tracksDirectory.exists()) {
-      await tracksDirectory.create(recursive: true);
-    }
-
-    if (!await artworksDirectory.exists()) {
-      await artworksDirectory.create(recursive: true);
+    final directory = Directory(applicationDirPath);
+    if (!await directory.exists()) {
+      await directory.create(recursive: true);
     }
   }
+}
+
+/// Removes characters that aren't safe in a folder/file name on Android's
+/// external storage, used to derive playlist/album download subfolders and
+/// exported filenames from user-provided titles.
+String sanitizeFileName(String name) {
+  final sanitized = name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
+  return sanitized.isEmpty ? 'DSKplay' : sanitized;
 }

@@ -31,6 +31,7 @@ import 'package:dskplay/services/data_manager.dart';
 import 'package:dskplay/services/listening_stats_service.dart';
 import 'package:dskplay/services/playlists_manager.dart';
 import 'package:dskplay/services/settings_manager.dart';
+import 'package:dskplay/theme/app_themes.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/widgets/custom_bar.dart';
 
@@ -119,6 +120,35 @@ class _BackupSectionState extends State<BackupSection> {
         await getData('settings', 'wrappedEnabled', defaultValue: true)
             as bool;
     listeningStatsService.reload();
+
+    // Same reasoning for the theme/accent settings added alongside backups:
+    // they live in the restored 'settings' box, but the live app state
+    // (ThemeMode, pure-black flag, seed color) is cached in module-level
+    // vars/notifiers that a restore doesn't touch on its own.
+    final restoredThemeIndex =
+        await getData('settings', 'themeIndex', defaultValue: 0) as int;
+    final restoredAmoled =
+        await getData('settings', 'usePureBlackColor', defaultValue: false)
+            as bool;
+    final restoredUseSystemColor =
+        await getData('settings', 'useSystemColor', defaultValue: true)
+            as bool;
+    final restoredAccent =
+        await getData('settings', 'accentColor', defaultValue: 0xff91cef4)
+            as int;
+
+    usePureBlackColor.value = restoredAmoled;
+    useSystemColor.value = restoredUseSystemColor;
+    primaryColorSetting = Color(restoredAccent);
+
+    if (mounted) {
+      DskPlay.updateAppState(
+        context,
+        newThemeMode: getThemeMode(restoredThemeIndex),
+        newAccentColor: primaryColorSetting,
+        useSystemColor: restoredUseSystemColor,
+      );
+    }
   }
 
   Future<void> _run(Future<({String message, bool success})> Function() action) async {

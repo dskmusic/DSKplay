@@ -22,6 +22,7 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/extensions/l10n.dart';
@@ -128,15 +129,6 @@ class SettingsPage extends StatelessWidget {
             onChanged: (value) => _toggleSystemColor(context, value),
           ),
         ),
-        if (themeMode == ThemeMode.dark)
-          CustomBar(
-            context.l10n!.pureBlackTheme,
-            FluentIcons.color_background_24_regular,
-            trailing: Switch(
-              value: usePureBlackColor.value,
-              onChanged: (value) => _togglePureBlack(context, value),
-            ),
-          ),
         ValueListenableBuilder<bool>(
           valueListenable: predictiveBack,
           builder: (_, value, __) {
@@ -546,6 +538,12 @@ class SettingsPage extends StatelessWidget {
 
   void _showAccentColorPicker(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    // Last preset is replaced by a rainbow tile that opens a full color
+    // picker instead of a fixed swatch.
+    final presetColors = availableColors.sublist(
+      0,
+      availableColors.length - 1,
+    );
 
     showCustomBottomSheet(
       context,
@@ -559,9 +557,36 @@ class SettingsPage extends StatelessWidget {
           ),
           shrinkWrap: true,
           physics: const BouncingScrollPhysics(),
-          itemCount: availableColors.length,
+          itemCount: presetColors.length + 1,
           itemBuilder: (context, index) {
-            final color = availableColors[index];
+            if (index == presetColors.length) {
+              return GestureDetector(
+                onTap: () => _pickCustomColor(context),
+                child: Container(
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: SweepGradient(
+                      colors: [
+                        Colors.red,
+                        Colors.yellow,
+                        Colors.green,
+                        Colors.cyan,
+                        Colors.blue,
+                        Colors.purple,
+                        Colors.red,
+                      ],
+                    ),
+                  ),
+                  child: const Icon(
+                    FluentIcons.color_24_filled,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+              );
+            }
+
+            final color = presetColors[index];
             final isSelected = color == primaryColorSetting;
 
             return GestureDetector(
@@ -577,7 +602,7 @@ class SettingsPage extends StatelessWidget {
                   useSystemColor: false,
                 );
                 showToast(context, context.l10n!.accentChangeMsg);
-                Navigator.pop(context);
+                closeCurrentBottomSheet();
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
@@ -606,41 +631,102 @@ class SettingsPage extends StatelessWidget {
   }
 
   void _showThemeModePicker(BuildContext context) {
-    final availableModes = [ThemeMode.system, ThemeMode.light, ThemeMode.dark];
-    const modeIcons = [
-      FluentIcons.phone_24_regular,
-      FluentIcons.weather_sunny_24_regular,
-      FluentIcons.weather_moon_24_regular,
-    ];
+    final isAmoled = usePureBlackColor.value;
 
     showCustomBottomSheet(
       context,
-      ListView.builder(
+      ListView(
         shrinkWrap: true,
         physics: const BouncingScrollPhysics(),
         padding: commonListViewBottomPadding,
-        itemCount: availableModes.length,
-        itemBuilder: (context, index) {
-          final mode = availableModes[index];
-          final modeNames = [
+        children: [
+          BottomSheetBar(
             context.l10n!.themeModeSystem,
+            () => _selectThemeMode(context, ThemeMode.system, amoled: false),
+            themeMode == ThemeMode.system,
+            icon: FluentIcons.phone_24_regular,
+          ),
+          BottomSheetBar(
             context.l10n!.themeModeLight,
+            () => _selectThemeMode(context, ThemeMode.light, amoled: false),
+            themeMode == ThemeMode.light,
+            icon: FluentIcons.weather_sunny_24_regular,
+          ),
+          BottomSheetBar(
             context.l10n!.themeModeDark,
-          ];
-
-          return BottomSheetBar(
-            modeNames[mode.index],
-            () {
-              addOrUpdateData<int>('settings', 'themeIndex', mode.index);
-              DskPlay.updateAppState(context, newThemeMode: mode);
-              Navigator.pop(context);
-            },
-            themeMode == mode,
-            icon: modeIcons[mode.index],
-          );
-        },
+            () => _selectThemeMode(context, ThemeMode.dark, amoled: false),
+            themeMode == ThemeMode.dark && !isAmoled,
+            icon: FluentIcons.weather_moon_24_regular,
+          ),
+          BottomSheetBar(
+            'AMOLED',
+            () => _selectThemeMode(context, ThemeMode.dark, amoled: true),
+            themeMode == ThemeMode.dark && isAmoled,
+            icon: FluentIcons.weather_moon_24_filled,
+          ),
+          BottomSheetBar(
+            context.l10n!.custom,
+            () => _pickCustomColor(context),
+            false,
+            icon: FluentIcons.color_24_regular,
+          ),
+        ],
       ),
     );
+  }
+
+  Future<void> _selectThemeMode(
+    BuildContext context,
+    ThemeMode mode, {
+    required bool amoled,
+  }) async {
+    addOrUpdateData<int>('settings', 'themeIndex', mode.index);
+    addOrUpdateData<bool>('settings', 'usePureBlackColor', amoled);
+    usePureBlackColor.value = amoled;
+    await DskPlay.updateAppState(context, newThemeMode: mode);
+    closeCurrentBottomSheet();
+  }
+
+  /// Opens a full color-wheel picker so the user can choose any accent
+  /// color, rather than being limited to the fixed [availableColors]
+  /// presets. Shared by the "AMOLED/Custom" theme-mode entry and the
+  /// rainbow swatch in the accent color picker.
+  Future<void> _pickCustomColor(BuildContext context) async {
+    var picked = primaryColorSetting;
+    final result = await showDialog<Color>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(context.l10n!.accentColor),
+        content: SingleChildScrollView(
+          child: ColorPicker(
+            pickerColor: primaryColorSetting,
+            onColorChanged: (color) => picked = color,
+            enableAlpha: false,
+            labelTypes: const [],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(context.l10n!.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, picked),
+            child: Text(context.l10n!.save),
+          ),
+        ],
+      ),
+    );
+    if (result == null || !context.mounted) return;
+
+    addOrUpdateData<int>('settings', 'accentColor', result.toARGB32());
+    await DskPlay.updateAppState(
+      context,
+      newAccentColor: result,
+      useSystemColor: false,
+    );
+    if (context.mounted) showToast(context, context.l10n!.accentChangeMsg);
+    closeCurrentBottomSheet();
   }
 
   void _showLanguagePicker(BuildContext context) {
@@ -731,13 +817,6 @@ class SettingsPage extends StatelessWidget {
       newAccentColor: primaryColorSetting,
       useSystemColor: value,
     );
-    showToast(context, context.l10n!.settingChangedMsg);
-  }
-
-  void _togglePureBlack(BuildContext context, bool value) {
-    addOrUpdateData<bool>('settings', 'usePureBlackColor', value);
-    usePureBlackColor.value = value;
-    DskPlay.updateAppState(context);
     showToast(context, context.l10n!.settingChangedMsg);
   }
 
