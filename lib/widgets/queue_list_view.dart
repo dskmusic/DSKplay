@@ -49,6 +49,15 @@ class _QueueWidgetState extends State<QueueWidget> {
   bool _hasScrolledToInitial = false;
   final ScrollController _scrollController = ScrollController();
 
+  // Keyed by queue entry id so the currently-playing tile can be located
+  // and scrolled into view using its real rendered position via
+  // Scrollable.ensureVisible, instead of an estimated-item-height pixel
+  // calculation that drifted further off the further into a long queue
+  // the current song was (which is why this used to only seem to work in
+  // shuffle mode - there the current song usually starts out near the
+  // front, so the estimate's error stayed small).
+  final Map<String, GlobalKey> _tileKeys = {};
+
   @override
   void initState() {
     super.initState();
@@ -71,22 +80,27 @@ class _QueueWidgetState extends State<QueueWidget> {
         });
   }
 
+  GlobalKey _keyFor(String queueEntryId) =>
+      _tileKeys.putIfAbsent(queueEntryId, GlobalKey.new);
+
   void _scrollToCurrentSong() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
+      if (!mounted) return;
       final currentIndex = audioHandler.currentQueueIndex;
-      if (currentIndex <= 0) return;
-      const estimatedItemHeight = 68.0;
-      const topPadding = 4.0;
-      final targetOffset = currentIndex * estimatedItemHeight + topPadding;
-      final clampedOffset = targetOffset.clamp(
-        0.0,
-        _scrollController.position.maxScrollExtent,
-      );
-      _scrollController.animateTo(
-        clampedOffset,
+      if (currentIndex < 0 || currentIndex >= _queue.length) return;
+
+      final song = _queue[currentIndex];
+      final queueEntryId =
+          song['queueEntryId']?.toString() ??
+          'legacy_${song['ytid']}_$currentIndex';
+      final tileContext = _tileKeys[queueEntryId]?.currentContext;
+      if (tileContext == null) return;
+
+      Scrollable.ensureVisible(
+        tileContext,
         duration: const Duration(milliseconds: 350),
         curve: Curves.easeOut,
+        alignment: 0.5,
       );
     });
   }
@@ -334,7 +348,7 @@ class _QueueWidgetState extends State<QueueWidget> {
             song['queueEntryId']?.toString() ??
             'legacy_${song['ytid']}_$index';
         return QueueTile(
-          key: ValueKey(queueEntryId),
+          key: _keyFor(queueEntryId),
           song: song,
           index: index,
           queueEntryId: queueEntryId,
