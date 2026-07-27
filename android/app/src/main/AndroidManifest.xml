@@ -41,17 +41,15 @@
 
     <application
         android:label="DSK Play"
-        android:name="${applicationName}"
+        android:name=".App"
         android:icon="@mipmap/ic_launcher"
         android:enableOnBackInvokedCallback="true"
         android:extractNativeLibs="true"
         tools:replace="android:extractNativeLibs">
 
-        <!-- Custom MainActivity (extends AudioServiceActivity) so our own
-             platform channels (configureFlutterEngine in MainActivity.kt)
-             actually run; see MainActivity.kt for why it must extend it. -->
+        <!-- AudioServiceActivity -->
         <activity
-            android:name="com.dskmusic.dskplay.MainActivity"
+            android:name="com.ryanheise.audioservice.AudioServiceActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:allowCrossUidActivitySwitchFromBelow="false"

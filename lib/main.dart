@@ -52,6 +52,7 @@ import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/language_utils.dart';
 import 'package:dskplay/utilities/playlist_utils.dart';
 import 'package:dskplay/utilities/sharing_intent.dart';
+import 'package:dskplay/widgets/confirmation_dialog.dart';
 import 'package:dskplay/widgets/update_dialog.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -271,7 +272,29 @@ class _DskPlayState extends State<DskPlay> with WidgetsBindingObserver {
           ],
         ),
       );
-      if (shouldRestore != true || !context.mounted) return;
+      if (!context.mounted) return;
+
+      var restore = shouldRestore == true;
+      if (!restore) {
+        // Declining now means using the app will start populating (and
+        // eventually auto-uploading) fresh, empty local data under this
+        // same device code - which would overwrite the cloud backup we
+        // just found. Give a chance to back out of skipping it.
+        final confirmedSkip = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => ConfirmationDialog(
+            confirmationMessage: dialogContext.l10n!.cloudBackupSkipWarning,
+            submitMessage: dialogContext.l10n!.cloudBackupContinueWithoutRestoring,
+            isDangerous: true,
+            onCancel: () => Navigator.of(dialogContext).pop(false),
+            onSubmit: () => Navigator.of(dialogContext).pop(true),
+          ),
+        );
+        if (confirmedSkip == true) return;
+        // Backed out of skipping - restore after all.
+        restore = true;
+      }
+      if (!restore || !context.mounted) return;
 
       await applyBackupSnapshot(result.data!);
       reloadSongLibraryStateFromStorage();
