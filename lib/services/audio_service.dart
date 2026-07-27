@@ -437,6 +437,41 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   void _restoreLastPlayedForDisplay() {
     try {
       if (mediaItem.valueOrNull != null) return;
+      if (!rememberLastPlayback.value) return;
+
+      final persisted = _loadPersistedQueueState();
+      if (persisted != null) {
+        _queueList
+          ..clear()
+          ..addAll(persisted.queue);
+        _originalQueueList
+          ..clear()
+          ..addAll(persisted.originalQueue);
+        _currentQueueIndex = persisted.index;
+        _hydrateQueueEntryIds();
+
+        final mediaItems = _buildQueueMediaItems();
+        queue.add(mediaItems);
+        _queueMapStream.add(List.unmodifiable(_queueList));
+
+        if (_currentQueueIndex >= mediaItems.length) return;
+        mediaItem.add(mediaItems[_currentQueueIndex]);
+        playbackState.add(
+          PlaybackState(
+            controls: _controls(false),
+            systemActions: const {
+              MediaAction.seek,
+              MediaAction.seekForward,
+              MediaAction.seekBackward,
+            },
+            androidCompactActionIndices: const [0, 1, 3],
+            processingState: AudioProcessingState.ready,
+            queueIndex: _currentQueueIndex,
+            updateTime: DateTime.now(),
+          ),
+        );
+        return;
+      }
 
       final song = _latestResumableSong();
       if (song == null) return;
@@ -1249,6 +1284,8 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         final currentMediaItem = mediaItems[_currentQueueIndex];
         mediaItem.add(currentMediaItem);
       }
+
+      _persistQueueState();
     } catch (e, stackTrace) {
       logger.log(
         'Error updating queue media items',
@@ -1364,6 +1401,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         if (success) {
           _consecutiveErrors = 0;
           _preloadUpcomingSongs();
+          _persistQueueState();
           // Trigger background song addition if auto-play is enabled
           if (playNextSongAutomatically.value) {
             unawaited(_backgroundAddSongsToQueue());
@@ -1547,6 +1585,70 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     return null;
   }
 
+  static const _lastQueueStateKey = 'lastQueueState';
+
+  void _persistQueueState() {
+    if (!rememberLastPlayback.value) return;
+    try {
+      final userBox = Hive.box('user');
+      if (_queueList.isEmpty) {
+        unawaited(userBox.delete(_lastQueueStateKey));
+        return;
+      }
+      unawaited(
+        userBox.put(_lastQueueStateKey, {
+          'queue': cloneMaps(_queueList),
+          'index': _currentQueueIndex,
+          'originalQueue': cloneMaps(_originalQueueList),
+        }),
+      );
+    } catch (e, stackTrace) {
+      logger.log(
+        'Error persisting queue state',
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  /// Returns the persisted queue + index from the previous session, or null
+  /// if there's nothing usable (never saved, corrupted, or empty).
+  ({List<Map> queue, int index, List<Map> originalQueue})?
+  _loadPersistedQueueState() {
+    try {
+      final raw = Hive.box('user').get(_lastQueueStateKey);
+      if (raw is! Map) return null;
+
+      final queueRaw = raw['queue'];
+      if (queueRaw is! List) return null;
+      final queue = queueRaw
+          .whereType<Map>()
+          .map((s) => Map<String, dynamic>.from(s))
+          .toList();
+      if (queue.isEmpty) return null;
+
+      var index = raw['index'] is int ? raw['index'] as int : 0;
+      if (index < 0 || index >= queue.length) index = 0;
+
+      final originalQueueRaw = raw['originalQueue'];
+      final originalQueue = originalQueueRaw is List
+          ? originalQueueRaw
+                .whereType<Map>()
+                .map((s) => Map<String, dynamic>.from(s))
+                .toList()
+          : <Map>[];
+
+      return (queue: queue, index: index, originalQueue: originalQueue);
+    } catch (e, stackTrace) {
+      logger.log(
+        'Error loading persisted queue state',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      return null;
+    }
+  }
+
   Map? _latestResumableSong() {
     if (!rememberLastPlayback.value) return null;
 
@@ -1564,6 +1666,9 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         activeMediaItem != null) {
       return mediaItemToMap(activeMediaItem);
     }
+
+    final persisted = _loadPersistedQueueState();
+    if (persisted != null) return persisted.queue[persisted.index];
 
     return _firstPlayableSong(userRecentlyPlayed.value) ??
         _firstPlayableSong(userOfflineSongs.value) ??
@@ -1600,6 +1705,27 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   Future<void> _playResumableSong(Map song) async {
     final normalisedSong = _normaliseResumableSong(song);
     if (normalisedSong == null) return;
+
+    final persisted = _loadPersistedQueueState();
+    if (persisted != null &&
+        _songYtid(persisted.queue[persisted.index]) ==
+            normalisedSong['ytid']) {
+      await playPlaylistSong(
+        playlist: {
+          'title': 'DSK Play',
+          'source': 'system-recent',
+          'list': persisted.queue,
+        },
+        songIndex: persisted.index,
+        keepManuallyAddedSongs: false,
+      );
+      if (persisted.originalQueue.isNotEmpty) {
+        _originalQueueList
+          ..clear()
+          ..addAll(persisted.originalQueue);
+      }
+      return;
+    }
 
     await playPlaylistSong(
       playlist: {
@@ -1856,6 +1982,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     _currentQueueIndex = 0;
     queue.add([]);
     mediaItem.add(null);
+    unawaited(Hive.box('user').delete(_lastQueueStateKey));
   }
 
   /// Returns unplayed manually added songs after the current queue index.
