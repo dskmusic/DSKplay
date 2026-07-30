@@ -234,12 +234,9 @@ class _SaveMp3Button extends StatelessWidget {
   Future<void> _download(BuildContext context) async {
     final song = mediaItemToMap(metadata);
     final notifications = DownloadNotificationService();
-    final notificationId = notifications.nextId();
     final notificationTitle = 'Descargando: ${metadata.title}';
 
-    unawaited(
-      notifications.showProgress(notificationId, notificationTitle, progress: 0),
-    );
+    unawaited(notifications.showProgress(notificationTitle, progress: 0));
     var lastReportedPercent = -1;
     final path = await exportSongToDevice(
       song,
@@ -248,19 +245,11 @@ class _SaveMp3Button extends StatelessWidget {
         if (percent == lastReportedPercent) return;
         lastReportedPercent = percent;
         unawaited(
-          notifications.showProgress(
-            notificationId,
-            notificationTitle,
-            progress: percent,
-          ),
+          notifications.showProgress(notificationTitle, progress: percent),
         );
       },
     );
-    await notifications.showResult(
-      notificationId,
-      notificationTitle,
-      success: path != null,
-    );
+    await notifications.showResult(notificationTitle, success: path != null);
 
     if (context.mounted) {
       showToast(

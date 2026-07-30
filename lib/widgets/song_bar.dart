@@ -280,7 +280,6 @@ Future<void> _exportSongToDeviceFlow(BuildContext context, dynamic song) async {
       ? 'Descargando canción'
       : 'Descargando: $title';
   final notifications = DownloadNotificationService();
-  final notificationId = notifications.nextId();
 
   showToast(
     context,
@@ -288,9 +287,7 @@ Future<void> _exportSongToDeviceFlow(BuildContext context, dynamic song) async {
     duration: const Duration(seconds: 1),
   );
 
-  unawaited(
-    notifications.showProgress(notificationId, notificationTitle, progress: 0),
-  );
+  unawaited(notifications.showProgress(notificationTitle, progress: 0));
   var lastReportedPercent = -1;
   final path = await exportSongToDevice(
     song,
@@ -299,19 +296,11 @@ Future<void> _exportSongToDeviceFlow(BuildContext context, dynamic song) async {
       if (percent == lastReportedPercent) return;
       lastReportedPercent = percent;
       unawaited(
-        notifications.showProgress(
-          notificationId,
-          notificationTitle,
-          progress: percent,
-        ),
+        notifications.showProgress(notificationTitle, progress: percent),
       );
     },
   );
-  await notifications.showResult(
-    notificationId,
-    notificationTitle,
-    success: path != null,
-  );
+  await notifications.showResult(notificationTitle, success: path != null);
 
   if (!context.mounted) return;
 
@@ -432,15 +421,8 @@ Future<void> _toggleSongOfflineStatus(
           ? 'Disponible sin conexión'
           : 'Sin conexión: $title';
       final notifications = DownloadNotificationService();
-      final notificationId = notifications.nextId();
 
-      unawaited(
-        notifications.showProgress(
-          notificationId,
-          notificationTitle,
-          progress: 0,
-        ),
-      );
+      unawaited(notifications.showProgress(notificationTitle, progress: 0));
       var lastReportedPercent = -1;
       success = await makeSongOffline(
         song,
@@ -449,19 +431,11 @@ Future<void> _toggleSongOfflineStatus(
           if (percent == lastReportedPercent) return;
           lastReportedPercent = percent;
           unawaited(
-            notifications.showProgress(
-              notificationId,
-              notificationTitle,
-              progress: percent,
-            ),
+            notifications.showProgress(notificationTitle, progress: percent),
           );
         },
       );
-      await notifications.showResult(
-        notificationId,
-        notificationTitle,
-        success: success,
-      );
+      await notifications.showResult(notificationTitle, success: success);
 
       if (success && context.mounted) {
         showToast(context, context.l10n!.songAddedToOffline);

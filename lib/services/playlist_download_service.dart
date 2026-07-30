@@ -31,6 +31,8 @@ import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/data_manager.dart';
+import 'package:dskplay/services/download_foreground_service.dart';
+import 'package:dskplay/services/download_notification_service.dart';
 import 'package:dskplay/services/io_service.dart';
 import 'package:dskplay/services/playlists_manager.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
@@ -137,6 +139,30 @@ class OfflinePlaylistService {
       playlist['title']?.toString() ?? playlistId,
     );
 
+    final notifications = DownloadNotificationService();
+    final title = playlist['title']?.toString() ?? '';
+    final notificationTitle = title.isEmpty
+        ? 'Descargando lista'
+        : 'Descargando: $title';
+    void onProgressChanged() {
+      unawaited(
+        notifications.showProgress(
+          notificationTitle,
+          progress: (progressNotifier.value.progress * 100).round(),
+        ),
+      );
+    }
+
+    progressNotifier.addListener(onProgressChanged);
+    unawaited(notifications.showProgress(notificationTitle, progress: 0));
+
+    // Held for the whole playlist, on top of each song's own acquire/release
+    // in makeSongOffline - without this, the protection count could
+    // momentarily hit zero *between* songs (one finishing right as another
+    // hasn't started yet), which was enough of a gap for the engine to get
+    // torn down before the next song's download ever got protected again.
+    await DownloadForegroundService.acquire();
+    DownloadProgress? finalProgress;
     try {
       final songQueue = Queue<dynamic>.from(songsList);
       const maxConcurrent = 3;
@@ -156,6 +182,9 @@ class OfflinePlaylistService {
           return <void>[];
         },
       );
+      // cleanupProgressNotifier (called below) resets progressNotifier, so
+      // the outcome for the notification has to be captured now.
+      finalProgress = progressNotifier.value;
 
       // Handle completion
       await _handleDownloadCompletion(
@@ -175,6 +204,14 @@ class OfflinePlaylistService {
       if (context.mounted) {
         showToast(context, '${context.l10n!.error}: $e');
       }
+    } finally {
+      progressNotifier.removeListener(onProgressChanged);
+      final success =
+          finalProgress != null &&
+          !finalProgress.isCancelled &&
+          finalProgress.completed > finalProgress.failed;
+      await notifications.showResult(notificationTitle, success: success);
+      DownloadForegroundService.release();
     }
   }
 
@@ -555,6 +592,10 @@ class OfflinePlaylistService {
     String folder,
   ) async {
     while (songQueue.isNotEmpty && !progressNotifier.value.isCancelled) {
+      if (DownloadForegroundService.cancelAllRequested) {
+        progressNotifier.value.isCancelled = true;
+        break;
+      }
       final song = songQueue.removeFirst();
 
       try {

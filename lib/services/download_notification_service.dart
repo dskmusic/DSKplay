@@ -19,112 +19,130 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
+import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter/services.dart';
+import 'package:dskplay/services/download_foreground_service.dart';
 
-/// Shows a system notification with a progress bar for manual downloads
-/// and "make available offline" actions, instead of only the final toast.
-/// Android-only: other platforms no-op.
+/// Drives the single system notification shown while a download or a
+/// "make available offline" action is running. Android-only: other
+/// platforms no-op.
+///
+/// This is only a client: the notification itself is built and posted by
+/// DownloadForegroundService on the native side, which is also the one
+/// holding it in the foreground and owning its "Cancelar" action. It used
+/// to be posted from here too via flutter_local_notifications, on the same
+/// id as the native one - two writers over one notification, which is what
+/// made the percentage jump backwards, left the useless (Dart-owned)
+/// Cancelar on top, and froze the whole thing as soon as the app was
+/// swiped from recents.
 class DownloadNotificationService {
   factory DownloadNotificationService() => _instance;
   DownloadNotificationService._internal();
   static final DownloadNotificationService _instance =
       DownloadNotificationService._internal();
 
-  static const String _channelId = 'downloads';
-  static const String _channelName = 'Descargas';
-  static const String _channelDescription =
-      'Progreso de descargas y disponibilidad sin conexión';
+  static const _channel = MethodChannel('dskplay/download_service');
 
-  final _plugin = FlutterLocalNotificationsPlugin();
-  bool _initialized = false;
-  int _nextId = 100000;
+  // Android silently coalesces notify() calls fired too close together for
+  // the same id, so a playlist's per-chunk progress callbacks would burst
+  // through and leave the bar stuck on a stale percentage.
+  static const Duration _minUpdateInterval = Duration(milliseconds: 400);
 
-  /// A fresh notification id for a single download/offline operation.
-  int nextId() => _nextId++;
+  String? _lastTitle;
+  int _lastPercent = -1;
+  DateTime? _lastSentAt;
 
-  Future<void> _ensureInitialized() async {
-    if (_initialized) return;
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-    await _plugin.initialize(
-      const InitializationSettings(android: androidInit),
-    );
-    await _plugin
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.requestNotificationsPermission();
-    _initialized = true;
-  }
+  // Invalidates the pending auto-dismiss of a finished download when a new
+  // one starts within its 3s grace period, so it can't wipe the new one's
+  // notification out from under it.
+  int _resultToken = 0;
 
-  AndroidNotificationDetails _details({
-    required bool ongoing,
-    int? progress,
-    int maxProgress = 100,
-    bool indeterminate = false,
-  }) {
-    return AndroidNotificationDetails(
-      _channelId,
-      _channelName,
-      channelDescription: _channelDescription,
-      importance: Importance.low,
-      priority: Priority.low,
-      onlyAlertOnce: true,
-      ongoing: ongoing,
-      autoCancel: !ongoing,
-      showProgress: ongoing,
-      maxProgress: maxProgress,
-      progress: progress ?? 0,
-      indeterminate: indeterminate,
-    );
-  }
-
-  /// Shows/updates an ongoing progress notification for [id].
-  /// [progress]/[max] as an explicit percentage, or [indeterminate] for a
-  /// spinner when there's nothing measurable to show yet (e.g. tagging).
-  Future<void> showProgress(
-    int id,
-    String title, {
-    int? progress,
-    int max = 100,
-    bool indeterminate = false,
-  }) async {
+  /// Shows/updates the ongoing progress notification.
+  ///
+  /// Nothing is awaited before the channel send on purpose, and callers may
+  /// fire it without awaiting: platform channel messages sent from this
+  /// isolate arrive in the order they were sent, so the percentage can
+  /// never land out of order. Awaiting *anything* first (a permission
+  /// check, plugin init...) let two updates race across the channel, which
+  /// is exactly what made the bar go 30% → 20% → 40% → 20%.
+  Future<void> showProgress(String title, {int? progress}) async {
     if (!Platform.isAndroid) return;
-    await _ensureInitialized();
-    await _plugin.show(
-      id,
-      title,
-      indeterminate ? null : '$progress%',
-      NotificationDetails(
-        android: _details(
-          ongoing: true,
-          progress: progress,
-          maxProgress: max,
-          indeterminate: indeterminate,
-        ),
-      ),
+    if (DownloadForegroundService.cancelAllRequested) return;
+
+    final percent = (progress ?? 0).clamp(0, 100).toInt();
+
+    if (title != _lastTitle) {
+      _lastTitle = title;
+      _lastPercent = -1;
+      _lastSentAt = null;
+      _resultToken++;
+    } else if (percent <= _lastPercent) {
+      // Unchanged, or a stale report from a slower parallel worker:
+      // progress only ever moves forward within one operation.
+      return;
+    }
+
+    final now = DateTime.now();
+    final lastSentAt = _lastSentAt;
+    if (percent < 100 &&
+        lastSentAt != null &&
+        now.difference(lastSentAt) < _minUpdateInterval) {
+      return;
+    }
+
+    _lastPercent = percent;
+    _lastSentAt = now;
+    unawaited(
+      _channel
+          .invokeMethod('showProgress', {'title': title, 'progress': percent})
+          .catchError((_) => null),
     );
   }
 
-  /// Replaces the progress notification for [id] with a final result.
-  Future<void> showResult(
-    int id,
-    String title, {
-    required bool success,
-  }) async {
+  /// Replaces the progress notification with a final result.
+  Future<void> showResult(String title, {required bool success}) async {
     if (!Platform.isAndroid) return;
-    await _ensureInitialized();
-    await _plugin.show(
-      id,
-      title,
-      success ? 'Completado' : 'Ha fallado',
-      NotificationDetails(android: _details(ongoing: false)),
-    );
+    _lastTitle = null;
+    _lastPercent = -1;
+    _lastSentAt = null;
+    final token = ++_resultToken;
+
+    if (DownloadForegroundService.cancelAllRequested) {
+      // The user cancelled this on the notification itself - a lingering
+      // "Ha fallado" would only be telling them what they already know.
+      await cancel();
+      return;
+    }
+
+    try {
+      await _channel.invokeMethod('showResult', {
+        'title': title,
+        'text': success ? 'Completado' : 'Ha fallado',
+      });
+    } catch (_) {}
+
+    if (success) {
+      // Confirms briefly, then gets out of the way - a failure stays put
+      // (dismissible) since the user may need to notice and act on it.
+      unawaited(
+        Future.delayed(const Duration(seconds: 3), () {
+          if (token == _resultToken) return cancel();
+          return null;
+        }),
+      );
+    }
   }
 
-  Future<void> cancel(int id) async {
+  Future<void> cancel() async {
     if (!Platform.isAndroid) return;
-    await _plugin.cancel(id);
+    _lastTitle = null;
+    _lastPercent = -1;
+    _lastSentAt = null;
+    _resultToken++;
+    try {
+      await _channel.invokeMethod('cancelNotification');
+    } catch (_) {}
   }
 }

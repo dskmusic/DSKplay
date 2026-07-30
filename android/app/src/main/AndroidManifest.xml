@@ -139,6 +139,19 @@
             </intent-filter>
         </service>
 
+        <!-- Keeps a download running after the app is swiped from recents.
+             foregroundServiceType is mediaPlayback (not dataSync) on purpose:
+             Android 15+ enforces a short forced-stop timeout on dataSync/
+             mediaProcessing services started from the background - confirmed
+             via logcat ("Stop FGS timeout") killing this service ~9s after
+             start on a real device, which was cutting downloads off. There's
+             no such OS-enforced timeout on mediaPlayback, and the permission
+             is already declared above for audio_service's own service. -->
+        <service android:name=".DownloadForegroundService"
+            android:foregroundServiceType="mediaPlayback"
+            android:stopWithTask="false"
+            android:exported="false" />
+
         <!-- MediaButtonReceiver -->
         <receiver android:name="com.ryanheise.audioservice.MediaButtonReceiver"
             android:exported="true"

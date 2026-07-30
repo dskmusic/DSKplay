@@ -669,21 +669,17 @@ class PlaylistBar extends StatelessWidget {
 
     final title = fullPlaylist['title']?.toString() ?? '';
     final notifications = DownloadNotificationService();
-    final notificationId = notifications.nextId();
     final notificationTitle = title.isEmpty
         ? 'Descargando lista'
         : 'Descargando: $title';
 
-    unawaited(
-      notifications.showProgress(notificationId, notificationTitle, progress: 0),
-    );
+    unawaited(notifications.showProgress(notificationTitle, progress: 0));
     final result = await exportPlaylistToDevice(
       fullPlaylist,
       onProgress: (done, total) {
         if (total == 0) return;
         unawaited(
           notifications.showProgress(
-            notificationId,
             notificationTitle,
             progress: (done * 100 / total).round(),
           ),
@@ -691,7 +687,6 @@ class PlaylistBar extends StatelessWidget {
       },
     );
     await notifications.showResult(
-      notificationId,
       notificationTitle,
       success: result.failed == 0,
     );

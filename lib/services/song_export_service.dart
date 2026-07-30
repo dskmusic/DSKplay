@@ -23,6 +23,7 @@ import 'dart:io';
 
 import 'package:dskplay/main.dart' show logger;
 import 'package:dskplay/services/common_services.dart';
+import 'package:dskplay/services/download_foreground_service.dart';
 import 'package:dskplay/services/io_service.dart';
 
 /// Kept as an alias so existing call sites/imports don't need to change.
@@ -41,6 +42,13 @@ Future<String?> exportSongToDevice(
   String? folder,
 }) async {
   String? tempSourcePath;
+  // Covers the whole export, not just the temp download/transcode step -
+  // releasing right after that left the final copy-to-destination step
+  // below unprotected, so the engine could be torn down before the file
+  // ever reached its real destination (only the orphaned temp copy would
+  // exist). Awaited so no bytes are downloaded before the protective
+  // service is confirmed up.
+  await DownloadForegroundService.acquire();
   try {
     final String? ytid = song['ytid'];
     if (ytid == null || ytid.isEmpty) return null;
@@ -84,6 +92,7 @@ Future<String?> exportSongToDevice(
         await File(tempSourcePath).delete();
       }
     } catch (_) {}
+    DownloadForegroundService.release();
   }
 }
 
@@ -102,14 +111,24 @@ Future<({int completed, int failed})> exportPlaylistToDevice(
   );
   var completed = 0;
   var failed = 0;
-  for (final song in songs) {
-    final path = await exportSongToDevice(song, folder: folder);
-    if (path != null) {
-      completed++;
-    } else {
-      failed++;
+  // Held for the whole playlist, on top of each song's own acquire/release
+  // in exportSongToDevice - without this, the protection count could
+  // momentarily hit zero between songs, which was enough of a gap for the
+  // engine to get torn down before the next song ever got protected again.
+  await DownloadForegroundService.acquire();
+  try {
+    for (final song in songs) {
+      if (DownloadForegroundService.cancelAllRequested) break;
+      final path = await exportSongToDevice(song, folder: folder);
+      if (path != null) {
+        completed++;
+      } else {
+        failed++;
+      }
+      onProgress?.call(completed + failed, songs.length);
     }
-    onProgress?.call(completed + failed, songs.length);
+  } finally {
+    DownloadForegroundService.release();
   }
   return (completed: completed, failed: failed);
 }

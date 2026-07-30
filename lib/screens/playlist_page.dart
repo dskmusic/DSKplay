@@ -30,10 +30,12 @@ import 'package:dskplay/main.dart';
 import 'package:dskplay/services/artist_service.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/data_manager.dart';
+import 'package:dskplay/services/download_notification_service.dart';
 import 'package:dskplay/services/playlist_download_service.dart';
 import 'package:dskplay/services/playlist_sharing.dart';
 import 'package:dskplay/services/playlists_manager.dart';
 import 'package:dskplay/services/settings_manager.dart';
+import 'package:dskplay/services/song_export_service.dart';
 import 'package:dskplay/utilities/app_utils.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/offline_playlist_dialogs.dart';
@@ -349,7 +351,10 @@ class _PlaylistPageState extends State<PlaylistPage> {
                 _buildAddToPlaylistButton(),
                 if (!isUserCreated) _buildSyncButton(),
               ],
-              if (songsLength > 0) _buildDownloadButton(),
+              if (songsLength > 0) ...[
+                _buildDownloadButton(),
+                if (!offlineMode.value) _buildExportButton(),
+              ],
               if (isUserCreated) ...[_buildShareButton(), _buildEditButton()],
             ],
           ),
@@ -599,10 +604,10 @@ class _PlaylistPageState extends State<PlaylistPage> {
             if (playlistOfflineStatus) {
               return IconButton.filled(
                 icon: Icon(
-                  FluentIcons.arrow_download_off_24_filled,
+                  FluentIcons.cloud_off_24_filled,
                   color: Theme.of(context).colorScheme.onPrimary,
                 ),
-                iconSize: 24,
+                iconSize: 18,
                 onPressed: () => _showRemoveOfflineDialog(playlistId),
                 tooltip: context.l10n!.removeOffline,
               );
@@ -618,14 +623,14 @@ class _PlaylistPageState extends State<PlaylistPage> {
 
                 if (isDownloading) {
                   return SizedBox(
-                    width: 48,
-                    height: 48,
+                    width: 40,
+                    height: 40,
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
                         SizedBox(
-                          width: 40,
-                          height: 40,
+                          width: 34,
+                          height: 34,
                           child: CircularProgressIndicator(
                             value: progress.isCancelled
                                 ? null
@@ -656,8 +661,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
                 }
 
                 return IconButton.filledTonal(
-                  icon: const Icon(FluentIcons.arrow_download_24_filled),
-                  iconSize: 24,
+                  icon: const Icon(FluentIcons.cloud_arrow_down_24_filled),
+                  iconSize: 18,
                   onPressed: () => offlinePlaylistService.downloadPlaylist(
                     context,
                     _playlist,
@@ -670,6 +675,98 @@ class _PlaylistPageState extends State<PlaylistPage> {
         );
       },
     );
+  }
+
+  Widget _buildExportButton() {
+    return _circleActionButton(
+      icon: FluentIcons.arrow_download_24_regular,
+      label: 'MP3',
+      onPressed: _handleExportToDevice,
+      tooltip: context.l10n!.downloadToDevice,
+    );
+  }
+
+  /// A small circular icon button with a caption underneath, used for the
+  /// MP3-export action so it doesn't read as a duplicate of the plain
+  /// cloud-icon offline-download button next to it.
+  Widget _circleActionButton({
+    required IconData icon,
+    required String label,
+    required String tooltip,
+    required VoidCallback? onPressed,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: colorScheme.secondaryContainer,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onPressed,
+          child: SizedBox(
+            width: 40,
+            height: 40,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 14, color: colorScheme.onSecondaryContainer),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 7,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.2,
+                    color: colorScheme.onSecondaryContainer,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleExportToDevice() async {
+    if (_playlist == null || (_playlist['list'] as List? ?? []).isEmpty) {
+      showToast(context, context.l10n!.playlistEmpty);
+      return;
+    }
+
+    final title = _playlist['title']?.toString() ?? '';
+    final notifications = DownloadNotificationService();
+    final notificationTitle = title.isEmpty
+        ? 'Descargando lista'
+        : 'Descargando: $title';
+
+    unawaited(notifications.showProgress(notificationTitle, progress: 0));
+    final result = await exportPlaylistToDevice(
+      _playlist,
+      onProgress: (done, total) {
+        if (total == 0) return;
+        unawaited(
+          notifications.showProgress(
+            notificationTitle,
+            progress: (done * 100 / total).round(),
+          ),
+        );
+      },
+    );
+    await notifications.showResult(
+      notificationTitle,
+      success: result.failed == 0,
+    );
+
+    if (mounted) {
+      showToast(
+        context,
+        '${context.l10n!.playlistDownloaded}: '
+        '${result.completed}/${result.completed + result.failed}',
+      );
+    }
   }
 
   void _showRemoveOfflineDialog(String playlistId) =>

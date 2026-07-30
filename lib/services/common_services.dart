@@ -35,6 +35,7 @@ import 'package:dskplay/constants/clients.dart';
 import 'package:dskplay/main.dart' show logger;
 import 'package:dskplay/models/radio_model.dart';
 import 'package:dskplay/services/data_manager.dart';
+import 'package:dskplay/services/download_foreground_service.dart';
 import 'package:dskplay/services/io_service.dart';
 import 'package:dskplay/services/lyrics_manager.dart';
 import 'package:dskplay/services/playlists_manager.dart';
@@ -818,6 +819,8 @@ Future<bool> _downloadAndTagAudioFile(
   File audioFile, {
   void Function(double progress)? onProgress,
 }) async {
+  if (DownloadForegroundService.cancelAllRequested) return false;
+
   final rawFile = File('${audioFile.path}.raw');
   await audioFile.parent.create(recursive: true);
 
@@ -834,6 +837,9 @@ Future<bool> _downloadAndTagAudioFile(
     final totalBytes = audioManifest.size.totalBytes;
     var receivedBytes = 0;
     await for (final chunk in stream) {
+      if (DownloadForegroundService.cancelAllRequested) {
+        throw Exception('Download cancelled by user');
+      }
       fileStream.add(chunk);
       receivedBytes += chunk.length;
       if (totalBytes > 0) onProgress?.call(receivedBytes / totalBytes);
@@ -989,6 +995,13 @@ Future<bool> makeSongOffline(
   void Function(double progress)? onProgress,
   String? folder,
 }) async {
+  // Covers the *whole* operation, not just the download itself - releasing
+  // early (e.g. right after the audio file is written) left the follow-up
+  // work (recording the song as offline below) unprotected, so the engine
+  // could still be torn down before that ever ran: the file would exist on
+  // disk but the app would never learn about it. Awaited so no bytes are
+  // downloaded before the protective service is confirmed up.
+  await DownloadForegroundService.acquire();
   try {
     final String? ytid = song['ytid'];
 
@@ -1065,6 +1078,8 @@ Future<bool> makeSongOffline(
   } catch (e, stackTrace) {
     logger.log('Error making song offline', error: e, stackTrace: stackTrace);
     return false;
+  } finally {
+    DownloadForegroundService.release();
   }
 }
 

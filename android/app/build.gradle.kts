@@ -31,8 +31,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-        // Required by flutter_local_notifications (download/offline
-        // progress notifications).
+        // Kept after dropping flutter_local_notifications: other plugins
+        // (and the AGP/Flutter toolchain itself) still expect it, and
+        // turning it off buys nothing.
         isCoreLibraryDesugaringEnabled = true
     }
 
