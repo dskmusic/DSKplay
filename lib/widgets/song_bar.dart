@@ -31,6 +31,7 @@ import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/download_notification_service.dart';
+import 'package:dskplay/services/local_files_service.dart';
 import 'package:dskplay/services/playlists_manager.dart';
 import 'package:dskplay/services/router_service.dart';
 import 'package:dskplay/services/settings_manager.dart';
@@ -506,6 +507,7 @@ class _SongBarState extends State<SongBar> {
   late String _songTitle;
   late String _songArtist;
   late final String? _artworkPath;
+  late final String? _audioPath;
   late final String _lowResImageUrl;
   late final String _ytid;
 
@@ -517,6 +519,7 @@ class _SongBarState extends State<SongBar> {
     _songTitle = widget.song['title'] ?? '';
     _songArtist = widget.song['artist']?.toString() ?? '';
     _artworkPath = widget.song['artworkPath'];
+    _audioPath = widget.song['audioPath'];
     _lowResImageUrl = widget.song['lowResImage']?.toString() ?? '';
     _ytid = widget.song['ytid'] ?? '';
 
@@ -662,6 +665,7 @@ class _SongBarState extends State<SongBar> {
     return _ArtworkDisplay(
       lowResImageUrl: _lowResImageUrl,
       artworkPath: _artworkPath,
+      audioPath: _audioPath,
       size: size,
       isDurationAvailable: isDurationAvailable,
       colorScheme: colorScheme,
@@ -825,16 +829,39 @@ class _SongInfo extends StatelessWidget {
 class _OfflineArtwork extends StatelessWidget {
   const _OfflineArtwork({
     required this.artworkPath,
+    this.audioPath,
     required this.size,
     required this.colorScheme,
   });
 
   final String artworkPath;
+  final String? audioPath;
   final double size;
   final ColorScheme colorScheme;
 
   @override
   Widget build(BuildContext context) {
+    // A cached artworkPath recorded long ago (e.g. into listening stats/
+    // recommendations) can point at a file that's since been evicted, from
+    // before the cache moved to a persistent directory. Re-extract it from
+    // the source audio file on demand rather than showing a blank cover.
+    if (!File(artworkPath).existsSync() && audioPath != null) {
+      return FutureBuilder<String?>(
+        future: reextractLocalArtwork(audioPath!),
+        builder: (context, snapshot) {
+          final resolvedPath = snapshot.data;
+          if (resolvedPath == null) {
+            return const NullArtworkWidget(iconSize: 30);
+          }
+          return _buildImage(resolvedPath);
+        },
+      );
+    }
+
+    return _buildImage(artworkPath);
+  }
+
+  Widget _buildImage(String path) {
     return SizedBox(
       width: size,
       height: size,
@@ -843,7 +870,7 @@ class _OfflineArtwork extends StatelessWidget {
         child: Stack(
           children: [
             Image.file(
-              File(artworkPath),
+              File(path),
               width: size,
               height: size,
               fit: BoxFit.cover,
@@ -997,6 +1024,7 @@ class _ArtworkDisplay extends StatelessWidget {
   const _ArtworkDisplay({
     required this.lowResImageUrl,
     required this.artworkPath,
+    this.audioPath,
     required this.size,
     required this.isDurationAvailable,
     required this.colorScheme,
@@ -1007,6 +1035,7 @@ class _ArtworkDisplay extends StatelessWidget {
 
   final String lowResImageUrl;
   final String? artworkPath;
+  final String? audioPath;
   final double size;
   final bool isDurationAvailable;
   final ColorScheme colorScheme;
@@ -1026,6 +1055,7 @@ class _ArtworkDisplay extends StatelessWidget {
         if (artworkPath != null && artworkPath!.isNotEmpty) {
           return _OfflineArtwork(
             artworkPath: artworkPath!,
+            audioPath: audioPath,
             size: size,
             colorScheme: colorScheme,
           );

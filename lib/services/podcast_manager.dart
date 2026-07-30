@@ -69,6 +69,17 @@ class PodcastManager {
         as bool,
   );
 
+  // Podcasts don't carry their own "latest episode" date - it only becomes
+  // known once its feed has been fetched (subscribing or opening its detail
+  // page). Recorded progressively so the subscriptions list can sort by it
+  // without eagerly re-fetching every feed just to render the list.
+  final ValueNotifier<Map<String, String>> latestEpisodeDates =
+      ValueNotifier<Map<String, String>>(
+        Map<String, String>.from(
+          Hive.box('user').get('podcastLatestEpisodeDates', defaultValue: {}),
+        ),
+      );
+
   String? _lastAutoMarkedKey;
   StreamSubscription<PositionData>? _positionSub;
 
@@ -190,6 +201,24 @@ class PodcastManager {
     );
   }
 
+  DateTime? latestEpisodeDate(String podcastId) {
+    final raw = latestEpisodeDates.value[podcastId];
+    return raw != null ? DateTime.tryParse(raw) : null;
+  }
+
+  Future<void> recordLatestEpisodeDate(String podcastId, DateTime? date) async {
+    if (date == null) return;
+    latestEpisodeDates.value = {
+      ...latestEpisodeDates.value,
+      podcastId: date.toIso8601String(),
+    };
+    await addOrUpdateData<Map>(
+      'user',
+      'podcastLatestEpisodeDates',
+      latestEpisodeDates.value,
+    );
+  }
+
   Future<void> setEpisodeSortAscending(bool ascending) async {
     episodeSortAscending.value = ascending;
     await addOrUpdateData<bool>(
@@ -217,6 +246,9 @@ class PodcastManager {
               'user',
             ).get('podcastEpisodeSortAscending', defaultValue: false)
             as bool;
+    latestEpisodeDates.value = Map<String, String>.from(
+      Hive.box('user').get('podcastLatestEpisodeDates', defaultValue: {}),
+    );
   }
 
   /// Watches playback progress and auto-marks the currently playing episode

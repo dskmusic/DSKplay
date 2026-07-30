@@ -24,6 +24,7 @@ import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:dskplay/utilities/artwork_provider.dart';
 import 'package:dskplay/widgets/no_artwork_cube.dart';
 import 'package:dskplay/widgets/spinner.dart';
 
@@ -42,29 +43,59 @@ class SongArtworkWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return metadata.artUri?.scheme == 'file'
-        ? SizedBox(
-            width: size,
-            height: size,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(borderRadius),
-              child: Image.file(
-                File(metadata.extras?['artWorkPath']),
-                fit: BoxFit.cover,
-              ),
-            ),
-          )
-        : CachedNetworkImage(
-            width: size,
-            height: size,
-            imageUrl: metadata.artUri.toString(),
-            imageBuilder: (context, imageProvider) => ClipRRect(
-              borderRadius: BorderRadius.circular(borderRadius),
-              child: Image(image: imageProvider, fit: BoxFit.cover),
-            ),
-            placeholder: (context, url) => const Spinner(),
-            errorWidget: (context, url, error) =>
+    if (metadata.artUri?.scheme == 'file') {
+      return SizedBox(
+        width: size,
+        height: size,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(borderRadius),
+          child: Image.file(
+            File(metadata.extras?['artWorkPath']),
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) =>
                 NullArtworkWidget(iconSize: errorWidgetIconSize),
-          );
+          ),
+        ),
+      );
+    }
+
+    final artwork = metadata.artUri?.toString() ?? '';
+    if (artwork.isEmpty) {
+      return NullArtworkWidget(iconSize: errorWidgetIconSize);
+    }
+
+    // Non-http art sources (e.g. podcast RSS feeds without a real image,
+    // falling back to the bundled asset logo) can't be loaded by
+    // CachedNetworkImage - ArtworkProvider already knows how to resolve
+    // http, asset, data: and file sources, so route those through it
+    // instead of always assuming a network URL.
+    if (!artwork.startsWith('http')) {
+      return SizedBox(
+        width: size,
+        height: size,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(borderRadius),
+          child: Image(
+            image: ArtworkProvider.get(artwork),
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) =>
+                NullArtworkWidget(iconSize: errorWidgetIconSize),
+          ),
+        ),
+      );
+    }
+
+    return CachedNetworkImage(
+      width: size,
+      height: size,
+      imageUrl: artwork,
+      imageBuilder: (context, imageProvider) => ClipRRect(
+        borderRadius: BorderRadius.circular(borderRadius),
+        child: Image(image: imageProvider, fit: BoxFit.cover),
+      ),
+      placeholder: (context, url) => const Spinner(),
+      errorWidget: (context, url, error) =>
+          NullArtworkWidget(iconSize: errorWidgetIconSize),
+    );
   }
 }

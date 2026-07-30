@@ -89,6 +89,8 @@ MediaItem mapToMediaItem(Map song) {
       'artWorkPath': hasArtworkFile
           ? artworkPath
           : (song['highResImage']?.toString() ?? ''),
+      'isPodcastEpisode': song['isPodcastEpisode'] ?? false,
+      'description': song['description'],
     },
   );
 }

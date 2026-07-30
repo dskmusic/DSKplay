@@ -44,6 +44,7 @@ import 'package:dskplay/services/logger_service.dart';
 import 'package:dskplay/services/playlist_download_service.dart';
 import 'package:dskplay/services/playlist_sharing.dart';
 import 'package:dskplay/services/playlists_manager.dart';
+import 'package:dskplay/services/podcast_manager.dart';
 import 'package:dskplay/services/router_service.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/services/update_manager.dart';
@@ -302,6 +303,7 @@ class _DskPlayState extends State<DskPlay> with WidgetsBindingObserver {
       reloadPlaylistLibraryStateFromStorage();
       reloadSearchHistoryFromStorage();
       reloadRadioStationsStateFromStorage();
+      podcastManager.reloadFromStorage();
       wrappedEnabled.value =
           await getData('settings', 'wrappedEnabled', defaultValue: true)
               as bool;
@@ -524,6 +526,7 @@ Future<void> initialisation() async {
         androidStopForegroundOnPause: false,
       ),
     );
+    podcastManager.attachAutoMarkListened();
 
     // Init router
     NavigationManager.instance;

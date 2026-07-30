@@ -27,6 +27,7 @@ import 'package:audio_session/audio_session.dart';
 import 'package:hive/hive.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:dskplay/main.dart';
+import 'package:dskplay/models/podcast_model.dart';
 import 'package:dskplay/models/position_data.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/data_manager.dart';
@@ -94,6 +95,23 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   String? _lastError;
   int _consecutiveErrors = 0;
   static const int _maxConsecutiveErrors = 3;
+
+  // Set by [_restoreLastPlayedForDisplay] when a podcast episode - rather
+  // than a regular song - is what should resume on the next play() tap;
+  // consumed and cleared there.
+  ({
+    PodcastEpisode episode,
+    String podcastTitle,
+    String? localPath,
+    Duration position,
+  })?
+  _pendingPodcastResume;
+
+  // The podcast episode currently loaded (if any), kept so the throttled
+  // position listener can persist progress without re-reading Hive on every
+  // tick. Cleared whenever a non-podcast source starts playing.
+  ({PodcastEpisode episode, String podcastTitle, String? localPath})?
+  _currentPlayingPodcast;
 
   static const int _maxHistorySize = 50;
   static const int _queueLookahead = 3;
@@ -236,6 +254,18 @@ class DskPlayAudioHandler extends BaseAudioHandler {
             _logStreamError('Current index stream error', error, stackTrace);
           },
         );
+
+    // Podcasts don't go through _queueList/_persistQueueState, so their
+    // resume position is saved separately here, throttled to avoid hammering
+    // Hive on every position tick.
+    audioPlayer.positionStream
+        .throttleTime(const Duration(seconds: 5))
+        .listen(
+          (position) => _persistPodcastPositionIfNeeded(position),
+          onError: (error, stackTrace) {
+            _logStreamError('Position stream error', error, stackTrace);
+          },
+        );
   }
 
   void _debouncedStateUpdate() {
@@ -334,6 +364,27 @@ class DskPlayAudioHandler extends BaseAudioHandler {
 
   void _updateCurrentMediaItemWithDuration(Duration duration) {
     try {
+      // Podcast episodes (and other out-of-queue playback) set mediaItem/
+      // queue directly without touching _queueList/_currentQueueIndex, so
+      // those two are stale leftovers from whatever played before. Falling
+      // through to the _queueList-based logic below would "resync" the
+      // duration against that stale entry and clobber the episode's own
+      // mediaItem the moment its real duration becomes known - unlike radio
+      // (duration always null), a podcast episode has a real duration, so
+      // it's the one out-of-queue case that actually reaches this listener.
+      final activeItem = mediaItem.valueOrNull;
+      if (activeItem != null && activeItem.extras?['isPodcastEpisode'] == true) {
+        if (_shouldUpdateDuration(activeItem.duration, duration)) {
+          final updated = activeItem.copyWith(duration: duration);
+          mediaItem.add(updated);
+          final existingQueue = queue.valueOrNull;
+          if (existingQueue != null && existingQueue.isNotEmpty) {
+            queue.add([updated, ...existingQueue.skip(1)]);
+          }
+        }
+        return;
+      }
+
       final queueIndex = _currentQueueIndex;
       if (queueIndex < 0 || queueIndex >= _queueList.length) return;
 
@@ -440,6 +491,50 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       if (!rememberLastPlayback.value) return;
 
       final persisted = _loadPersistedQueueState();
+      final persistedPodcast = _loadPersistedPodcastState();
+      if (persistedPodcast != null &&
+          (persisted == null || persistedPodcast.savedAt >= persisted.savedAt)) {
+        _pendingPodcastResume = (
+          episode: persistedPodcast.episode,
+          podcastTitle: persistedPodcast.podcastTitle,
+          localPath: persistedPodcast.localPath,
+          position: persistedPodcast.position,
+        );
+
+        final episodeSong = {
+          'id': persistedPodcast.episode.key,
+          'ytid': persistedPodcast.episode.key,
+          'title': persistedPodcast.episode.title,
+          'artist': persistedPodcast.podcastTitle,
+          'album': persistedPodcast.podcastTitle,
+          'highResImage': persistedPodcast.episode.image,
+          'lowResImage': persistedPodcast.episode.image,
+          'duration': persistedPodcast.episode.durationSeconds,
+          'isLive': false,
+          'isPodcastEpisode': true,
+          'description': persistedPodcast.episode.description,
+        };
+        final item = mapToMediaItem(episodeSong);
+        mediaItem.add(item);
+        queue.add([item]);
+        playbackState.add(
+          PlaybackState(
+            controls: _controls(false),
+            systemActions: const {
+              MediaAction.seek,
+              MediaAction.seekForward,
+              MediaAction.seekBackward,
+            },
+            androidCompactActionIndices: const [0, 1, 3],
+            processingState: AudioProcessingState.ready,
+            queueIndex: 0,
+            updatePosition: persistedPodcast.position,
+            updateTime: DateTime.now(),
+          ),
+        );
+        return;
+      }
+
       if (persisted != null) {
         _queueList
           ..clear()
@@ -1586,6 +1681,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   }
 
   static const _lastQueueStateKey = 'lastQueueState';
+  static const _lastPodcastStateKey = 'lastPodcastState';
 
   void _persistQueueState() {
     if (!rememberLastPlayback.value) return;
@@ -1595,11 +1691,16 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         unawaited(userBox.delete(_lastQueueStateKey));
         return;
       }
+      // A regular song is now playing, so it - not whatever podcast episode
+      // was last playing, if any - is what a cold start should resume.
+      _currentPlayingPodcast = null;
+      unawaited(userBox.delete(_lastPodcastStateKey));
       unawaited(
         userBox.put(_lastQueueStateKey, {
           'queue': cloneMaps(_queueList),
           'index': _currentQueueIndex,
           'originalQueue': cloneMaps(_originalQueueList),
+          'savedAt': DateTime.now().millisecondsSinceEpoch,
         }),
       );
     } catch (e, stackTrace) {
@@ -1613,7 +1714,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
 
   /// Returns the persisted queue + index from the previous session, or null
   /// if there's nothing usable (never saved, corrupted, or empty).
-  ({List<Map> queue, int index, List<Map> originalQueue})?
+  ({List<Map> queue, int index, List<Map> originalQueue, int savedAt})?
   _loadPersistedQueueState() {
     try {
       final raw = Hive.box('user').get(_lastQueueStateKey);
@@ -1638,10 +1739,101 @@ class DskPlayAudioHandler extends BaseAudioHandler {
                 .toList()
           : <Map>[];
 
-      return (queue: queue, index: index, originalQueue: originalQueue);
+      final savedAt = raw['savedAt'] is int ? raw['savedAt'] as int : 0;
+
+      return (
+        queue: queue,
+        index: index,
+        originalQueue: originalQueue,
+        savedAt: savedAt,
+      );
     } catch (e, stackTrace) {
       logger.log(
         'Error loading persisted queue state',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      return null;
+    }
+  }
+
+  /// Saves which podcast episode was last playing and at what position, so a
+  /// cold start can offer to resume it - mirrors [_persistQueueState] for
+  /// podcasts, which bypass _queueList entirely (see [playPodcastEpisode]).
+  void _persistPodcastState(
+    PodcastEpisode episode,
+    String podcastTitle,
+    String? localPath,
+    Duration position,
+  ) {
+    if (!rememberLastPlayback.value) return;
+    try {
+      final userBox = Hive.box('user');
+      unawaited(userBox.delete(_lastQueueStateKey));
+      unawaited(
+        userBox.put(_lastPodcastStateKey, {
+          'episode': episode.toMap(),
+          'podcastTitle': podcastTitle,
+          'localPath': localPath,
+          'positionMs': position.inMilliseconds,
+          'savedAt': DateTime.now().millisecondsSinceEpoch,
+        }),
+      );
+    } catch (e, stackTrace) {
+      logger.log(
+        'Error persisting podcast state',
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  void _persistPodcastPositionIfNeeded(Duration position) {
+    final current = _currentPlayingPodcast;
+    if (current == null) return;
+    _persistPodcastState(
+      current.episode,
+      current.podcastTitle,
+      current.localPath,
+      position,
+    );
+  }
+
+  /// Returns the persisted podcast episode + position from the previous
+  /// session, or null if there's nothing usable.
+  ({
+    PodcastEpisode episode,
+    String podcastTitle,
+    String? localPath,
+    Duration position,
+    int savedAt,
+  })?
+  _loadPersistedPodcastState() {
+    try {
+      final raw = Hive.box('user').get(_lastPodcastStateKey);
+      if (raw is! Map) return null;
+
+      final episodeRaw = raw['episode'];
+      if (episodeRaw is! Map) return null;
+      final episode = PodcastEpisode.fromMap(
+        Map<String, dynamic>.from(episodeRaw),
+      );
+
+      final positionMs = raw['positionMs'] is int
+          ? raw['positionMs'] as int
+          : 0;
+      final savedAt = raw['savedAt'] is int ? raw['savedAt'] as int : 0;
+
+      return (
+        episode: episode,
+        podcastTitle: raw['podcastTitle']?.toString() ?? episode.title,
+        localPath: raw['localPath']?.toString(),
+        position: Duration(milliseconds: positionMs),
+        savedAt: savedAt,
+      );
+    } catch (e, stackTrace) {
+      logger.log(
+        'Error loading persisted podcast state',
         error: e,
         stackTrace: stackTrace,
       );
@@ -1911,6 +2103,20 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   Future<void> play() async {
     try {
       if (audioPlayer.audioSource == null) {
+        final pendingPodcast = _pendingPodcastResume;
+        if (pendingPodcast != null) {
+          _pendingPodcastResume = null;
+          final started = await playPodcastEpisode(
+            pendingPodcast.episode,
+            podcastTitle: pendingPodcast.podcastTitle,
+            localPath: pendingPodcast.localPath,
+          );
+          if (started && pendingPodcast.position > Duration.zero) {
+            await audioPlayer.seek(pendingPodcast.position);
+          }
+          return;
+        }
+
         final recentSong = _latestResumableSong();
         if (recentSong != null) {
           await _playResumableSong(recentSong);
@@ -1945,6 +2151,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       );
       unawaited(listeningStatsService.flush());
       await audioPlayer.pause();
+      _persistPodcastPositionIfNeeded(audioPlayer.position);
     } catch (e, stackTrace) {
       logger.log('Error in pause()', error: e, stackTrace: stackTrace);
     }
@@ -1982,7 +2189,11 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     _currentQueueIndex = 0;
     queue.add([]);
     mediaItem.add(null);
-    unawaited(Hive.box('user').delete(_lastQueueStateKey));
+    _pendingPodcastResume = null;
+    _currentPlayingPodcast = null;
+    final userBox = Hive.box('user');
+    unawaited(userBox.delete(_lastQueueStateKey));
+    unawaited(userBox.delete(_lastPodcastStateKey));
   }
 
   /// Returns unplayed manually added songs after the current queue index.
@@ -2439,6 +2650,9 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         'duration': null, // Radio streams are live
         'isLive': true,
       };
+      // A different source is now playing - stop the throttled position
+      // listener from overwriting the podcast episode's saved resume point.
+      _currentPlayingPodcast = null;
 
       _lastError = null;
       if (audioPlayer.playing) {
@@ -2494,6 +2708,103 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     } catch (e, stackTrace) {
       logger.log(
         'Error playing radio stream',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      _lastError = e.toString();
+      return false;
+    }
+  }
+
+  /// Plays a podcast episode, online (streamed from [episode.audioUrl]) or
+  /// from a [localPath] if it was downloaded. Modeled on [playRadioStream]
+  /// - a podcast episode is likewise a plain, ready-to-play audio file, just
+  /// not live and with a real duration.
+  Future<bool> playPodcastEpisode(
+    PodcastEpisode episode, {
+    required String podcastTitle,
+    String? localPath,
+  }) async {
+    try {
+      final isOffline = localPath != null;
+      final episodeSong = {
+        'id': episode.key,
+        'ytid': episode.key,
+        'title': episode.title,
+        'artist': podcastTitle,
+        'album': podcastTitle,
+        'highResImage': episode.image,
+        'lowResImage': episode.image,
+        'duration': episode.durationSeconds,
+        'isLive': false,
+        'isPodcastEpisode': true,
+        'description': episode.description,
+      };
+
+      _lastError = null;
+      if (audioPlayer.playing) {
+        listeningStatsService.recordListeningSessionProgress(
+          wasPlaying: audioPlayer.playing,
+        );
+        await audioPlayer.pause();
+      }
+
+      final mediaItem = mapToMediaItem(episodeSong);
+      this.mediaItem.add(mediaItem);
+      queue.add([mediaItem]);
+
+      final audioSource = await buildAudioSource(
+        episodeSong,
+        isOffline ? localPath : episode.audioUrl,
+        isOffline,
+      );
+
+      if (audioSource == null) {
+        logger.log(
+          'Failed to build audio source for podcast episode: ${episode.key}',
+        );
+        _lastError = 'Failed to load podcast episode';
+        return false;
+      }
+
+      final wasPlayingBeforeSwap = audioPlayer.playing;
+
+      await audioPlayer
+          .setAudioSource(audioSource)
+          .timeout(_songTransitionTimeout);
+
+      listeningStatsService
+        ..finishListeningSession(
+          countCurrentTick: true,
+          wasPlaying: wasPlayingBeforeSwap,
+        )
+        ..startListeningSession(
+          episodeSong,
+          duration: episode.durationSeconds != null
+              ? Duration(seconds: episode.durationSeconds!)
+              : Duration.zero,
+        );
+
+      await audioPlayer.play().catchError((Object e, StackTrace stackTrace) {
+        logger.log(
+          'Error starting podcast episode playback',
+          error: e,
+          stackTrace: stackTrace,
+        );
+        _lastError = e.toString();
+      });
+
+      _updatePlaybackState();
+      _currentPlayingPodcast = (
+        episode: episode,
+        podcastTitle: podcastTitle,
+        localPath: localPath,
+      );
+      _persistPodcastState(episode, podcastTitle, localPath, Duration.zero);
+      return true;
+    } catch (e, stackTrace) {
+      logger.log(
+        'Error playing podcast episode',
         error: e,
         stackTrace: stackTrace,
       );

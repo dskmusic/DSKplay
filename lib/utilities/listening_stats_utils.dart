@@ -481,6 +481,12 @@ void _upsertSongStats(
       song['artWorkPath'],
       fallback: entry['artWorkPath'],
     )
+    // Kept so a stale/evicted cached artworkPath can be re-extracted from
+    // the source file on demand (see SongBar's artwork fallback).
+    ..['audioPath'] = _readString(
+      song['audioPath'],
+      fallback: entry['audioPath'],
+    )
     ..['seconds'] = _readInt(entry['seconds']) + seconds
     ..['playCount'] =
         _readInt(entry['playCount']) + (incrementPlayCount ? 1 : 0)
@@ -620,6 +626,10 @@ void _copyLatestSongMetadata(
     ..['artWorkPath'] = _readString(
       source['artWorkPath'],
       fallback: target['artWorkPath'],
+    )
+    ..['audioPath'] = _readString(
+      source['audioPath'],
+      fallback: target['audioPath'],
     )
     ..['lastPlayed'] = source['lastPlayed'];
 

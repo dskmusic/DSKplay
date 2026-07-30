@@ -282,8 +282,11 @@ Future<Directory> _artworkCacheDirectory() async {
   final cached = _artworkCacheDir;
   if (cached != null) return cached;
 
-  final tempDir = await getTemporaryDirectory();
-  final dir = Directory('${tempDir.path}/local_artwork');
+  // Application support (not temp): artwork paths are persisted into
+  // listening stats/recommendations and read back much later, so the
+  // cache must survive OS temp-dir eviction between sessions.
+  final supportDir = await getApplicationSupportDirectory();
+  final dir = Directory('${supportDir.path}/local_artwork');
   if (!await dir.exists()) await dir.create(recursive: true);
   _artworkCacheDir = dir;
   return dir;
@@ -357,4 +360,19 @@ Future<Map<String, dynamic>> buildLocalSongMap(File file) async {
 
 Future<List<Map<String, dynamic>>> buildLocalSongMaps(List<File> files) async {
   return Future.wait(files.map(buildLocalSongMap));
+}
+
+/// Re-extracts and re-caches [audioPath]'s embedded artwork on demand, for
+/// when a previously cached path (e.g. one recorded into listening stats/
+/// recommendations long ago, possibly under an old cache location) no
+/// longer exists on disk. Returns null if the file has no tags/picture, or
+/// no longer exists.
+Future<String?> reextractLocalArtwork(String audioPath) async {
+  try {
+    final tag = await AudioTags.read(audioPath);
+    if (tag == null) return null;
+    return _extractAndCacheArtwork(audioPath, tag);
+  } catch (_) {
+    return null;
+  }
 }

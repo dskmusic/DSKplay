@@ -24,6 +24,7 @@ DSK Play is a mobile music player built with Flutter. It streams music on demand
   - [🎧 Streaming & search](#-streaming--search)
   - [📃 Playlists & library](#-playlists--library)
   - [📻 Radio stations](#-radio-stations)
+  - [🎙️ Podcasts](#️-podcasts)
   - [📂 Local files](#-local-files)
   - [🎤 Karaoke & lyrics](#-karaoke--lyrics)
   - [⬇️ Offline](#️-offline)
@@ -60,6 +61,14 @@ DSK Play is a mobile music player built with Flutter. It streams music on demand
 - Built-in radio stations, ready to play
 - Add your own custom stations
 - Favorite the ones you like, hide the ones you don't
+
+### 🎙️ Podcasts
+
+- Search and subscribe to podcasts, with a dedicated episode list per show sorted by date
+- Download episodes for offline listening, with progress in the notification shade
+- Automatic "listened" tracking as an episode plays, plus bulk mark as listened/unlistened
+- Live search to filter a show's episodes by name
+- In the full player, tap the cover to read the episode's description instead of lyrics
 
 ### 📂 Local files
 

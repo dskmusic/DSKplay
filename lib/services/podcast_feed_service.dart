@@ -111,7 +111,7 @@ Future<({Podcast podcast, List<PodcastEpisode> episodes})?> fetchPodcastFeed(
     final episodes =
         channel
             .findElements('item')
-            .map((item) => _episodeFromItem(item, podcastId, podcastImage))
+            .map((item) => _episodeFromItem(item, podcastId, podcast.image))
             .whereType<PodcastEpisode>()
             .toList()
           ..sort(

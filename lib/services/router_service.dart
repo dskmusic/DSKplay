@@ -30,9 +30,12 @@ import 'package:dskplay/screens/equalizer_page.dart';
 import 'package:dskplay/screens/home_page.dart';
 import 'package:dskplay/screens/library_page.dart';
 import 'package:dskplay/screens/library_search_page.dart';
+import 'package:dskplay/models/podcast_model.dart';
 import 'package:dskplay/screens/local_files_page.dart';
 import 'package:dskplay/screens/playlist_folder_page.dart';
 import 'package:dskplay/screens/playlist_page.dart';
+import 'package:dskplay/screens/podcast_detail_page.dart';
+import 'package:dskplay/screens/podcasts_page.dart';
 import 'package:dskplay/screens/radio_stations_page.dart';
 import 'package:dskplay/screens/search_page.dart';
 import 'package:dskplay/screens/settings_page.dart';
@@ -283,6 +286,22 @@ class NavigationManager {
                 path: 'radioStations',
                 pageBuilder: (context, state) =>
                     _pushPage(child: const RadioStationsPage(), state: state),
+              ),
+              GoRoute(
+                path: 'podcasts',
+                pageBuilder: (context, state) =>
+                    _pushPage(child: const PodcastsPage(), state: state),
+                routes: [
+                  GoRoute(
+                    path: 'detail',
+                    pageBuilder: (context, state) => _pushPage(
+                      child: PodcastDetailPage(
+                        podcast: state.extra! as Podcast,
+                      ),
+                      state: state,
+                    ),
+                  ),
+                ],
               ),
               GoRoute(
                 path: 'search',

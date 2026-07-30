@@ -293,6 +293,14 @@ class _LibraryPageState extends State<LibraryPage> {
                   onPressed: () =>
                       NavigationManager.router.go('/library/radioStations'),
                   cubeIcon: FluentIcons.sound_source_24_regular,
+                  borderRadius: BorderRadius.zero,
+                  showBuildActions: false,
+                ),
+                PlaylistBar(
+                  context.l10n!.podcasts,
+                  onPressed: () =>
+                      NavigationManager.router.go('/library/podcasts'),
+                  cubeIcon: FluentIcons.mic_24_regular,
                   borderRadius: hasCustomPlaylists || hasFolders
                       ? BorderRadius.zero
                       : commonCustomBarRadiusLast,

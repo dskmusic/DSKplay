@@ -134,7 +134,48 @@ class NowPlayingArtwork extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(borderRadius),
-          child: _LyricsBackContent(metadata: metadata),
+          child: metadata.extras?['isPodcastEpisode'] == true
+              ? _PodcastDescriptionBackContent(metadata: metadata)
+              : _LyricsBackContent(metadata: metadata),
+        ),
+      ),
+    );
+  }
+}
+
+class _PodcastDescriptionBackContent extends StatelessWidget {
+  const _PodcastDescriptionBackContent({required this.metadata});
+  final MediaItem metadata;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final description = metadata.extras?['description'] as String?;
+
+    if (description == null || description.trim().isEmpty) {
+      return Center(
+        child: Text(
+          context.l10n!.podcastDescriptionNotAvailable,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            color: colorScheme.onSecondaryContainer,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      physics: const BouncingScrollPhysics(),
+      child: Text(
+        description,
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+          color: colorScheme.onSecondaryContainer,
+          height: 1.6,
         ),
       ),
     );
