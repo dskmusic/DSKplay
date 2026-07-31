@@ -70,6 +70,24 @@ class MiniPlayer extends StatelessWidget {
 
           return StreamBuilder<FullPlayerState>(
             stream: _fullPlayerStateStream,
+            // playbackState/queue are already available synchronously (via
+            // valueOrNull) the moment metadata is non-null - e.g. right after
+            // a cold-start restore, which only seeds those two plus
+            // mediaItem, not a live position tick. Without this, the mini
+            // player would stay hidden until _fullPlayerStateStream's
+            // position-based combineLatest happens to emit, which may lag
+            // behind the first frame.
+            initialData: FullPlayerState(
+              playbackState:
+                  audioHandler.playbackState.valueOrNull ??
+                  PlaybackState(),
+              queue: audioHandler.queue.valueOrNull ?? const [],
+              position: PositionData(
+                Duration.zero,
+                Duration.zero,
+                metadata.duration ?? Duration.zero,
+              ),
+            ),
             builder: (context, stateSnapshot) {
               final state = stateSnapshot.data;
               if (state == null) return const SizedBox.shrink();

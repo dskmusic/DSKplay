@@ -21,16 +21,20 @@
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:dskplay/database/radio_stations.db.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart' show audioHandler;
+import 'package:dskplay/models/podcast_model.dart';
 import 'package:dskplay/models/radio_model.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/playlist_download_service.dart';
 import 'package:dskplay/services/playlists_manager.dart';
+import 'package:dskplay/services/podcast_manager.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/playlist_utils.dart';
 import 'package:dskplay/widgets/playlist_bar.dart';
+import 'package:dskplay/widgets/podcast_card.dart';
 import 'package:dskplay/widgets/radio_station_card.dart';
 import 'package:dskplay/widgets/section_header.dart';
 
@@ -126,11 +130,18 @@ class _LibrarySearchPageState extends State<LibrarySearchPage> {
             ...radioStationsDB.where((s) => !hiddenIds.contains(s.id)),
           ].where((s) => _matches(s.name) || _matches(s.genre ?? '')).toList();
 
+    final podcasts = query.isEmpty
+        ? const <Podcast>[]
+        : podcastManager.subscriptions.value
+              .where((p) => _matches(p.title) || _matches(p.author))
+              .toList();
+
     final hasResults =
         folders.isNotEmpty ||
         playlists.isNotEmpty ||
         artists.isNotEmpty ||
-        stations.isNotEmpty;
+        stations.isNotEmpty ||
+        podcasts.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -202,6 +213,27 @@ class _LibrarySearchPageState extends State<LibrarySearchPage> {
                     (f) => PlaylistBar(
                       f['name']?.toString() ?? '',
                       playlistData: f,
+                    ),
+                  ),
+                ],
+                if (podcasts.isNotEmpty) ...[
+                  SectionHeader(
+                    title: context.l10n!.podcasts,
+                    icon: FluentIcons.mic_24_filled,
+                  ),
+                  ...podcasts.map(
+                    (p) => Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 4,
+                      ),
+                      child: PodcastCard(
+                        podcast: p,
+                        onTap: () => context.push(
+                          '/library/podcasts/detail',
+                          extra: p,
+                        ),
+                      ),
                     ),
                   ),
                 ],

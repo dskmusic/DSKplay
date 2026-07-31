@@ -25,6 +25,30 @@ import 'package:flutter/material.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
 
+// A podcast restored on cold start resumes silently for headless play
+// triggers (notification, media button, Android Auto), but an in-app tap
+// asks first - the user may want to start the episode over instead.
+Future<void> _confirmResumePodcast(BuildContext context) async {
+  final resume = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(context.l10n!.resumePodcastQuestion),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: Text(context.l10n!.startOver),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: Text(context.l10n!.resumeEpisode),
+        ),
+      ],
+    ),
+  );
+  if (resume == null) return;
+  await audioHandler.resumePendingPodcast(fromStart: !resume);
+}
+
 Widget buildPlaybackIconButton(
   double iconSize,
   Color iconColor,
@@ -74,7 +98,12 @@ Widget buildPlaybackIconButton(
           color: iconColor,
           size: iconSize,
         );
-        onPressed = isPlaying ? audioHandler.pause : audioHandler.play;
+        final pendingPodcast = audioHandler.pendingPodcastResume;
+        onPressed = isPlaying
+            ? audioHandler.pause
+            : (pendingPodcast != null && pendingPodcast.position > Duration.zero
+                  ? () => _confirmResumePodcast(context)
+                  : audioHandler.play);
         semanticLabel = isPlaying ? context.l10n!.pause : context.l10n!.play;
       }
 

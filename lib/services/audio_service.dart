@@ -31,6 +31,7 @@ import 'package:dskplay/models/podcast_model.dart';
 import 'package:dskplay/models/position_data.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/data_manager.dart';
+import 'package:dskplay/services/download_foreground_service.dart';
 import 'package:dskplay/services/listening_stats_service.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/utilities/map_utils.dart';
@@ -107,11 +108,29 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   })?
   _pendingPodcastResume;
 
+  /// A podcast episode restored from a cold start that hasn't resumed
+  /// playback yet - used by the in-app play button to ask the user whether
+  /// to resume from [Duration] or start over, instead of silently seeking.
+  ({
+    PodcastEpisode episode,
+    String podcastTitle,
+    String? localPath,
+    Duration position,
+  })?
+  get pendingPodcastResume => _pendingPodcastResume;
+
   // The podcast episode currently loaded (if any), kept so the throttled
   // position listener can persist progress without re-reading Hive on every
   // tick. Cleared whenever a non-podcast source starts playing.
   ({PodcastEpisode episode, String podcastTitle, String? localPath})?
   _currentPlayingPodcast;
+
+  /// The podcast episode currently loaded, if the current media item is a
+  /// podcast episode rather than a regular song - used by the full player's
+  /// "download MP3" button to download the actual episode file instead of
+  /// treating the episode id as a YouTube video id.
+  ({PodcastEpisode episode, String podcastTitle, String? localPath})?
+  get currentPlayingPodcast => _currentPlayingPodcast;
 
   static const int _maxHistorySize = 50;
   static const int _queueLookahead = 3;
@@ -171,7 +190,6 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       else
         MediaControl.rewind,
       if (playing) MediaControl.pause else MediaControl.play,
-      MediaControl.stop,
       if (hasMultipleTracks)
         MediaControl.skipToNext
       else
@@ -525,7 +543,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
               MediaAction.seekForward,
               MediaAction.seekBackward,
             },
-            androidCompactActionIndices: const [0, 1, 3],
+            androidCompactActionIndices: const [0, 1, 2],
             processingState: AudioProcessingState.ready,
             queueIndex: 0,
             updatePosition: persistedPodcast.position,
@@ -559,7 +577,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
               MediaAction.seekForward,
               MediaAction.seekBackward,
             },
-            androidCompactActionIndices: const [0, 1, 3],
+            androidCompactActionIndices: const [0, 1, 2],
             processingState: AudioProcessingState.ready,
             queueIndex: _currentQueueIndex,
             updateTime: DateTime.now(),
@@ -584,7 +602,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
             MediaAction.seekForward,
             MediaAction.seekBackward,
           },
-          androidCompactActionIndices: const [0, 1, 3],
+          androidCompactActionIndices: const [0, 1, 2],
           processingState: AudioProcessingState.ready,
           queueIndex: 0,
           updateTime: DateTime.now(),
@@ -806,7 +824,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
               MediaAction.seekForward,
               MediaAction.seekBackward,
             },
-            androidCompactActionIndices: const [0, 1, 3],
+            androidCompactActionIndices: const [0, 1, 2],
             processingState: newProcessingState,
             playing: isPlaying,
             updatePosition: currentPosition,
@@ -1412,7 +1430,6 @@ class DskPlayAudioHandler extends BaseAudioHandler {
           controls: [
             MediaControl.skipToPrevious,
             MediaControl.pause,
-            MediaControl.stop,
             MediaControl.skipToNext,
           ],
           systemActions: const {
@@ -1420,7 +1437,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
             MediaAction.seekForward,
             MediaAction.seekBackward,
           },
-          androidCompactActionIndices: const [0, 1, 3],
+          androidCompactActionIndices: const [0, 1, 2],
           processingState: AudioProcessingState.loading,
           queueIndex:
               queueIndex ??
@@ -1688,20 +1705,30 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     try {
       final userBox = Hive.box('user');
       if (_queueList.isEmpty) {
-        unawaited(userBox.delete(_lastQueueStateKey));
+        unawaited(
+          userBox.delete(_lastQueueStateKey).then((_) => userBox.flush()),
+        );
         return;
       }
       // A regular song is now playing, so it - not whatever podcast episode
       // was last playing, if any - is what a cold start should resume.
       _currentPlayingPodcast = null;
       unawaited(userBox.delete(_lastPodcastStateKey));
+      // Hive's box.put only writes into an in-memory buffer, flushed to disk
+      // lazily (on close or once ~64KB accumulates) - a force-stop/kill -9
+      // (unlike backgrounding, which gives the OS a chance to flush) wipes
+      // that buffer, silently reverting to whatever index was last flushed.
+      // Explicitly flushing after every write keeps the on-disk queue index
+      // durable across an abrupt kill.
       unawaited(
-        userBox.put(_lastQueueStateKey, {
-          'queue': cloneMaps(_queueList),
-          'index': _currentQueueIndex,
-          'originalQueue': cloneMaps(_originalQueueList),
-          'savedAt': DateTime.now().millisecondsSinceEpoch,
-        }),
+        userBox
+            .put(_lastQueueStateKey, {
+              'queue': cloneMaps(_queueList),
+              'index': _currentQueueIndex,
+              'originalQueue': cloneMaps(_originalQueueList),
+              'savedAt': DateTime.now().millisecondsSinceEpoch,
+            })
+            .then((_) => userBox.flush()),
       );
     } catch (e, stackTrace) {
       logger.log(
@@ -1771,13 +1798,15 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       final userBox = Hive.box('user');
       unawaited(userBox.delete(_lastQueueStateKey));
       unawaited(
-        userBox.put(_lastPodcastStateKey, {
-          'episode': episode.toMap(),
-          'podcastTitle': podcastTitle,
-          'localPath': localPath,
-          'positionMs': position.inMilliseconds,
-          'savedAt': DateTime.now().millisecondsSinceEpoch,
-        }),
+        userBox
+            .put(_lastPodcastStateKey, {
+              'episode': episode.toMap(),
+              'podcastTitle': podcastTitle,
+              'localPath': localPath,
+              'positionMs': position.inMilliseconds,
+              'savedAt': DateTime.now().millisecondsSinceEpoch,
+            })
+            .then((_) => userBox.flush()),
       );
     } catch (e, stackTrace) {
       logger.log(
@@ -2060,7 +2089,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
           MediaAction.seekForward,
           MediaAction.seekBackward,
         },
-        androidCompactActionIndices: const [0, 1, 3],
+        androidCompactActionIndices: const [0, 1, 2],
         processingState: AudioProcessingState.ready,
         queueIndex: 0,
         updateTime: DateTime.now(),
@@ -2097,23 +2126,41 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       logger.log('Error in onTaskRemoved', error: e, stackTrace: stackTrace);
     }
     await super.onTaskRemoved();
+
+    // Nothing playing and no download (individual or batch) in flight -
+    // there's no reason to keep the process alive draining battery in the
+    // background, so kill it outright instead of leaving it idling in the
+    // OS's recent-process cache.
+    if (!audioPlayer.playing && !DownloadForegroundService.isActive) {
+      exit(0);
+    }
+  }
+
+  /// Starts the podcast episode restored from a cold start. Called by default
+  /// (headless triggers - notification, lock screen, media button, Android
+  /// Auto) from [play] itself, which always resumes; the in-app play button
+  /// instead asks the user first and passes [fromStart] true for "start
+  /// over", skipping the seek back to the saved position.
+  Future<void> resumePendingPodcast({bool fromStart = false}) async {
+    final pendingPodcast = _pendingPodcastResume;
+    if (pendingPodcast == null) return;
+    _pendingPodcastResume = null;
+    await playPodcastEpisode(
+      pendingPodcast.episode,
+      podcastTitle: pendingPodcast.podcastTitle,
+      localPath: pendingPodcast.localPath,
+      initialPosition: (!fromStart && pendingPodcast.position > Duration.zero)
+          ? pendingPodcast.position
+          : null,
+    );
   }
 
   @override
   Future<void> play() async {
     try {
       if (audioPlayer.audioSource == null) {
-        final pendingPodcast = _pendingPodcastResume;
-        if (pendingPodcast != null) {
-          _pendingPodcastResume = null;
-          final started = await playPodcastEpisode(
-            pendingPodcast.episode,
-            podcastTitle: pendingPodcast.podcastTitle,
-            localPath: pendingPodcast.localPath,
-          );
-          if (started && pendingPodcast.position > Duration.zero) {
-            await audioPlayer.seek(pendingPodcast.position);
-          }
+        if (_pendingPodcastResume != null) {
+          await resumePendingPodcast();
           return;
         }
 
@@ -2192,8 +2239,12 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     _pendingPodcastResume = null;
     _currentPlayingPodcast = null;
     final userBox = Hive.box('user');
-    unawaited(userBox.delete(_lastQueueStateKey));
-    unawaited(userBox.delete(_lastPodcastStateKey));
+    unawaited(
+      Future.wait([
+        userBox.delete(_lastQueueStateKey),
+        userBox.delete(_lastPodcastStateKey),
+      ]).then((_) => userBox.flush()),
+    );
   }
 
   /// Returns unplayed manually added songs after the current queue index.
@@ -2724,6 +2775,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     PodcastEpisode episode, {
     required String podcastTitle,
     String? localPath,
+    Duration? initialPosition,
   }) async {
     try {
       final isOffline = localPath != null;
@@ -2769,8 +2821,12 @@ class DskPlayAudioHandler extends BaseAudioHandler {
 
       final wasPlayingBeforeSwap = audioPlayer.playing;
 
+      // Passing initialPosition here (rather than a seek() call after play())
+      // lets the player seek before playback starts, avoiding a race where a
+      // seek issued right after play() on a still-buffering source is
+      // dropped and playback silently starts from zero.
       await audioPlayer
-          .setAudioSource(audioSource)
+          .setAudioSource(audioSource, initialPosition: initialPosition)
           .timeout(_songTransitionTimeout);
 
       listeningStatsService
@@ -2800,7 +2856,12 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         podcastTitle: podcastTitle,
         localPath: localPath,
       );
-      _persistPodcastState(episode, podcastTitle, localPath, Duration.zero);
+      _persistPodcastState(
+        episode,
+        podcastTitle,
+        localPath,
+        initialPosition ?? Duration.zero,
+      );
       return true;
     } catch (e, stackTrace) {
       logger.log(

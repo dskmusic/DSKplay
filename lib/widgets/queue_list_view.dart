@@ -83,26 +83,59 @@ class _QueueWidgetState extends State<QueueWidget> {
   GlobalKey _keyFor(String queueEntryId) =>
       _tileKeys.putIfAbsent(queueEntryId, GlobalKey.new);
 
+  // Rough per-tile height (artwork 46 + 10+10 vertical padding) used only to
+  // force the current tile's neighbourhood into the lazy builder's range -
+  // see [_attemptScrollToCurrentSong].
+  static const double _estimatedTileExtent = 70;
+
   void _scrollToCurrentSong() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final currentIndex = audioHandler.currentQueueIndex;
-      if (currentIndex < 0 || currentIndex >= _queue.length) return;
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _attemptScrollToCurrentSong(),
+    );
+  }
 
-      final song = _queue[currentIndex];
-      final queueEntryId =
-          song['queueEntryId']?.toString() ??
-          'legacy_${song['ytid']}_$currentIndex';
-      final tileContext = _tileKeys[queueEntryId]?.currentContext;
-      if (tileContext == null) return;
+  // ReorderableListView.builder is lazy: a tile far down a long queue (the
+  // common case in normal, non-shuffle order - shuffle tends to start the
+  // current song near the front, which is why this used to only seem to
+  // work there) is never actually built, so Scrollable.ensureVisible on its
+  // still-null context silently did nothing. Jumping to an estimated offset
+  // first forces that neighbourhood to build, then ensureVisible does the
+  // precise scroll once a real, laid-out context exists - retried a few
+  // frames in case one jump isn't enough to bring it into the cache range.
+  void _attemptScrollToCurrentSong([int attempt = 0]) {
+    if (!mounted || !_scrollController.hasClients) return;
+    final currentIndex = audioHandler.currentQueueIndex;
+    if (currentIndex < 0 || currentIndex >= _queue.length) return;
 
+    final song = _queue[currentIndex];
+    final queueEntryId =
+        song['queueEntryId']?.toString() ??
+        'legacy_${song['ytid']}_$currentIndex';
+    final tileContext = _tileKeys[queueEntryId]?.currentContext;
+
+    if (tileContext != null) {
       Scrollable.ensureVisible(
         tileContext,
         duration: const Duration(milliseconds: 350),
         curve: Curves.easeOut,
         alignment: 0.5,
       );
-    });
+      return;
+    }
+
+    if (attempt >= 3) return;
+    if (attempt == 0) {
+      final estimatedOffset = currentIndex * _estimatedTileExtent;
+      _scrollController.jumpTo(
+        estimatedOffset.clamp(
+          0.0,
+          _scrollController.position.maxScrollExtent,
+        ),
+      );
+    }
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _attemptScrollToCurrentSong(attempt + 1),
+    );
   }
 
   @override

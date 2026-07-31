@@ -40,8 +40,6 @@ class PodcastsPage extends StatefulWidget {
 }
 
 class _PodcastsPageState extends State<PodcastsPage> {
-  int _tabIndex = 0;
-
   void _openPodcast(Podcast podcast) {
     // A nested go_router route (like playlist/artist detail pages), not a
     // raw root-navigator push: the latter stacked the detail page above the
@@ -50,40 +48,36 @@ class _PodcastsPageState extends State<PodcastsPage> {
     context.push('/library/podcasts/detail', extra: podcast);
   }
 
+  void _openDiscover({bool autoFocusSearch = false}) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => Scaffold(
+          appBar: AppBar(title: Text(context.l10n!.discover)),
+          body: _DiscoverTab(
+            onOpenPodcast: _openPodcast,
+            autoFocusSearch: autoFocusSearch,
+          ),
+          bottomNavigationBar: const MiniPlayerBottomSpace(),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(context.l10n!.podcasts)),
-      body: IndexedStack(
-        index: _tabIndex,
-        children: [
-          _SubscriptionsTab(onOpenPodcast: _openPodcast),
-          _DiscoverTab(onOpenPodcast: _openPodcast),
-        ],
-      ),
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          NavigationBar(
-            selectedIndex: _tabIndex,
-            onDestinationSelected: (index) =>
-                setState(() => _tabIndex = index),
-            destinations: [
-              NavigationDestination(
-                icon: const Icon(FluentIcons.mic_24_regular),
-                selectedIcon: const Icon(FluentIcons.mic_24_filled),
-                label: context.l10n!.subscriptions,
-              ),
-              NavigationDestination(
-                icon: const Icon(FluentIcons.search_24_regular),
-                selectedIcon: const Icon(FluentIcons.search_24_filled),
-                label: context.l10n!.discover,
-              ),
-            ],
+      appBar: AppBar(
+        title: Text(context.l10n!.podcasts),
+        actions: [
+          IconButton(
+            tooltip: context.l10n!.search,
+            onPressed: () => _openDiscover(autoFocusSearch: true),
+            icon: const Icon(FluentIcons.search_24_regular),
           ),
-          const MiniPlayerBottomSpace(),
         ],
       ),
+      body: _SubscriptionsTab(onOpenPodcast: _openPodcast),
+      bottomNavigationBar: const MiniPlayerBottomSpace(),
     );
   }
 }
@@ -179,9 +173,13 @@ class _SubscriptionsTab extends StatelessWidget {
 }
 
 class _DiscoverTab extends StatefulWidget {
-  const _DiscoverTab({required this.onOpenPodcast});
+  const _DiscoverTab({
+    required this.onOpenPodcast,
+    this.autoFocusSearch = false,
+  });
 
   final void Function(Podcast podcast) onOpenPodcast;
+  final bool autoFocusSearch;
 
   @override
   State<_DiscoverTab> createState() => _DiscoverTabState();
@@ -189,13 +187,25 @@ class _DiscoverTab extends StatefulWidget {
 
 class _DiscoverTabState extends State<_DiscoverTab> {
   final _controller = TextEditingController();
+  final _focusNode = FocusNode();
   List<Podcast> _results = [];
   bool _loading = false;
   Timer? _debounce;
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.autoFocusSearch) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _focusNode.requestFocus(),
+      );
+    }
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
+    _focusNode.dispose();
     _debounce?.cancel();
     super.dispose();
   }
@@ -227,6 +237,7 @@ class _DiscoverTabState extends State<_DiscoverTab> {
         children: [
           TextField(
             controller: _controller,
+            focusNode: _focusNode,
             decoration: InputDecoration(
               labelText: context.l10n!.searchPodcasts,
               prefixIcon: const Icon(FluentIcons.search_24_regular),

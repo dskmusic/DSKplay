@@ -30,13 +30,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_flip_card/flutter_flip_card.dart';
 import 'package:http/http.dart' as http;
 import 'package:dskplay/extensions/l10n.dart';
-import 'package:dskplay/main.dart' show logger;
+import 'package:dskplay/main.dart' show audioHandler, logger;
+import 'package:dskplay/models/podcast_model.dart';
 import 'package:dskplay/screens/karaoke_fullscreen_page.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/download_notification_service.dart';
 import 'package:dskplay/services/io_service.dart';
 import 'package:dskplay/services/lyrics_export_service.dart';
 import 'package:dskplay/services/lyrics_manager.dart';
+import 'package:dskplay/services/podcast_download_service.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/services/song_export_service.dart';
 import 'package:dskplay/utilities/async_loader.dart';
@@ -108,11 +110,12 @@ class NowPlayingArtwork extends StatelessWidget {
                 bottom: 8,
                 child: _SaveCoverButton(metadata: metadata),
               ),
-              Positioned(
-                right: 8,
-                bottom: 8,
-                child: _SaveMp3Button(metadata: metadata),
-              ),
+              if (metadata.extras?['isPodcastEpisode'] != true)
+                Positioned(
+                  right: 8,
+                  bottom: 8,
+                  child: _SaveMp3Button(metadata: metadata),
+                ),
             ],
           ),
         ),
@@ -273,6 +276,11 @@ class _SaveMp3Button extends StatelessWidget {
   final MediaItem metadata;
 
   Future<void> _download(BuildContext context) async {
+    if (metadata.extras?['isPodcastEpisode'] == true) {
+      await _downloadPodcastEpisode(context);
+      return;
+    }
+
     final song = mediaItemToMap(metadata);
     final notifications = DownloadNotificationService();
     final notificationTitle = 'Descargando: ${metadata.title}';
@@ -297,6 +305,41 @@ class _SaveMp3Button extends StatelessWidget {
         context,
         path != null
             ? '${context.l10n!.savedToDevice} $exportDirPath'
+            : context.l10n!.downloadFailed,
+      );
+    }
+  }
+
+  // Episode audio is a direct URL, not a YouTube id - exportSongToDevice
+  // would misinterpret the episode key as a ytid, so this routes to the
+  // same download used by the podcast screens instead (Podcasts/<podcast>
+  // folder, marks the episode as downloaded for offline playback). Only
+  // `podcast.title` is actually used by downloadPodcastEpisode, so a
+  // minimal Podcast stand-in (built from the currently playing episode) is
+  // enough - no need to look up the full subscription.
+  Future<void> _downloadPodcastEpisode(BuildContext context) async {
+    final current = audioHandler.currentPlayingPodcast;
+    if (current == null) {
+      if (context.mounted) showToast(context, context.l10n!.downloadFailed);
+      return;
+    }
+
+    final success = await downloadPodcastEpisode(
+      Podcast(
+        id: current.episode.podcastId,
+        title: current.podcastTitle,
+        author: '',
+        image: current.episode.image,
+        feedUrl: '',
+      ),
+      current.episode,
+    );
+
+    if (context.mounted) {
+      showToast(
+        context,
+        success
+            ? '${context.l10n!.savedToDevice} $appExternalRootPath/Podcasts'
             : context.l10n!.downloadFailed,
       );
     }

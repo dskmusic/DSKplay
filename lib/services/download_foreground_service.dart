@@ -54,6 +54,10 @@ class DownloadForegroundService {
   /// to interrupt this notification, which is what this exists to fix.
   static bool cancelAllRequested = false;
 
+  /// Whether any download - individual or batch (playlist/podcast) - is
+  /// currently in progress.
+  static bool get isActive => _activeCount > 0;
+
   /// Awaited (unlike [release]) so a download's actual network I/O never
   /// starts before the protective native service is confirmed running -
   /// otherwise closing the app in the first instant after starting a
