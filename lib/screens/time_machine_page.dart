@@ -29,6 +29,7 @@ import 'package:intl/intl.dart';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
+import 'package:dskplay/models/podcast_model.dart';
 import 'package:dskplay/screens/user_songs_page.dart';
 import 'package:dskplay/services/listening_stats_service.dart';
 import 'package:dskplay/services/settings_manager.dart';
@@ -217,6 +218,7 @@ class _TimeMachinePageState extends State<TimeMachinePage> {
               minutes: monthDisplayMinutes(monthStats),
               songs: previewSongs,
               onSongTap: (index) => _playSongs(previewSongs, index),
+              onRemoveSong: _removeFromTimeMachine,
             ),
           ),
           if (songs.length > previewSongs.length)
@@ -254,6 +256,7 @@ class _TimeMachinePageState extends State<TimeMachinePage> {
               ),
               songs: previewSongs,
               onSongTap: (index) => _playSongs(previewSongs, index),
+              onRemoveSong: _removeFromTimeMachine,
             ),
           ),
           if (songs.length > previewSongs.length)
@@ -355,6 +358,7 @@ class _TimeMachinePageState extends State<TimeMachinePage> {
                 return SongBar(
                   song,
                   true,
+                  key: ValueKey(song['ytid']),
                   borderRadius: getItemBorderRadius(
                     songIndex,
                     visibleSongs.length,
@@ -365,6 +369,10 @@ class _TimeMachinePageState extends State<TimeMachinePage> {
                     Navigator.pop(context);
                     _playSongs(visibleSongs, songIndex);
                   },
+                  onRemoveFromTimeMachine: () {
+                    Navigator.pop(context);
+                    _removeFromTimeMachine(song);
+                  },
                 );
               },
             ),
@@ -374,8 +382,48 @@ class _TimeMachinePageState extends State<TimeMachinePage> {
     );
   }
 
+  Future<void> _removeFromTimeMachine(Map<String, dynamic> song) async {
+    final ytid = song['ytid']?.toString();
+    if (ytid == null || ytid.isEmpty) return;
+    await listeningStatsService.removeSongFromStats(ytid);
+    if (mounted) setState(() {});
+  }
+
   Future<void> _playSongs(List<Map<String, dynamic>> songs, int index) async {
     if (songs.isEmpty) return;
+    final song = songs[index];
+
+    // A podcast episode's ytid is its internal key, not a real YouTube video
+    // id - playPlaylistSong would try to resolve it as one and fail. Replay
+    // it the same way the podcast player does instead.
+    if (song['isPodcastEpisode'] == true) {
+      final audioUrl = song['audioUrl']?.toString();
+      final guid = song['guid']?.toString();
+      final podcastId = song['podcastId']?.toString();
+      if (audioUrl == null ||
+          audioUrl.isEmpty ||
+          guid == null ||
+          guid.isEmpty ||
+          podcastId == null ||
+          podcastId.isEmpty) {
+        // Recorded before this data was tracked - nothing to replay it with.
+        if (mounted) showToast(context, context.l10n!.error);
+        return;
+      }
+
+      await audioHandler.playPodcastEpisode(
+        PodcastEpisode(
+          guid: guid,
+          podcastId: podcastId,
+          title: song['title']?.toString() ?? '',
+          audioUrl: audioUrl,
+          image: song['highResImage']?.toString() ?? '',
+        ),
+        podcastTitle: song['artist']?.toString() ?? '',
+      );
+      return;
+    }
+
     await audioHandler.playPlaylistSong(
       playlist: {'title': context.l10n!.timeMachine, 'list': songs},
       songIndex: index,

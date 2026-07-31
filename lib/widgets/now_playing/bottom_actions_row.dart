@@ -51,14 +51,11 @@ class BottomActionsRow extends StatefulWidget {
 
 class _BottomActionsRowState extends State<BottomActionsRow> {
   late final ValueNotifier<bool> _songLikeStatus;
-  late final ValueNotifier<bool> _songOfflineStatus;
   // metadata.id is a per-queue-slot id (see QueueEntryIdManager), not the
   // song's real ytid, so like/offline status must key off the ytid extra.
   late final String? audioId =
       (widget.metadata.extras?['ytid'] as String?) ?? widget.metadata.id;
   late final bool isRadioStation = widget.metadata.extras?['isLive'] ?? false;
-  late final bool isPodcastEpisode =
-      widget.metadata.extras?['isPodcastEpisode'] ?? false;
 
   @override
   void initState() {
@@ -70,8 +67,6 @@ class _BottomActionsRowState extends State<BottomActionsRow> {
       _songLikeStatus = ValueNotifier<bool>(isSongAlreadyLiked(audioId));
       userLikedSongsList.addListener(_syncLikeStatus);
     }
-    _songOfflineStatus = ValueNotifier<bool>(isSongAlreadyOffline(audioId));
-    userOfflineSongs.addListener(_syncOfflineStatus);
   }
 
   void _syncLikeStatus() {
@@ -88,13 +83,6 @@ class _BottomActionsRowState extends State<BottomActionsRow> {
     }
   }
 
-  void _syncOfflineStatus() {
-    final newStatus = isSongAlreadyOffline(audioId);
-    if (_songOfflineStatus.value != newStatus) {
-      _songOfflineStatus.value = newStatus;
-    }
-  }
-
   @override
   void didUpdateWidget(BottomActionsRow oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -104,7 +92,6 @@ class _BottomActionsRowState extends State<BottomActionsRow> {
       } else {
         _songLikeStatus.value = isSongAlreadyLiked(audioId);
       }
-      _songOfflineStatus.value = isSongAlreadyOffline(audioId);
     }
   }
 
@@ -115,9 +102,7 @@ class _BottomActionsRowState extends State<BottomActionsRow> {
     } else {
       userLikedSongsList.removeListener(_syncLikeStatus);
     }
-    userOfflineSongs.removeListener(_syncOfflineStatus);
     _songLikeStatus.dispose();
-    _songOfflineStatus.dispose();
     super.dispose();
   }
 
@@ -137,25 +122,11 @@ class _BottomActionsRowState extends State<BottomActionsRow> {
         final queue = snapshot.data ?? [];
 
         final actions = <Widget>[
-          if (isPodcastEpisode)
-            _buildPlaybackSpeedButton(context, colorScheme, responsiveIconSize)
-          else if (!isRadioStation)
-            _buildActionButton(
-              context: context,
-              icon: FluentIcons.cloud_arrow_down_24_regular,
-              activeIcon: FluentIcons.cloud_off_24_filled,
-              colorScheme: colorScheme,
-              size: responsiveIconSize,
-              statusNotifier: _songOfflineStatus,
-              onPressed: audioId == null
-                  ? null
-                  : () => _toggleOffline(
-                      _songOfflineStatus,
-                      audioId,
-                      widget.metadata,
-                    ),
-              tooltip: l10n.makeOffline,
-            ),
+          // Always the speed control here (music and podcasts alike) - the
+          // offline/download action still exists elsewhere in the app (e.g.
+          // library rows), just not duplicated in this bar anymore.
+          if (!isRadioStation)
+            _buildPlaybackSpeedButton(context, colorScheme, responsiveIconSize),
           _buildSleepTimerButton(context, colorScheme, responsiveIconSize),
           if (!offlineMode.value && !isRadioStation)
             _buildSimpleActionButton(
@@ -438,30 +409,6 @@ void _showPlaybackSpeedDialog(BuildContext context, double currentSpeed) {
       );
     },
   );
-}
-
-Future<void> _toggleOffline(
-  ValueNotifier<bool> status,
-  String? audioId,
-  MediaItem metadata,
-) async {
-  final originalValue = status.value;
-  status.value = !originalValue;
-
-  try {
-    final bool success;
-    if (originalValue) {
-      success = await removeSongFromOffline(audioId);
-    } else {
-      success = await makeSongOffline(mediaItemToMap(metadata));
-    }
-    if (!success) {
-      status.value = originalValue;
-    }
-  } catch (e) {
-    status.value = originalValue;
-    logger.log('Error toggling offline status', error: e);
-  }
 }
 
 void _showSleepTimerDialog(BuildContext context) {

@@ -24,6 +24,7 @@ import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:dskplay/services/local_files_service.dart';
 import 'package:dskplay/utilities/artwork_provider.dart';
 import 'package:dskplay/widgets/no_artwork_cube.dart';
 import 'package:dskplay/widgets/spinner.dart';
@@ -44,16 +45,59 @@ class SongArtworkWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (metadata.artUri?.scheme == 'file') {
+      final artworkPath = metadata.extras?['artWorkPath'] as String;
+      final audioPath = metadata.extras?['audioPath'] as String?;
+      // A cached artworkPath recorded long ago can point at a file that's
+      // since been evicted (e.g. cleared cache) - re-extract it from the
+      // source audio file on demand rather than showing a blank cover.
+      if (!File(artworkPath).existsSync() &&
+          audioPath != null &&
+          audioPath.isNotEmpty) {
+        return SizedBox(
+          width: size,
+          height: size,
+          child: FutureBuilder<String?>(
+            future: reextractLocalArtwork(audioPath),
+            builder: (context, snapshot) {
+              final resolvedPath = snapshot.data;
+              if (resolvedPath == null) {
+                return NullArtworkWidget(
+                  size: size,
+                  iconSize: errorWidgetIconSize,
+                  borderRadius: borderRadius,
+                );
+              }
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(borderRadius),
+                child: Image.file(
+                  File(resolvedPath),
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) =>
+                      NullArtworkWidget(
+                        size: size,
+                        iconSize: errorWidgetIconSize,
+                        borderRadius: borderRadius,
+                      ),
+                ),
+              );
+            },
+          ),
+        );
+      }
+
       return SizedBox(
         width: size,
         height: size,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(borderRadius),
           child: Image.file(
-            File(metadata.extras?['artWorkPath']),
+            File(artworkPath),
             fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) =>
-                NullArtworkWidget(iconSize: errorWidgetIconSize),
+            errorBuilder: (context, error, stackTrace) => NullArtworkWidget(
+              size: size,
+              iconSize: errorWidgetIconSize,
+              borderRadius: borderRadius,
+            ),
           ),
         ),
       );
@@ -61,7 +105,14 @@ class SongArtworkWidget extends StatelessWidget {
 
     final artwork = metadata.artUri?.toString() ?? '';
     if (artwork.isEmpty) {
-      return NullArtworkWidget(iconSize: errorWidgetIconSize);
+      // Must stay pinned to `size` like every other branch here - without
+      // it this falls back to NullArtworkWidget's own 220 default, blowing
+      // up whatever fixed-size layout (mini player, queue row...) hosts it.
+      return NullArtworkWidget(
+        size: size,
+        iconSize: errorWidgetIconSize,
+        borderRadius: borderRadius,
+      );
     }
 
     // Non-http art sources (e.g. podcast RSS feeds without a real image,

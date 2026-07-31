@@ -97,6 +97,10 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   int _consecutiveErrors = 0;
   static const int _maxConsecutiveErrors = 3;
 
+  // Below this much time left, a saved podcast position is treated as
+  // "finished" rather than resumable (see [_restoreLastPlayedForDisplay]).
+  static const Duration _podcastNearEndThreshold = Duration(minutes: 2);
+
   // Set by [_restoreLastPlayedForDisplay] when a podcast episode - rather
   // than a regular song - is what should resume on the next play() tap;
   // consumed and cleared there.
@@ -511,9 +515,22 @@ class DskPlayAudioHandler extends BaseAudioHandler {
 
       final persisted = _loadPersistedQueueState();
       final persistedPodcast = _loadPersistedPodcastState();
+
       if (persistedPodcast != null &&
           (persisted == null ||
               persistedPodcast.savedAt >= persisted.savedAt)) {
+        // Don't offer to resume an episode the user likely already
+        // finished - e.g. stopped during the outro thinking it was over,
+        // with a minute or two left - and don't fall back to whatever
+        // song was playing before it either: that's not what the user was
+        // last listening to, so show no mini player at all.
+        final durationSeconds = persistedPodcast.episode.durationSeconds;
+        if (durationSeconds != null &&
+            Duration(seconds: durationSeconds) - persistedPodcast.position <=
+                _podcastNearEndThreshold) {
+          return;
+        }
+
         _pendingPodcastResume = (
           episode: persistedPodcast.episode,
           podcastTitle: persistedPodcast.podcastTitle,
@@ -948,6 +965,20 @@ class DskPlayAudioHandler extends BaseAudioHandler {
 
   Future<void> _handleSongCompletion() async {
     try {
+      if (_currentPlayingPodcast != null) {
+        // Podcast episodes play outside _queueList, so there's never a
+        // "next" to advance to here - close the notification outright
+        // instead of just pausing, otherwise just_audio leaves `playing`
+        // true after it finishes on its own and the notification would
+        // keep showing a pause button forever.
+        await stop();
+        // Nothing left to play - kill the process outright (unless a
+        // download is in flight) instead of leaving it idling in the
+        // background, same as when the sleep timer expires.
+        _exitIfIdle();
+        return;
+      }
+
       if (_currentQueueIndex >= 0 && _currentQueueIndex < _queueList.length) {
         _addToHistory(_queueList[_currentQueueIndex]);
       }
@@ -956,6 +987,13 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       if (repeatNotifier.value == AudioServiceRepeatMode.one) {
         // Repeat single song - play current song again
         await playAgain();
+      } else if (!_canRetryPlayback()) {
+        // Last song of a playlist/queue (or a standalone song with nothing
+        // queued after it) with no repeat-all and no autoplay - same
+        // situation as a podcast finishing with nothing left, so close the
+        // notification and free the process the same way.
+        await stop();
+        _exitIfIdle();
       } else {
         // For all other cases (next song, repeat all, auto-play), skipToNext handles it
         await skipToNext();
@@ -2155,7 +2193,8 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   // reason to keep the process alive draining battery in the background.
   // Called after anything that stops playback outright rather than just
   // pausing it: the app being swiped away, the notification being
-  // dismissed, or the sleep timer expiring.
+  // dismissed, the sleep timer expiring, or a podcast episode finishing
+  // on its own with nothing queued after it.
   void _exitIfIdle() {
     if (!audioPlayer.playing && !DownloadForegroundService.isActive) {
       exit(0);
@@ -2838,6 +2877,12 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         'isLive': false,
         'isPodcastEpisode': true,
         'description': episode.description,
+        // Kept so a Time Machine recap entry can replay this episode later
+        // via playPodcastEpisode - it needs a real PodcastEpisode, not a
+        // fetchSongStreamUrl(ytid) lookup like a regular song.
+        'audioUrl': episode.audioUrl,
+        'guid': episode.guid,
+        'podcastId': episode.podcastId,
       };
 
       _lastError = null;

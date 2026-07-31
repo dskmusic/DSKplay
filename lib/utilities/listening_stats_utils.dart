@@ -487,6 +487,16 @@ void _upsertSongStats(
       song['audioPath'],
       fallback: entry['audioPath'],
     )
+    // Needed to replay a podcast episode from Time Machine via
+    // playPodcastEpisode instead of the regular ytid stream lookup.
+    ..['isPodcastEpisode'] =
+        song['isPodcastEpisode'] == true || entry['isPodcastEpisode'] == true
+    ..['audioUrl'] = _readString(song['audioUrl'], fallback: entry['audioUrl'])
+    ..['guid'] = _readString(song['guid'], fallback: entry['guid'])
+    ..['podcastId'] = _readString(
+      song['podcastId'],
+      fallback: entry['podcastId'],
+    )
     ..['seconds'] = _readInt(entry['seconds']) + seconds
     ..['playCount'] =
         _readInt(entry['playCount']) + (incrementPlayCount ? 1 : 0)
@@ -630,6 +640,17 @@ void _copyLatestSongMetadata(
     ..['audioPath'] = _readString(
       source['audioPath'],
       fallback: target['audioPath'],
+    )
+    ..['isPodcastEpisode'] =
+        source['isPodcastEpisode'] == true || target['isPodcastEpisode'] == true
+    ..['audioUrl'] = _readString(
+      source['audioUrl'],
+      fallback: target['audioUrl'],
+    )
+    ..['guid'] = _readString(source['guid'], fallback: target['guid'])
+    ..['podcastId'] = _readString(
+      source['podcastId'],
+      fallback: target['podcastId'],
     )
     ..['lastPlayed'] = source['lastPlayed'];
 

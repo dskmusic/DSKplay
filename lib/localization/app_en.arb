@@ -261,6 +261,8 @@
   "removeFromLikedSongs": "Remove from liked songs",
   "removeFromPlaylist": "Remove from playlist",
   "removeFromRecentlyPlayed": "Remove from recently played",
+  "removeFromTimeMachine": "Remove from Time Machine",
+  "removeFromTimeMachineQuestion": "Remove this song from Time Machine? Its listening stats will be deleted from every month and year.",
   "removeOffline": "Remove from offline",
   "removeOfflinePlaylist": "Remove Offline Playlist",
   "removeOfflinePlaylistConfirm": "This will remove the playlist from offline storage. Songs that are used in other playlists will still be available.",

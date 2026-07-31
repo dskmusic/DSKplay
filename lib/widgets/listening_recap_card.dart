@@ -31,6 +31,7 @@ class ListeningRecapCard extends StatelessWidget {
     required this.minutes,
     required this.songs,
     required this.onSongTap,
+    this.onRemoveSong,
     super.key,
   });
 
@@ -38,6 +39,7 @@ class ListeningRecapCard extends StatelessWidget {
   final int minutes;
   final List<Map<String, dynamic>> songs;
   final ValueChanged<int> onSongTap;
+  final ValueChanged<Map<String, dynamic>>? onRemoveSong;
 
   @override
   Widget build(BuildContext context) {
@@ -103,9 +105,13 @@ class ListeningRecapCard extends StatelessWidget {
                 SongBar(
                   songs[i],
                   false,
+                  key: ValueKey(songs[i]['ytid']),
                   showPlayTime: true,
                   rank: i + 1,
                   onPlay: () => onSongTap(i),
+                  onRemoveFromTimeMachine: onRemoveSong == null
+                      ? null
+                      : () => onRemoveSong!(songs[i]),
                   barPadding: const EdgeInsetsDirectional.symmetric(
                     vertical: 10,
                   ),

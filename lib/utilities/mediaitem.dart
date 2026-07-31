@@ -91,6 +91,7 @@ MediaItem mapToMediaItem(Map song) {
           : (song['highResImage']?.toString() ?? ''),
       'isPodcastEpisode': song['isPodcastEpisode'] ?? false,
       'description': song['description'],
+      'audioPath': song['audioPath'],
     },
   );
 }

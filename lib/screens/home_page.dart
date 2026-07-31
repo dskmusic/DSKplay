@@ -289,6 +289,7 @@ class _HomePageState extends State<HomePage> {
               minutes: displayMinutes,
               songs: previewSongs,
               onSongTap: (index) => _playRecapSongs(previewSongs, index),
+              onRemoveSong: _removeFromTimeMachine,
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 10, 8, 0),
@@ -316,6 +317,13 @@ class _HomePageState extends State<HomePage> {
       playlist: {'title': context.l10n!.timeMachine, 'list': songs},
       songIndex: index,
     );
+  }
+
+  Future<void> _removeFromTimeMachine(Map<String, dynamic> song) async {
+    final ytid = song['ytid']?.toString();
+    if (ytid == null || ytid.isEmpty) return;
+    await listeningStatsService.removeSongFromStats(ytid);
+    if (mounted) setState(() {});
   }
 
   Widget _buildRecommendedForYouSection(

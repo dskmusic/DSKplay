@@ -23,7 +23,9 @@ import 'package:audio_service/audio_service.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_flip_card/flutter_flip_card.dart';
+import 'package:go_router/go_router.dart';
 import 'package:dskplay/main.dart';
+import 'package:dskplay/services/router_service.dart';
 import 'package:dskplay/widgets/now_playing/bottom_actions_row.dart';
 import 'package:dskplay/widgets/now_playing/now_playing_artwork.dart';
 import 'package:dskplay/widgets/now_playing/now_playing_controls.dart';
@@ -70,40 +72,54 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
         : 44.0;
     final miniIconSize = screenWidth < 360 ? 18.0 : 22.0;
 
-    return Scaffold(
-      backgroundColor: colorScheme.surface,
-      body: SafeArea(
-        child: StreamBuilder<MediaItem?>(
-          stream: audioHandler.mediaItem,
-          builder: (context, snapshot) {
-            if (snapshot.data == null || !snapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            final metadata = snapshot.data!;
-            return Column(
-              children: [
-                _buildAppBar(context, colorScheme),
-                Expanded(
-                  child: isLargeScreen
-                      ? _DesktopLayout(
-                          metadata: metadata,
-                          size: size,
-                          adjustedIconSize: baseIconSize,
-                          adjustedMiniIconSize: miniIconSize,
-                          lyricsController: _lyricsController,
-                        )
-                      : _MobileLayout(
-                          metadata: metadata,
-                          size: size,
-                          adjustedIconSize: baseIconSize,
-                          adjustedMiniIconSize: miniIconSize,
-                          isLargeScreen: isLargeScreen,
-                          lyricsController: _lyricsController,
-                        ),
-                ),
-              ],
-            );
-          },
+    return PopScope(
+      // Normally there's always a previous screen underneath (this page is
+      // only ever reached via an imperative push), so a plain pop is enough.
+      // The one case where there isn't is reopening the app from the
+      // notification after it was swiped away from Recents while this page
+      // was open: the engine survives (playback was active) and comes back
+      // with this page still on top of the stack, but with nothing left
+      // beneath it - go to the main screen instead of letting the back
+      // press fall through to the OS default (minimizing the app).
+      canPop: Navigator.canPop(context),
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) context.go(NavigationManager.homePath);
+      },
+      child: Scaffold(
+        backgroundColor: colorScheme.surface,
+        body: SafeArea(
+          child: StreamBuilder<MediaItem?>(
+            stream: audioHandler.mediaItem,
+            builder: (context, snapshot) {
+              if (snapshot.data == null || !snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final metadata = snapshot.data!;
+              return Column(
+                children: [
+                  _buildAppBar(context, colorScheme),
+                  Expanded(
+                    child: isLargeScreen
+                        ? _DesktopLayout(
+                            metadata: metadata,
+                            size: size,
+                            adjustedIconSize: baseIconSize,
+                            adjustedMiniIconSize: miniIconSize,
+                            lyricsController: _lyricsController,
+                          )
+                        : _MobileLayout(
+                            metadata: metadata,
+                            size: size,
+                            adjustedIconSize: baseIconSize,
+                            adjustedMiniIconSize: miniIconSize,
+                            isLargeScreen: isLargeScreen,
+                            lyricsController: _lyricsController,
+                          ),
+                  ),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );

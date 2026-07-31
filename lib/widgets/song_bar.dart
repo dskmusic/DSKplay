@@ -39,6 +39,7 @@ import 'package:dskplay/services/song_export_service.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/formatter.dart';
 import 'package:dskplay/utilities/playlist_dialogs.dart';
+import 'package:dskplay/widgets/confirmation_dialog.dart';
 import 'package:dskplay/widgets/no_artwork_cube.dart';
 import 'package:dskplay/widgets/overflow_menu_button.dart';
 import 'package:dskplay/widgets/popup_menu_item.dart';
@@ -56,6 +57,7 @@ List<PopupMenuEntry<String>> _buildSongMenuItems({
   bool canRemove = false,
   bool showDismissSuggestion = false,
   bool showGoToArtist = false,
+  bool showRemoveFromTimeMachine = false,
 }) {
   final l10n = context.l10n!;
   final playNextText = l10n.playNext;
@@ -148,6 +150,13 @@ List<PopupMenuEntry<String>> _buildSongMenuItems({
         label: l10n.dismissSuggestion,
         colorScheme: colorScheme,
       ),
+    if (showRemoveFromTimeMachine)
+      buildPopupMenuItem<String>(
+        value: 'remove_from_time_machine',
+        icon: FluentIcons.delete_24_regular,
+        label: l10n.removeFromTimeMachine,
+        colorScheme: colorScheme,
+      ),
     if (!offlineMode.value || songOfflineStatus.value)
       PopupMenuItem<String>(
         value: 'offline',
@@ -197,6 +206,7 @@ Future<void> _handleSongMenuAction({
   VoidCallback? onRemove,
   VoidCallback? onDismissSuggestion,
   FutureOr<void> Function()? onRename,
+  VoidCallback? onRemoveFromTimeMachine,
 }) async {
   switch (value) {
     case 'play_next':
@@ -266,6 +276,9 @@ Future<void> _handleSongMenuAction({
     case 'offline':
       await _toggleSongOfflineStatus(context, song, ytid, songOfflineStatus);
       break;
+    case 'remove_from_time_machine':
+      await _confirmAndRemoveFromTimeMachine(context, onRemoveFromTimeMachine);
+      break;
     case 'export_device':
       await _exportSongToDeviceFlow(context, song);
       break;
@@ -273,6 +286,23 @@ Future<void> _handleSongMenuAction({
       await _shareSongFlow(context, song, ytid);
       break;
   }
+}
+
+Future<void> _confirmAndRemoveFromTimeMachine(
+  BuildContext context,
+  VoidCallback? onRemoveFromTimeMachine,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => ConfirmationDialog(
+      confirmationMessage: dialogContext.l10n!.removeFromTimeMachineQuestion,
+      submitMessage: dialogContext.l10n!.remove,
+      isDangerous: true,
+      onCancel: () => Navigator.of(dialogContext).pop(false),
+      onSubmit: () => Navigator.of(dialogContext).pop(true),
+    ),
+  );
+  if (confirmed == true) onRemoveFromTimeMachine?.call();
 }
 
 Future<void> _exportSongToDeviceFlow(BuildContext context, dynamic song) async {
@@ -465,6 +495,7 @@ class SongBar extends StatefulWidget {
     this.isRecentSong,
     this.onRemove,
     this.onDismissSuggestion,
+    this.onRemoveFromTimeMachine,
     this.borderRadius = BorderRadius.zero,
     this.isFromLikedSongs = false,
     this.showQueueActions = true,
@@ -481,6 +512,7 @@ class SongBar extends StatefulWidget {
   final Color? backgroundColor;
   final VoidCallback? onRemove;
   final VoidCallback? onDismissSuggestion;
+  final VoidCallback? onRemoveFromTimeMachine;
   final VoidCallback? onPlay;
   final bool? isRecentSong;
   final bool showMusicDuration;
@@ -634,6 +666,7 @@ class _SongBarState extends State<SongBar> {
                   onRemove: widget.onRemove,
                   onDismissSuggestion: widget.onDismissSuggestion,
                   onRename: () => _handleRenameSong(context),
+                  onRemoveFromTimeMachine: widget.onRemoveFromTimeMachine,
                 ),
                 itemBuilder: (context) => _buildMenuItems(context, colorScheme),
               ),
@@ -748,6 +781,7 @@ class _SongBarState extends State<SongBar> {
       canRemove: widget.onRemove != null,
       showDismissSuggestion: widget.onDismissSuggestion != null,
       showGoToArtist: _songArtist.isNotEmpty,
+      showRemoveFromTimeMachine: widget.onRemoveFromTimeMachine != null,
     );
   }
 }

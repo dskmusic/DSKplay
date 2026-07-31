@@ -346,6 +346,46 @@ class ListeningStatsService {
     return null;
   }
 
+  /// Removes a song's listening stats from every month/year, so it stops
+  /// appearing anywhere in the Time Machine.
+  Future<void> removeSongFromStats(String ytid) async {
+    final stats = _readStats();
+    var removed = false;
+
+    final currentMonth = _removeSongFromMonth(stats['currentMonth'], ytid);
+    if (currentMonth != null) {
+      stats['currentMonth'] = currentMonth;
+      removed = true;
+    }
+
+    final history = _asMap(stats['history']) ?? <String, dynamic>{};
+    for (final monthKey in history.keys.toList()) {
+      final month = _removeSongFromMonth(history[monthKey], ytid);
+      if (month != null) {
+        history[monthKey] = month;
+        removed = true;
+      }
+    }
+    if (removed) {
+      stats['history'] = history;
+    }
+
+    if (!removed) return;
+    _markDirty();
+    await flush();
+  }
+
+  /// Returns an updated copy of [month] with [ytid] removed from its songs,
+  /// or null if the song wasn't present there.
+  Map<String, dynamic>? _removeSongFromMonth(dynamic month, String ytid) {
+    final monthMap = _asMap(month);
+    final songs = _asMap(monthMap?['songs']);
+    if (songs == null || !songs.containsKey(ytid)) return null;
+    songs.remove(ytid);
+    monthMap!['songs'] = songs;
+    return monthMap;
+  }
+
   void reload() {
     _dirty = false;
     _listeningTimeRemainder = Duration.zero;
