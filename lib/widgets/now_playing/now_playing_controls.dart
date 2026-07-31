@@ -31,6 +31,7 @@ import 'package:dskplay/services/router_service.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/utilities/app_utils.dart';
 import 'package:dskplay/widgets/now_playing/marquee_text_widget.dart';
+import 'package:dskplay/widgets/now_playing/now_playing_artwork.dart';
 import 'package:dskplay/widgets/playback_icon_button.dart';
 import 'package:dskplay/widgets/position_slider.dart';
 
@@ -57,6 +58,7 @@ class NowPlayingControls extends StatelessWidget {
 
     final titleFontSize = getResponsiveTitleFontSize(size);
     final artistFontSize = getResponsiveArtistFontSize(size);
+    final isPodcastEpisode = metadata.extras?['isPodcastEpisode'] == true;
     final canOpenArtist = _canOpenArtist(metadata);
 
     return LayoutBuilder(
@@ -100,7 +102,9 @@ class NowPlayingControls extends StatelessWidget {
                   if (metadata.artist != null)
                     GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTap: canOpenArtist
+                      onTap: isPodcastEpisode
+                          ? () => openCurrentPodcastEpisodeList(context)
+                          : canOpenArtist
                           ? () => _openArtistPage(context, metadata)
                           : null,
                       child: MarqueeTextWidget(

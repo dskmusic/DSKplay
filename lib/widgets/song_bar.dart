@@ -885,7 +885,7 @@ class _OfflineArtwork extends StatelessWidget {
         builder: (context, snapshot) {
           final resolvedPath = snapshot.data;
           if (resolvedPath == null) {
-            return const NullArtworkWidget(iconSize: 30);
+            return NullArtworkWidget(size: size, iconSize: 30);
           }
           return _buildImage(resolvedPath);
         },
@@ -909,7 +909,7 @@ class _OfflineArtwork extends StatelessWidget {
               height: size,
               fit: BoxFit.cover,
               errorBuilder: (_, __, ___) =>
-                  const NullArtworkWidget(iconSize: 30),
+                  NullArtworkWidget(size: size, iconSize: 30),
             ),
             Positioned(
               top: 3,

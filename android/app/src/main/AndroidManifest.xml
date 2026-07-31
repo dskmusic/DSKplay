@@ -45,6 +45,7 @@
         android:icon="@mipmap/ic_launcher"
         android:enableOnBackInvokedCallback="false"
         android:extractNativeLibs="true"
+        android:usesCleartextTraffic="true"
         tools:replace="android:extractNativeLibs">
 
         <!-- AudioServiceActivity -->

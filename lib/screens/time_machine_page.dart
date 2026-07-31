@@ -32,6 +32,8 @@ import 'package:dskplay/main.dart';
 import 'package:dskplay/models/podcast_model.dart';
 import 'package:dskplay/screens/user_songs_page.dart';
 import 'package:dskplay/services/listening_stats_service.dart';
+import 'package:dskplay/services/podcast_feed_service.dart';
+import 'package:dskplay/services/podcast_manager.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/utilities/app_utils.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
@@ -411,12 +413,30 @@ class _TimeMachinePageState extends State<TimeMachinePage> {
         return;
       }
 
+      // The audioUrl was recorded the first time this episode was played and
+      // never touched again - some hosts rotate or expire enclosure URLs
+      // after a while, which then fails to play here even though the same
+      // episode still streams fine anywhere that re-reads the live feed.
+      // Refetch it and prefer whatever the feed currently reports, falling
+      // back to the recorded URL only if the podcast/episode can't be found
+      // there anymore.
+      var currentAudioUrl = audioUrl;
+      final subscribedPodcast = podcastManager.subscriptions.value
+          .where((p) => p.id == podcastId);
+      if (subscribedPodcast.isNotEmpty) {
+        final feed = await fetchPodcastFeed(subscribedPodcast.first.feedUrl);
+        final matchingEpisodes = feed?.episodes.where((e) => e.guid == guid);
+        if (matchingEpisodes != null && matchingEpisodes.isNotEmpty) {
+          currentAudioUrl = matchingEpisodes.first.audioUrl;
+        }
+      }
+
       await audioHandler.playPodcastEpisode(
         PodcastEpisode(
           guid: guid,
           podcastId: podcastId,
           title: song['title']?.toString() ?? '',
-          audioUrl: audioUrl,
+          audioUrl: currentAudioUrl,
           image: song['highResImage']?.toString() ?? '',
         ),
         podcastTitle: song['artist']?.toString() ?? '',

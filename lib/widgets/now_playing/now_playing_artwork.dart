@@ -319,38 +319,41 @@ class _SaveCoverButton extends StatelessWidget {
 
 // Only works when the episode's podcast is subscribed - that's the only
 // place a real feedUrl (needed to fetch the episode list) is known; an
-// episode played from a preview/search result has no feed to open.
+// episode played from a preview/search result has no feed to open. Shared
+// by [_ViewPodcastButton] and the artist-name label in now_playing_controls.dart,
+// which opens the same episode list when tapped on a podcast episode instead
+// of trying to open a (nonexistent) music artist page.
+void openCurrentPodcastEpisodeList(BuildContext context) {
+  // On a cold start the resumed episode is shown before playback actually
+  // starts, so currentPlayingPodcast is still null - fall back to the
+  // pending resume data (see _restoreLastPlayedForDisplay).
+  final episode =
+      audioHandler.currentPlayingPodcast?.episode ??
+      audioHandler.pendingPodcastResume?.episode;
+  if (episode == null) return;
+
+  Podcast? podcast;
+  for (final subscription in podcastManager.subscriptions.value) {
+    if (subscription.id == episode.podcastId) {
+      podcast = subscription;
+      break;
+    }
+  }
+  if (podcast == null) {
+    showToast(context, context.l10n!.podcastNotSubscribed);
+    return;
+  }
+  // Capture the router before popping: GoRouter.of(context) on a context
+  // that's already been popped (deactivated) throws silently, which is
+  // why this used to do nothing when tapped.
+  final router = GoRouter.of(context);
+  Navigator.of(context).pop();
+  router.push('/podcasts/detail', extra: podcast);
+}
+
 class _ViewPodcastButton extends StatelessWidget {
   const _ViewPodcastButton({required this.metadata});
   final MediaItem metadata;
-
-  Podcast? _findSubscribedPodcast(String podcastId) {
-    for (final podcast in podcastManager.subscriptions.value) {
-      if (podcast.id == podcastId) return podcast;
-    }
-    return null;
-  }
-
-  void _openPodcast(BuildContext context) {
-    // On a cold start the resumed episode is shown before playback actually
-    // starts, so currentPlayingPodcast is still null - fall back to the
-    // pending resume data (see _restoreLastPlayedForDisplay).
-    final episode =
-        audioHandler.currentPlayingPodcast?.episode ??
-        audioHandler.pendingPodcastResume?.episode;
-    if (episode == null) return;
-    final podcast = _findSubscribedPodcast(episode.podcastId);
-    if (podcast == null) {
-      showToast(context, context.l10n!.podcastNotSubscribed);
-      return;
-    }
-    // Capture the router before popping: GoRouter.of(context) on a context
-    // that's already been popped (deactivated) throws silently, which is
-    // why this used to do nothing when tapped.
-    final router = GoRouter.of(context);
-    Navigator.of(context).pop();
-    router.push('/podcasts/detail', extra: podcast);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -359,7 +362,7 @@ class _ViewPodcastButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => _openPodcast(context),
+        onTap: () => openCurrentPodcastEpisodeList(context),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           child: Row(
