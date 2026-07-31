@@ -339,8 +339,12 @@ class _ViewPodcastButton extends StatelessWidget {
       showToast(context, context.l10n!.podcastNotSubscribed);
       return;
     }
+    // Capture the router before popping: GoRouter.of(context) on a context
+    // that's already been popped (deactivated) throws silently, which is
+    // why this used to do nothing when tapped.
+    final router = GoRouter.of(context);
     Navigator.of(context).pop();
-    context.push('/podcasts/detail', extra: podcast);
+    router.push('/podcasts/detail', extra: podcast);
   }
 
   @override
