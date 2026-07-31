@@ -57,6 +57,8 @@ class _BottomActionsRowState extends State<BottomActionsRow> {
   late final String? audioId =
       (widget.metadata.extras?['ytid'] as String?) ?? widget.metadata.id;
   late final bool isRadioStation = widget.metadata.extras?['isLive'] ?? false;
+  late final bool isPodcastEpisode =
+      widget.metadata.extras?['isPodcastEpisode'] ?? false;
 
   @override
   void initState() {
@@ -135,7 +137,9 @@ class _BottomActionsRowState extends State<BottomActionsRow> {
         final queue = snapshot.data ?? [];
 
         final actions = <Widget>[
-          if (!isRadioStation)
+          if (isPodcastEpisode)
+            _buildPlaybackSpeedButton(context, colorScheme, responsiveIconSize)
+          else if (!isRadioStation)
             _buildActionButton(
               context: context,
               icon: FluentIcons.cloud_arrow_down_24_regular,
@@ -345,6 +349,95 @@ class _BottomActionsRowState extends State<BottomActionsRow> {
       },
     );
   }
+
+  Widget _buildPlaybackSpeedButton(
+    BuildContext context,
+    ColorScheme colorScheme,
+    double size,
+  ) {
+    return StreamBuilder<PlaybackState>(
+      stream: audioHandler.playbackState,
+      initialData: audioHandler.playbackState.valueOrNull,
+      builder: (context, snapshot) {
+        final speed = snapshot.data?.speed ?? 1.0;
+        final isActive = speed != 1.0;
+        return IconButton(
+          icon: Text(
+            '${_formatSpeed(speed)}x',
+            style: TextStyle(
+              fontSize: size * 0.5,
+              fontWeight: FontWeight.bold,
+              color: isActive
+                  ? colorScheme.primary
+                  : colorScheme.onSurfaceVariant,
+            ),
+          ),
+          iconSize: size,
+          tooltip: context.l10n!.playbackSpeed,
+          style: IconButton.styleFrom(
+            backgroundColor: isActive
+                ? colorScheme.primary.withValues(alpha: 0.15)
+                : Colors.transparent,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          onPressed: () => _showPlaybackSpeedDialog(context, speed),
+        );
+      },
+    );
+  }
+}
+
+String _formatSpeed(double speed) =>
+    speed == speed.roundToDouble()
+        ? speed.toStringAsFixed(0)
+        : speed.toStringAsFixed(1);
+
+void _showPlaybackSpeedDialog(BuildContext context, double currentSpeed) {
+  const speeds = [0.5, 0.8, 1.0, 1.2, 1.5, 1.8, 2.0];
+
+  showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
+      final colorScheme = Theme.of(dialogContext).colorScheme;
+      return AlertDialog(
+        title: Text(context.l10n!.playbackSpeed),
+        content: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: WrapAlignment.center,
+          children: speeds.map((speed) {
+            final selected = speed == currentSpeed;
+            return ChoiceChip(
+              label: Text('${_formatSpeed(speed)}x'),
+              selected: selected,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              onSelected: (_) {
+                audioHandler.audioPlayer.setSpeed(speed);
+                Navigator.pop(dialogContext);
+              },
+            );
+          }).toList(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            style: TextButton.styleFrom(
+              foregroundColor: colorScheme.onSurfaceVariant,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Text(context.l10n!.cancel),
+          ),
+        ],
+      );
+    },
+  );
 }
 
 Future<void> _toggleOffline(

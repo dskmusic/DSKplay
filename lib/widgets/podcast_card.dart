@@ -53,24 +53,61 @@ class PodcastCard extends StatelessWidget {
           padding: const EdgeInsets.all(10),
           child: Row(
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Image(
-                  image: ArtworkProvider.get(podcast.image),
-                  width: 56,
-                  height: 56,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    width: 56,
-                    height: 56,
-                    color: colorScheme.primaryContainer,
-                    child: Icon(
-                      FluentIcons.mic_24_regular,
-                      color: colorScheme.onPrimaryContainer,
-                      size: 26,
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image(
+                      image: ArtworkProvider.get(podcast.image),
+                      width: 56,
+                      height: 56,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        width: 56,
+                        height: 56,
+                        color: colorScheme.primaryContainer,
+                        child: Icon(
+                          FluentIcons.mic_24_regular,
+                          color: colorScheme.onPrimaryContainer,
+                          size: 26,
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                  // New-episode dot: reacts to both notifiers since
+                  // hasNewEpisode() compares across them.
+                  Positioned(
+                    top: -2,
+                    right: -2,
+                    child: ValueListenableBuilder<Map<String, List<String>>>(
+                      valueListenable: podcastManager.episodeKeysByPodcast,
+                      builder: (context, _, _) =>
+                          ValueListenableBuilder<List<String>>(
+                            valueListenable:
+                                podcastManager.listenedEpisodeKeys,
+                            builder: (context, _, _) {
+                              if (!podcastManager.isSubscribed(podcast.id) ||
+                                  !podcastManager.hasNewEpisode(podcast.id)) {
+                                return const SizedBox.shrink();
+                              }
+                              return Container(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: colorScheme.error,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: colorScheme.surfaceContainer,
+                                    width: 2,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(width: 12),
               Expanded(

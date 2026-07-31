@@ -40,12 +40,20 @@ class PodcastsPage extends StatefulWidget {
 }
 
 class _PodcastsPageState extends State<PodcastsPage> {
+  bool _refreshing = false;
+
+  Future<void> _refresh() async {
+    setState(() => _refreshing = true);
+    await podcastManager.refreshAllSubscriptions();
+    if (mounted) setState(() => _refreshing = false);
+  }
+
   void _openPodcast(Podcast podcast) {
     // A nested go_router route (like playlist/artist detail pages), not a
     // raw root-navigator push: the latter stacked the detail page above the
     // whole shell Scaffold, hiding the mini player behind it instead of
     // keeping it on top like every other in-branch page.
-    context.push('/library/podcasts/detail', extra: podcast);
+    context.push('/podcasts/detail', extra: podcast);
   }
 
   void _openDiscover({bool autoFocusSearch = false}) {
@@ -69,6 +77,30 @@ class _PodcastsPageState extends State<PodcastsPage> {
       appBar: AppBar(
         title: Text(context.l10n!.podcasts),
         actions: [
+          IconButton(
+            tooltip: context.l10n!.refresh,
+            onPressed: _refreshing ? null : _refresh,
+            icon: _refreshing
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                  )
+                : const Icon(FluentIcons.arrow_sync_24_regular),
+          ),
+          ValueListenableBuilder<bool>(
+            valueListenable: podcastManager.episodeSortAscending,
+            builder: (context, ascending, _) => IconButton(
+              tooltip: context.l10n!.sortByDate,
+              onPressed: () =>
+                  podcastManager.setEpisodeSortAscending(!ascending),
+              icon: Icon(
+                ascending
+                    ? FluentIcons.arrow_sort_up_24_regular
+                    : FluentIcons.arrow_sort_down_24_regular,
+              ),
+            ),
+          ),
           IconButton(
             tooltip: context.l10n!.search,
             onPressed: () => _openDiscover(autoFocusSearch: true),
@@ -123,45 +155,20 @@ class _SubscriptionsTab extends StatelessWidget {
               valueListenable: podcastManager.episodeSortAscending,
               builder: (context, ascending, _) {
                 final sorted = _sorted(subscriptions, latestDates, ascending);
-                return Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 4,
+                return ListView.builder(
+                  padding: commonSingleChildScrollViewPadding,
+                  itemCount: sorted.length,
+                  itemBuilder: (context, index) {
+                    final podcast = sorted[index];
+                    return Padding(
+                      key: ValueKey(podcast.id),
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: PodcastCard(
+                        podcast: podcast,
+                        onTap: () => onOpenPodcast(podcast),
                       ),
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: IconButton(
-                          tooltip: context.l10n!.sortByDate,
-                          onPressed: () => podcastManager
-                              .setEpisodeSortAscending(!ascending),
-                          icon: Icon(
-                            ascending
-                                ? FluentIcons.arrow_sort_up_24_regular
-                                : FluentIcons.arrow_sort_down_24_regular,
-                          ),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: ListView.builder(
-                        padding: commonSingleChildScrollViewPadding,
-                        itemCount: sorted.length,
-                        itemBuilder: (context, index) {
-                          final podcast = sorted[index];
-                          return Padding(
-                            key: ValueKey(podcast.id),
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: PodcastCard(
-                              podcast: podcast,
-                              onTap: () => onOpenPodcast(podcast),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
+                    );
+                  },
                 );
               },
             );

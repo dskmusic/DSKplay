@@ -27,8 +27,10 @@ import 'package:dskplay/main.dart';
 
 // A podcast restored on cold start resumes silently for headless play
 // triggers (notification, media button, Android Auto), but an in-app tap
-// asks first - the user may want to start the episode over instead.
-Future<void> _confirmResumePodcast(BuildContext context) async {
+// asks first - the user may want to start the episode over instead. Also
+// reused by the podcast episode list when tapping the episode that was
+// already loaded/pending resume.
+Future<void> confirmResumePodcast(BuildContext context) async {
   final resume = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
@@ -102,7 +104,7 @@ Widget buildPlaybackIconButton(
         onPressed = isPlaying
             ? audioHandler.pause
             : (pendingPodcast != null && pendingPodcast.position > Duration.zero
-                  ? () => _confirmResumePodcast(context)
+                  ? () => confirmResumePodcast(context)
                   : audioHandler.play);
         semanticLabel = isPlaying ? context.l10n!.pause : context.l10n!.play;
       }

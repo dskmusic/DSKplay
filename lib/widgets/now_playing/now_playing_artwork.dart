@@ -27,7 +27,9 @@ import 'package:audio_service/audio_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_flip_card/flutter_flip_card.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart' show audioHandler, logger;
@@ -39,6 +41,7 @@ import 'package:dskplay/services/io_service.dart';
 import 'package:dskplay/services/lyrics_export_service.dart';
 import 'package:dskplay/services/lyrics_manager.dart';
 import 'package:dskplay/services/podcast_download_service.dart';
+import 'package:dskplay/services/podcast_manager.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/services/song_export_service.dart';
 import 'package:dskplay/utilities/async_loader.dart';
@@ -110,7 +113,13 @@ class NowPlayingArtwork extends StatelessWidget {
                 bottom: 8,
                 child: _SaveCoverButton(metadata: metadata),
               ),
-              if (metadata.extras?['isPodcastEpisode'] != true)
+              if (metadata.extras?['isPodcastEpisode'] == true)
+                Positioned(
+                  right: 8,
+                  bottom: 8,
+                  child: _ViewPodcastButton(metadata: metadata),
+                )
+              else
                 Positioned(
                   right: 8,
                   bottom: 8,
@@ -150,37 +159,73 @@ class _PodcastDescriptionBackContent extends StatelessWidget {
   const _PodcastDescriptionBackContent({required this.metadata});
   final MediaItem metadata;
 
+  Future<void> _copyEpisodeInfo(BuildContext context) async {
+    final current = audioHandler.currentPlayingPodcast;
+    if (current == null) return;
+    await Clipboard.setData(
+      ClipboardData(
+        text: podcastEpisodeCopyText(current.podcastTitle, current.episode),
+      ),
+    );
+    if (context.mounted) {
+      showToast(context, context.l10n!.episodeInfoCopied);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final description = metadata.extras?['description'] as String?;
 
-    if (description == null || description.trim().isEmpty) {
-      return Center(
-        child: Text(
-          context.l10n!.podcastDescriptionNotAvailable,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-            color: colorScheme.onSecondaryContainer,
+    return Stack(
+      children: [
+        if (description == null || description.trim().isEmpty)
+          Center(
+            child: Text(
+              context.l10n!.podcastDescriptionNotAvailable,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: colorScheme.onSecondaryContainer,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          )
+        else
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            physics: const BouncingScrollPhysics(),
+            child: Text(
+              description,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: colorScheme.onSecondaryContainer,
+                height: 1.6,
+              ),
+            ),
           ),
-          textAlign: TextAlign.center,
+        Positioned(
+          left: 8,
+          bottom: 8,
+          child: Material(
+            color: Colors.black.withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(8),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => _copyEpisodeInfo(context),
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Icon(
+                  FluentIcons.copy_24_regular,
+                  color: Colors.white,
+                  size: 18,
+                ),
+              ),
+            ),
+          ),
         ),
-      );
-    }
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      physics: const BouncingScrollPhysics(),
-      child: Text(
-        description,
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w500,
-          color: colorScheme.onSecondaryContainer,
-          height: 1.6,
-        ),
-      ),
+      ],
     );
   }
 }
@@ -238,7 +283,8 @@ class _SaveCoverButton extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: PopupMenuButton<bool>(
         tooltip: 'Guardar portada',
-        onSelected: (chooseFolder) => _save(context, chooseFolder: chooseFolder),
+        onSelected: (chooseFolder) =>
+            _save(context, chooseFolder: chooseFolder),
         itemBuilder: (context) => const [
           PopupMenuItem(value: false, child: Text('Guardar en Descargas')),
           PopupMenuItem(value: true, child: Text('Elegir carpeta...')),
@@ -257,6 +303,68 @@ class _SaveCoverButton extends StatelessWidget {
               Text(
                 'Cover',
                 style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Only works when the episode's podcast is subscribed - that's the only
+// place a real feedUrl (needed to fetch the episode list) is known; an
+// episode played from a preview/search result has no feed to open.
+class _ViewPodcastButton extends StatelessWidget {
+  const _ViewPodcastButton({required this.metadata});
+  final MediaItem metadata;
+
+  Podcast? _findSubscribedPodcast(String podcastId) {
+    for (final podcast in podcastManager.subscriptions.value) {
+      if (podcast.id == podcastId) return podcast;
+    }
+    return null;
+  }
+
+  void _openPodcast(BuildContext context) {
+    final current = audioHandler.currentPlayingPodcast;
+    if (current == null) return;
+    final podcast = _findSubscribedPodcast(current.episode.podcastId);
+    if (podcast == null) {
+      showToast(context, context.l10n!.podcastNotSubscribed);
+      return;
+    }
+    Navigator.of(context).pop();
+    context.push('/podcasts/detail', extra: podcast);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.black.withValues(alpha: 0.35),
+      borderRadius: BorderRadius.circular(8),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _openPodcast(context),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                FluentIcons.headphones_24_regular,
+                color: Colors.white,
+                size: 16,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                context.l10n!.viewPodcast,
+                style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.5,

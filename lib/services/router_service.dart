@@ -114,6 +114,8 @@ class NavigationManager {
       GlobalKey<NavigatorState>();
   static final GlobalKey<NavigatorState> libraryTabNavigatorKey =
       GlobalKey<NavigatorState>();
+  static final GlobalKey<NavigatorState> podcastsTabNavigatorKey =
+      GlobalKey<NavigatorState>();
   static final GlobalKey<NavigatorState> localFilesTabNavigatorKey =
       GlobalKey<NavigatorState>();
   static final GlobalKey<NavigatorState> settingsTabNavigatorKey =
@@ -139,6 +141,7 @@ class NavigationManager {
   static const String settingsPath = '/settings';
   static const String searchPath = '/search';
   static const String libraryPath = '/library';
+  static const String podcastsPath = '/podcasts';
   static const String localFilesPath = '/localFiles';
 
   /// Refresh the router configuration when offline mode changes
@@ -251,7 +254,28 @@ class NavigationManager {
           ),
         ],
       ),
-      // Branch 2: Library
+      // Branch 2: Podcasts
+      StatefulShellBranch(
+        navigatorKey: podcastsTabNavigatorKey,
+        routes: [
+          GoRoute(
+            path: podcastsPath,
+            pageBuilder: (context, state) {
+              return getPage(child: const PodcastsPage(), state: state);
+            },
+            routes: [
+              GoRoute(
+                path: 'detail',
+                pageBuilder: (context, state) => _pushPage(
+                  child: PodcastDetailPage(podcast: state.extra! as Podcast),
+                  state: state,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      // Branch 3: Library
       StatefulShellBranch(
         navigatorKey: libraryTabNavigatorKey,
         routes: [
@@ -288,22 +312,6 @@ class NavigationManager {
                     _pushPage(child: const RadioStationsPage(), state: state),
               ),
               GoRoute(
-                path: 'podcasts',
-                pageBuilder: (context, state) =>
-                    _pushPage(child: const PodcastsPage(), state: state),
-                routes: [
-                  GoRoute(
-                    path: 'detail',
-                    pageBuilder: (context, state) => _pushPage(
-                      child: PodcastDetailPage(
-                        podcast: state.extra! as Podcast,
-                      ),
-                      state: state,
-                    ),
-                  ),
-                ],
-              ),
-              GoRoute(
                 path: 'search',
                 pageBuilder: (context, state) =>
                     _pushPage(child: const LibrarySearchPage(), state: state),
@@ -312,7 +320,7 @@ class NavigationManager {
           ),
         ],
       ),
-      // Branch 3: Local files
+      // Branch 4: Local files
       StatefulShellBranch(
         navigatorKey: localFilesTabNavigatorKey,
         routes: [
@@ -324,7 +332,7 @@ class NavigationManager {
           ),
         ],
       ),
-      // Branch 4: Settings
+      // Branch 5: Settings
       StatefulShellBranch(
         navigatorKey: settingsTabNavigatorKey,
         routes: [

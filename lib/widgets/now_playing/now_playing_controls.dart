@@ -290,6 +290,7 @@ class PlayerControlButtons extends StatelessWidget {
               Expanded(
                 child: Center(
                   child: _PlaybackControlsRow(
+                    metadata: metadata,
                     colorScheme: colorScheme,
                     buttonConstraints: buttonConstraints,
                     buttonPadding: buttonPadding,
@@ -419,6 +420,7 @@ class PlayerControlButtons extends StatelessWidget {
 
 class _PlaybackControlsRow extends StatelessWidget {
   const _PlaybackControlsRow({
+    required this.metadata,
     required this.colorScheme,
     required this.buttonConstraints,
     required this.buttonPadding,
@@ -428,6 +430,7 @@ class _PlaybackControlsRow extends StatelessWidget {
     required this.playPadding,
   });
 
+  final MediaItem metadata;
   final ColorScheme colorScheme;
   final BoxConstraints buttonConstraints;
   final EdgeInsets buttonPadding;
@@ -436,8 +439,21 @@ class _PlaybackControlsRow extends StatelessWidget {
   final double minButtonSize;
   final EdgeInsets playPadding;
 
+  static const _podcastSeekStep = Duration(minutes: 1);
+
+  void _seekPodcastBy(Duration step) {
+    final player = audioHandler.audioPlayer;
+    final duration = player.duration ?? Duration.zero;
+    var target = player.position + step;
+    if (target < Duration.zero) target = Duration.zero;
+    if (target > duration) target = duration;
+    audioHandler.seek(target);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isPodcastEpisode = metadata.extras?['isPodcastEpisode'] == true;
+
     return StreamBuilder<List<MediaItem>>(
       stream: audioHandler.queue,
       builder: (context, snapshot) {
@@ -449,20 +465,33 @@ class _PlaybackControlsRow extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _PlaybackControlButton(
-                    icon: FluentIcons.previous_24_regular,
-                    isEnabled:
-                        audioHandler.hasPrevious ||
-                        repeatMode != AudioServiceRepeatMode.none,
-                    tooltip: context.l10n!.skipToPrevious,
-                    onPressed: () => audioHandler.skipToPrevious(),
-                    seekDirection: -1,
-                    colorScheme: colorScheme,
-                    buttonConstraints: buttonConstraints,
-                    buttonPadding: buttonPadding,
-                    controlIconSize: controlIconSize,
-                    minButtonSize: minButtonSize,
-                  ),
+                  isPodcastEpisode
+                      ? _PlaybackControlButton(
+                          icon: FluentIcons.rewind_24_regular,
+                          isEnabled: true,
+                          tooltip: context.l10n!.rewind1Minute,
+                          onPressed: () => _seekPodcastBy(-_podcastSeekStep),
+                          seekDirection: -1,
+                          colorScheme: colorScheme,
+                          buttonConstraints: buttonConstraints,
+                          buttonPadding: buttonPadding,
+                          controlIconSize: controlIconSize,
+                          minButtonSize: minButtonSize,
+                        )
+                      : _PlaybackControlButton(
+                          icon: FluentIcons.previous_24_regular,
+                          isEnabled:
+                              audioHandler.hasPrevious ||
+                              repeatMode != AudioServiceRepeatMode.none,
+                          tooltip: context.l10n!.skipToPrevious,
+                          onPressed: () => audioHandler.skipToPrevious(),
+                          seekDirection: -1,
+                          colorScheme: colorScheme,
+                          buttonConstraints: buttonConstraints,
+                          buttonPadding: buttonPadding,
+                          controlIconSize: controlIconSize,
+                          minButtonSize: minButtonSize,
+                        ),
                   SizedBox(width: buttonSpacing),
                   PlaybackIconButton(
                     iconColor: colorScheme.onPrimary,
@@ -471,22 +500,36 @@ class _PlaybackControlsRow extends StatelessWidget {
                     padding: playPadding,
                   ),
                   SizedBox(width: buttonSpacing),
-                  _PlaybackControlButton(
-                    icon: FluentIcons.next_24_regular,
-                    isEnabled:
-                        audioHandler.hasNext ||
-                        repeatMode == AudioServiceRepeatMode.one,
-                    tooltip: context.l10n!.skipToNext,
-                    onPressed: () => repeatMode == AudioServiceRepeatMode.one
-                        ? audioHandler.playAgain()
-                        : audioHandler.skipToNext(),
-                    seekDirection: 1,
-                    colorScheme: colorScheme,
-                    buttonConstraints: buttonConstraints,
-                    buttonPadding: buttonPadding,
-                    controlIconSize: controlIconSize,
-                    minButtonSize: minButtonSize,
-                  ),
+                  isPodcastEpisode
+                      ? _PlaybackControlButton(
+                          icon: FluentIcons.fast_forward_24_regular,
+                          isEnabled: true,
+                          tooltip: context.l10n!.fastForward1Minute,
+                          onPressed: () => _seekPodcastBy(_podcastSeekStep),
+                          seekDirection: 1,
+                          colorScheme: colorScheme,
+                          buttonConstraints: buttonConstraints,
+                          buttonPadding: buttonPadding,
+                          controlIconSize: controlIconSize,
+                          minButtonSize: minButtonSize,
+                        )
+                      : _PlaybackControlButton(
+                          icon: FluentIcons.next_24_regular,
+                          isEnabled:
+                              audioHandler.hasNext ||
+                              repeatMode == AudioServiceRepeatMode.one,
+                          tooltip: context.l10n!.skipToNext,
+                          onPressed: () =>
+                              repeatMode == AudioServiceRepeatMode.one
+                              ? audioHandler.playAgain()
+                              : audioHandler.skipToNext(),
+                          seekDirection: 1,
+                          colorScheme: colorScheme,
+                          buttonConstraints: buttonConstraints,
+                          buttonPadding: buttonPadding,
+                          controlIconSize: controlIconSize,
+                          minButtonSize: minButtonSize,
+                        ),
                 ],
               ),
             );
@@ -527,8 +570,7 @@ class _PlaybackControlButton extends StatefulWidget {
   final int? seekDirection;
 
   @override
-  State<_PlaybackControlButton> createState() =>
-      _PlaybackControlButtonState();
+  State<_PlaybackControlButton> createState() => _PlaybackControlButtonState();
 }
 
 class _PlaybackControlButtonState extends State<_PlaybackControlButton> {

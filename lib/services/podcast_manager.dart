@@ -28,6 +28,7 @@ import 'package:dskplay/main.dart' show audioHandler, logger;
 import 'package:dskplay/models/podcast_model.dart';
 import 'package:dskplay/models/position_data.dart';
 import 'package:dskplay/services/data_manager.dart';
+import 'package:dskplay/services/podcast_feed_service.dart';
 
 /// Subscriptions, listened/downloaded state and playback-progress tracking
 /// for podcasts. Mirrors the radio stations state kept in
@@ -80,13 +81,26 @@ class PodcastManager {
         ),
       );
 
+  // Every episode key seen in each podcast's feed the last time it was
+  // fetched (subscribing, opening its detail page, or refreshing), so the
+  // subscriptions list can badge podcasts that have any episode not yet in
+  // [listenedEpisodeKeys] - whether that's because it's a new release or
+  // because the user explicitly marked it unlistened.
+  final ValueNotifier<Map<String, List<String>>> episodeKeysByPodcast =
+      ValueNotifier<Map<String, List<String>>>(
+        (Hive.box('user').get('podcastEpisodeKeys', defaultValue: {}) as Map)
+            .map(
+              (key, value) =>
+                  MapEntry(key as String, List<String>.from(value as List)),
+            ),
+      );
+
   String? _lastAutoMarkedKey;
   StreamSubscription<PositionData>? _positionSub;
 
   static List<Podcast> _loadSubscriptions() {
     final raw =
-        Hive.box('user').get('podcastSubscriptions', defaultValue: [])
-            as List;
+        Hive.box('user').get('podcastSubscriptions', defaultValue: []) as List;
     return raw
         .whereType<Map>()
         .map((p) => Podcast.fromMap(Map<String, dynamic>.from(p)))
@@ -118,10 +132,7 @@ class PodcastManager {
   bool isListened(String episodeKey) =>
       listenedEpisodeKeys.value.contains(episodeKey);
 
-  Future<void> setListened(
-    String episodeKey, {
-    required bool listened,
-  }) async {
+  Future<void> setListened(String episodeKey, {required bool listened}) async {
     final current = listenedEpisodeKeys.value;
     if (listened == current.contains(episodeKey)) return;
 
@@ -155,9 +166,7 @@ class PodcastManager {
       downloadedEpisodes.value.any((e) => e['key'] == episodeKey);
 
   Map? getDownloadedEpisode(String episodeKey) {
-    final match = downloadedEpisodes.value.where(
-      (e) => e['key'] == episodeKey,
-    );
+    final match = downloadedEpisodes.value.where((e) => e['key'] == episodeKey);
     return match.isEmpty ? null : match.first;
   }
 
@@ -201,6 +210,30 @@ class PodcastManager {
     );
   }
 
+  /// Drops any entry in [downloadedEpisodes] whose local file no longer
+  /// exists (e.g. deleted from another app's file manager while this app was
+  /// closed) - otherwise it stays "marked downloaded" forever and playback
+  /// fails when it tries to play the missing file. Call once at startup.
+  Future<void> pruneMissingDownloads() async {
+    final missingKeys = <String>[];
+    for (final episode in downloadedEpisodes.value) {
+      final path = episode['audioPath'] as String?;
+      if (path == null || path.isEmpty || !await File(path).exists()) {
+        missingKeys.add(episode['key'] as String);
+      }
+    }
+    if (missingKeys.isEmpty) return;
+
+    downloadedEpisodes.value = downloadedEpisodes.value
+        .where((e) => !missingKeys.contains(e['key']))
+        .toList();
+    await addOrUpdateData<List>(
+      'userNoBackup',
+      'downloadedPodcastEpisodes',
+      downloadedEpisodes.value,
+    );
+  }
+
   DateTime? latestEpisodeDate(String podcastId) {
     final raw = latestEpisodeDates.value[podcastId];
     return raw != null ? DateTime.tryParse(raw) : null;
@@ -217,6 +250,50 @@ class PodcastManager {
       'podcastLatestEpisodeDates',
       latestEpisodeDates.value,
     );
+  }
+
+  /// Re-fetches every subscribed podcast's feed to refresh
+  /// [latestEpisodeDates] (so subscription-list sorting reflects newly
+  /// published episodes) and [episodeKeysByPodcast] (so the new-episode
+  /// badge stays accurate) without needing to open each podcast's detail
+  /// page. Called on app startup and from the subscriptions screen's refresh
+  /// button.
+  Future<void> refreshAllSubscriptions() async {
+    await Future.wait(
+      subscriptions.value.map((podcast) async {
+        final result = await fetchPodcastFeed(podcast.feedUrl);
+        if (result == null || result.episodes.isEmpty) return;
+        await recordLatestEpisodeDate(
+          podcast.id,
+          result.episodes.first.pubDate,
+        );
+        await recordEpisodeKeys(podcast.id, result.episodes);
+      }),
+    );
+  }
+
+  Future<void> recordEpisodeKeys(
+    String podcastId,
+    List<PodcastEpisode> episodes,
+  ) async {
+    episodeKeysByPodcast.value = {
+      ...episodeKeysByPodcast.value,
+      podcastId: episodes.map((e) => e.key).toList(),
+    };
+    await addOrUpdateData<Map>(
+      'user',
+      'podcastEpisodeKeys',
+      episodeKeysByPodcast.value,
+    );
+  }
+
+  /// Whether [podcastId] has any episode not yet in [listenedEpisodeKeys] -
+  /// drives the subscriptions list's "new episode" badge. True for both a
+  /// newly published episode and one the user explicitly marked unlistened.
+  bool hasNewEpisode(String podcastId) {
+    final keys = episodeKeysByPodcast.value[podcastId];
+    if (keys == null) return false;
+    return keys.any((key) => !listenedEpisodeKeys.value.contains(key));
   }
 
   Future<void> setEpisodeSortAscending(bool ascending) async {
@@ -242,13 +319,17 @@ class PodcastManager {
       ).get('downloadedPodcastEpisodes', defaultValue: []),
     );
     episodeSortAscending.value =
-        Hive.box(
-              'user',
-            ).get('podcastEpisodeSortAscending', defaultValue: false)
+        Hive.box('user').get('podcastEpisodeSortAscending', defaultValue: false)
             as bool;
     latestEpisodeDates.value = Map<String, String>.from(
       Hive.box('user').get('podcastLatestEpisodeDates', defaultValue: {}),
     );
+    episodeKeysByPodcast.value =
+        (Hive.box('user').get('podcastEpisodeKeys', defaultValue: {}) as Map)
+            .map(
+              (key, value) =>
+                  MapEntry(key as String, List<String>.from(value as List)),
+            );
   }
 
   /// Watches playback progress and auto-marks the currently playing episode

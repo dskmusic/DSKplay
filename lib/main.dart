@@ -33,7 +33,8 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/localization/app_localizations.dart';
 import 'package:dskplay/screens/now_playing_page.dart';
-import 'package:dskplay/screens/search_page.dart' show reloadSearchHistoryFromStorage;
+import 'package:dskplay/screens/search_page.dart'
+    show reloadSearchHistoryFromStorage;
 import 'package:dskplay/services/audio_service.dart';
 import 'package:dskplay/services/cloud_backup_service.dart';
 import 'package:dskplay/services/common_services.dart';
@@ -217,7 +218,9 @@ class _DskPlayState extends State<DskPlay> with WidgetsBindingObserver {
       );
     }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) => _checkForUpdateSilently());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _checkForUpdateSilently(),
+    );
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _offerCloudRestoreIfAvailable(),
     );
@@ -285,7 +288,8 @@ class _DskPlayState extends State<DskPlay> with WidgetsBindingObserver {
           context: context,
           builder: (dialogContext) => ConfirmationDialog(
             confirmationMessage: dialogContext.l10n!.cloudBackupSkipWarning,
-            submitMessage: dialogContext.l10n!.cloudBackupContinueWithoutRestoring,
+            submitMessage:
+                dialogContext.l10n!.cloudBackupContinueWithoutRestoring,
             cancelMessage: dialogContext.l10n!.restoreUserData,
             isDangerous: true,
             onCancel: () => Navigator.of(dialogContext).pop(false),
@@ -527,6 +531,8 @@ Future<void> initialisation() async {
       ),
     );
     podcastManager.attachAutoMarkListened();
+    unawaited(podcastManager.pruneMissingDownloads());
+    unawaited(podcastManager.refreshAllSubscriptions());
 
     // Init router
     NavigationManager.instance;
@@ -572,9 +578,7 @@ Future<void> initialisation() async {
 /// One-time move of offline songs/artwork downloaded before this app version
 /// (internal, private storage) to the new external DSKplay/Offline folder,
 /// so they aren't silently orphaned by the storage-location change.
-Future<void> _migrateOfflineFilesToExternalStorage(
-  String oldRootPath,
-) async {
+Future<void> _migrateOfflineFilesToExternalStorage(String oldRootPath) async {
   if (oldRootPath == applicationDirPath) return;
 
   for (final subdir in [FilePaths.tracksDir, FilePaths.artworksDir]) {

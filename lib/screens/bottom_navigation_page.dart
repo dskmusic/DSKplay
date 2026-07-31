@@ -236,25 +236,32 @@ class _BottomNavigationPageState extends State<BottomNavigationPage> {
 
     items.addAll([
       _NavigationItem(
+        icon: FluentIcons.mic_24_regular,
+        selectedIcon: FluentIcons.mic_24_filled,
+        label: context.l10n?.podcasts ?? 'Podcasts',
+        route: '/podcasts',
+        shellIndex: 2,
+      ),
+      _NavigationItem(
         icon: FluentIcons.book_24_regular,
         selectedIcon: FluentIcons.book_24_filled,
         label: context.l10n?.library ?? 'Library',
         route: '/library',
-        shellIndex: 2,
+        shellIndex: 3,
       ),
       _NavigationItem(
         icon: FluentIcons.folder_24_regular,
         selectedIcon: FluentIcons.folder_24_filled,
         label: context.l10n?.localFiles ?? 'Local files',
         route: '/localFiles',
-        shellIndex: 3,
+        shellIndex: 4,
       ),
       _NavigationItem(
         icon: FluentIcons.settings_24_regular,
         selectedIcon: FluentIcons.settings_24_filled,
         label: context.l10n?.settings ?? 'Settings',
         route: '/settings',
-        shellIndex: 4,
+        shellIndex: 5,
       ),
     ]);
 

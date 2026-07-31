@@ -140,3 +140,16 @@ class PodcastEpisode {
   @override
   int get hashCode => key.hashCode;
 }
+
+/// Plain-text summary of an episode (podcast, episode title, description,
+/// audio link) for the "copy episode info" buttons in the episode list and
+/// full-screen player.
+String podcastEpisodeCopyText(String podcastTitle, PodcastEpisode episode) {
+  final lines = [
+    podcastTitle,
+    episode.title,
+    if (episode.description.trim().isNotEmpty) episode.description.trim(),
+    if (episode.audioUrl.trim().isNotEmpty) episode.audioUrl.trim(),
+  ];
+  return lines.join('\n\n');
+}

@@ -391,7 +391,8 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       // (duration always null), a podcast episode has a real duration, so
       // it's the one out-of-queue case that actually reaches this listener.
       final activeItem = mediaItem.valueOrNull;
-      if (activeItem != null && activeItem.extras?['isPodcastEpisode'] == true) {
+      if (activeItem != null &&
+          activeItem.extras?['isPodcastEpisode'] == true) {
         if (_shouldUpdateDuration(activeItem.duration, duration)) {
           final updated = activeItem.copyWith(duration: duration);
           mediaItem.add(updated);
@@ -511,7 +512,8 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       final persisted = _loadPersistedQueueState();
       final persistedPodcast = _loadPersistedPodcastState();
       if (persistedPodcast != null &&
-          (persisted == null || persistedPodcast.savedAt >= persisted.savedAt)) {
+          (persisted == null ||
+              persistedPodcast.savedAt >= persisted.savedAt)) {
         _pendingPodcastResume = (
           episode: persistedPodcast.episode,
           podcastTitle: persistedPodcast.podcastTitle,
@@ -854,14 +856,18 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     }
   }
 
-  void _handleProcessingStateChange(ProcessingState state) {
+  Future<void> _handleProcessingStateChange(ProcessingState state) async {
     try {
       if (state == ProcessingState.completed) {
         if (sleepTimerEndOfSong) {
           sleepTimerExpired = true;
           sleepTimerEndOfSong = false;
-          stop();
+          await stop();
           sleepTimerNotifier.value = null;
+          // The sleep timer expiring should end the listening session
+          // outright, not just pause it - whether the app is foregrounded
+          // or only alive via the notification in the background.
+          _exitIfIdle();
           return;
         }
 
@@ -1710,6 +1716,10 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         );
         return;
       }
+      // A file opened/shared from another app (see consumeSharedAudioFile)
+      // shouldn't overwrite what a cold start remembers as "what you were
+      // playing" - leave whatever was persisted before the share untouched.
+      if (currentSong?['externalShare'] == true) return;
       // A regular song is now playing, so it - not whatever podcast episode
       // was last playing, if any - is what a cold start should resume.
       _currentPlayingPodcast = null;
@@ -1929,8 +1939,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
 
     final persisted = _loadPersistedQueueState();
     if (persisted != null &&
-        _songYtid(persisted.queue[persisted.index]) ==
-            normalisedSong['ytid']) {
+        _songYtid(persisted.queue[persisted.index]) == normalisedSong['ytid']) {
       await playPlaylistSong(
         playlist: {
           'title': 'DSK Play',
@@ -2118,7 +2127,15 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       // already set up to keep running (androidStopForegroundOnPause:
       // false), matching how other music players behave. Only stop (and
       // release the audio session) when there's nothing playing anyway.
-      if (audioPlayer.playing) return;
+      if (audioPlayer.playing) {
+        // The process may later die without ever calling pause()/stop() (OS
+        // kills the backgrounded task), leaving the podcast resume position
+        // stuck at whatever the throttled positionStream last saved (up to
+        // 5s stale) - persist the exact position now, at the last reliable
+        // checkpoint before that can happen.
+        _persistPodcastPositionIfNeeded(audioPlayer.position);
+        return;
+      }
       await stop();
       final session = await AudioSession.instance;
       await session.setActive(false);
@@ -2131,9 +2148,39 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     // there's no reason to keep the process alive draining battery in the
     // background, so kill it outright instead of leaving it idling in the
     // OS's recent-process cache.
+    _exitIfIdle();
+  }
+
+  // Nothing playing and no download (individual or batch) in flight - no
+  // reason to keep the process alive draining battery in the background.
+  // Called after anything that stops playback outright rather than just
+  // pausing it: the app being swiped away, the notification being
+  // dismissed, or the sleep timer expiring.
+  void _exitIfIdle() {
     if (!audioPlayer.playing && !DownloadForegroundService.isActive) {
       exit(0);
     }
+  }
+
+  @override
+  Future<void> onNotificationDeleted() async {
+    try {
+      if (audioPlayer.playing) {
+        _persistPodcastPositionIfNeeded(audioPlayer.position);
+        return;
+      }
+      await stop();
+      final session = await AudioSession.instance;
+      await session.setActive(false);
+    } catch (e, stackTrace) {
+      logger.log(
+        'Error in onNotificationDeleted',
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
+
+    _exitIfIdle();
   }
 
   /// Starts the podcast episode restored from a cold start. Called by default
@@ -3180,6 +3227,10 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         sleepTimerExpired = true;
         await stop();
         sleepTimerNotifier.value = null;
+        // The sleep timer expiring should end the listening session
+        // outright, not just pause it - whether the app is foregrounded or
+        // only alive via the notification in the background.
+        _exitIfIdle();
       });
     } catch (e, stackTrace) {
       logger.log('Error setting sleep timer', error: e, stackTrace: stackTrace);

@@ -229,10 +229,7 @@ class _LibrarySearchPageState extends State<LibrarySearchPage> {
                       ),
                       child: PodcastCard(
                         podcast: p,
-                        onTap: () => context.push(
-                          '/library/podcasts/detail',
-                          extra: p,
-                        ),
+                        onTap: () => context.push('/podcasts/detail', extra: p),
                       ),
                     ),
                   ),
