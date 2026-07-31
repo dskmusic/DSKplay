@@ -123,11 +123,41 @@ class CloudBackupService {
 
     try {
       final snapshot = await buildBackupSnapshot();
+
+      // Firestore caps a single document at 1 MiB. Writing the whole backup
+      // (song library, wrapped stats, and every podcast's subscriptions,
+      // listened episodes and per-podcast stats) as one nested field on one
+      // document can blow past that for a long-time user or a large podcast
+      // history, which fails the *entire* upload silently - nothing gets
+      // backed up, not just the part that grew too big. Splitting into one
+      // small document per top-level box key keeps each write far under the
+      // limit no matter how much history any single box key accumulates.
+      final entries = document.collection('entries');
+      final existing = await entries.get();
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in existing.docs) {
+        batch.delete(doc.reference);
+      }
+      for (final boxEntry in snapshot.entries) {
+        final boxData = boxEntry.value;
+        if (boxData is! Map) continue;
+        for (final keyEntry in boxData.entries) {
+          batch.set(entries.doc('${boxEntry.key}__${keyEntry.key}'), {
+            'box': boxEntry.key,
+            'key': keyEntry.key,
+            'value': keyEntry.value,
+          });
+        }
+      }
       // A plain DateTime (not FieldValue.serverTimestamp()) so it reads
       // back immediately: a server timestamp resolves to null on reads
       // until the write is acknowledged by the server, which can take a
       // while - this value is only ever shown to the device that wrote it.
-      await document.set({'data': snapshot, 'updatedAt': DateTime.now()});
+      // Replaces the document outright, which also drops any legacy 'data'
+      // field from a pre-chunking backup.
+      batch.set(document, {'updatedAt': DateTime.now()});
+      await batch.commit();
+
       await addOrUpdateData(
         'userNoBackup',
         'lastCloudBackupAt',
@@ -150,17 +180,39 @@ class CloudBackupService {
     if (document == null) return (data: null, updatedAt: null);
 
     try {
-      final snapshot = await document.get();
-      final raw = snapshot.data();
+      final docSnapshot = await document.get();
+      final raw = docSnapshot.data();
       if (raw == null) return (data: null, updatedAt: null);
 
-      final rawData = (raw['data'] as Map?)?.cast<String, dynamic>();
-      final data = rawData == null
-          ? null
-          : _normalizeFirestoreValue(rawData) as Map<String, dynamic>;
+      final entriesSnapshot = await document.collection('entries').get();
+      final data = <String, Map<String, dynamic>>{};
+      if (entriesSnapshot.docs.isEmpty) {
+        // Legacy pre-chunking backups nested everything under a single
+        // 'data' field - keep reading those so a device that hasn't
+        // re-uploaded since the chunking change doesn't lose its backup.
+        final legacy = (raw['data'] as Map?)?.cast<String, dynamic>();
+        if (legacy != null) {
+          for (final boxEntry in legacy.entries) {
+            final boxData = boxEntry.value;
+            if (boxData is Map) {
+              data[boxEntry.key] = boxData.cast<String, dynamic>();
+            }
+          }
+        }
+      } else {
+        for (final entryDoc in entriesSnapshot.docs) {
+          final entryData = entryDoc.data();
+          final box = entryData['box'] as String?;
+          final key = entryData['key'] as String?;
+          if (box == null || key == null) continue;
+          (data[box] ??= <String, dynamic>{})[key] = entryData['value'];
+        }
+      }
+
+      final normalized = _normalizeFirestoreValue(data) as Map<String, dynamic>;
       final timestamp = raw['updatedAt'];
       final updatedAt = timestamp is Timestamp ? timestamp.toDate() : null;
-      return (data: data, updatedAt: updatedAt);
+      return (data: normalized, updatedAt: updatedAt);
     } catch (e, stackTrace) {
       logger.log(
         'Cloud backup download failed',

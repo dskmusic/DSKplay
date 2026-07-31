@@ -30,6 +30,7 @@ import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/data_manager.dart';
 import 'package:dskplay/services/listening_stats_service.dart';
 import 'package:dskplay/services/playlists_manager.dart';
+import 'package:dskplay/services/podcast_manager.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/theme/app_themes.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
@@ -111,6 +112,7 @@ class _BackupSectionState extends State<BackupSection> {
     reloadPlaylistLibraryStateFromStorage();
     reloadSearchHistoryFromStorage();
     reloadRadioStationsStateFromStorage();
+    podcastManager.reloadFromStorage();
     // The restored settings box may carry a different wrappedEnabled value
     // than the one already loaded into this ValueNotifier; without resyncing
     // it here, recording silently keeps following the pre-restore value

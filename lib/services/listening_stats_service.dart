@@ -25,6 +25,7 @@ import 'package:hive/hive.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:dskplay/main.dart' show logger;
 import 'package:dskplay/services/data_manager.dart';
+import 'package:dskplay/services/podcast_manager.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/utilities/listening_stats_utils.dart';
 import 'package:dskplay/utilities/map_utils.dart';
@@ -150,6 +151,15 @@ class ListeningStatsService {
     );
     if (incrementPlayCount || listenedDuration > Duration.zero) {
       _markDirty();
+    }
+
+    if (song['isPodcastEpisode'] == true) {
+      final podcastId = song['podcastId']?.toString();
+      if (podcastId != null && podcastId.isNotEmpty) {
+        unawaited(
+          podcastManager.recordListenedTime(podcastId, listenedDuration, now),
+        );
+      }
     }
   }
 

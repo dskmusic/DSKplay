@@ -27,6 +27,7 @@ import 'package:go_router/go_router.dart';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/models/podcast_model.dart';
+import 'package:dskplay/screens/podcast_stats_page.dart';
 import 'package:dskplay/services/podcast_feed_service.dart';
 import 'package:dskplay/services/podcast_manager.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
@@ -186,6 +187,15 @@ class _PodcastsPageState extends State<PodcastsPage> {
                           : FluentIcons.arrow_sort_down_24_regular,
                     ),
                   ),
+                ),
+                IconButton(
+                  tooltip: 'Estadísticas',
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (context) => const PodcastStatsPage(),
+                    ),
+                  ),
+                  icon: const Icon(FluentIcons.data_bar_vertical_24_regular),
                 ),
                 IconButton(
                   tooltip: 'Añadir podcast por URL',

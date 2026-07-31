@@ -75,6 +75,62 @@ class PodcastManager {
         as bool,
   );
 
+  // Total seconds listened per podcast id, kept forever (unlike the
+  // wrapped/Time-Machine song stats, which trim old months down to their top
+  // songs) so the statistics screen's all-time subscription ranking stays
+  // accurate no matter how long ago an episode was played.
+  final ValueNotifier<Map<String, int>> listenedSecondsByPodcast =
+      ValueNotifier<Map<String, int>>(
+        (Hive.box('user').get('podcastListenedSecondsByPodcast', defaultValue: {})
+                as Map)
+            .map((key, value) => MapEntry(key as String, value as int)),
+      );
+
+  // Total seconds listened per calendar month (key 'yyyy-MM'), across every
+  // podcast - drives the statistics screen's "Años" bar chart.
+  final ValueNotifier<Map<String, int>> listenedSecondsByMonth =
+      ValueNotifier<Map<String, int>>(
+        (Hive.box('user').get('podcastListenedSecondsByMonth', defaultValue: {})
+                as Map)
+            .map((key, value) => MapEntry(key as String, value as int)),
+      );
+
+  /// Called from [ListeningStatsService.recordListening] whenever a podcast
+  /// episode accrues listened time, so podcast statistics stay in sync with
+  /// the same tick/session accounting used for song stats, without inheriting
+  /// its per-month song trimming.
+  Future<void> recordListenedTime(
+    String podcastId,
+    Duration listenedDuration,
+    DateTime at,
+  ) async {
+    final seconds = listenedDuration.inSeconds;
+    if (seconds <= 0) return;
+
+    listenedSecondsByPodcast.value = {
+      ...listenedSecondsByPodcast.value,
+      podcastId: (listenedSecondsByPodcast.value[podcastId] ?? 0) + seconds,
+    };
+    await addOrUpdateData<Map>(
+      'user',
+      'podcastListenedSecondsByPodcast',
+      listenedSecondsByPodcast.value,
+    );
+
+    final monthKey =
+        '${at.year.toString().padLeft(4, '0')}-'
+        '${at.month.toString().padLeft(2, '0')}';
+    listenedSecondsByMonth.value = {
+      ...listenedSecondsByMonth.value,
+      monthKey: (listenedSecondsByMonth.value[monthKey] ?? 0) + seconds,
+    };
+    await addOrUpdateData<Map>(
+      'user',
+      'podcastListenedSecondsByMonth',
+      listenedSecondsByMonth.value,
+    );
+  }
+
   // Ordered by the sequence they were pinned in (not alphabetical/date) - the
   // subscriptions list always shows these first, in this exact order, ahead
   // of whatever ascending/descending sort the user has picked.
@@ -388,6 +444,18 @@ class PodcastManager {
     pinnedPodcastIds.value = List<String>.from(
       Hive.box('user').get('pinnedPodcastIds', defaultValue: []),
     );
+    listenedSecondsByPodcast.value =
+        (Hive.box(
+                  'user',
+                ).get('podcastListenedSecondsByPodcast', defaultValue: {})
+                as Map)
+            .map((key, value) => MapEntry(key as String, value as int));
+    listenedSecondsByMonth.value =
+        (Hive.box(
+                  'user',
+                ).get('podcastListenedSecondsByMonth', defaultValue: {})
+                as Map)
+            .map((key, value) => MapEntry(key as String, value as int));
   }
 
   /// Watches playback progress and auto-marks the currently playing episode
