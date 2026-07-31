@@ -2851,6 +2851,16 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       final mediaItem = mapToMediaItem(episodeSong);
       this.mediaItem.add(mediaItem);
       queue.add([mediaItem]);
+      // Set as soon as the episode's mediaItem is shown, not after playback
+      // actually starts: buildAudioSource/setAudioSource below can await on
+      // network I/O, and until they resolve this was left null even though
+      // the episode was already visibly "current" - e.g. the full player's
+      // "View podcast" button would find nothing during that window.
+      _currentPlayingPodcast = (
+        episode: episode,
+        podcastTitle: podcastTitle,
+        localPath: localPath,
+      );
 
       final audioSource = await buildAudioSource(
         episodeSong,
@@ -2863,6 +2873,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
           'Failed to build audio source for podcast episode: ${episode.key}',
         );
         _lastError = 'Failed to load podcast episode';
+        _currentPlayingPodcast = null;
         return false;
       }
 
@@ -2898,11 +2909,6 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       });
 
       _updatePlaybackState();
-      _currentPlayingPodcast = (
-        episode: episode,
-        podcastTitle: podcastTitle,
-        localPath: localPath,
-      );
       _persistPodcastState(
         episode,
         podcastTitle,

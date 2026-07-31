@@ -332,9 +332,14 @@ class _ViewPodcastButton extends StatelessWidget {
   }
 
   void _openPodcast(BuildContext context) {
-    final current = audioHandler.currentPlayingPodcast;
-    if (current == null) return;
-    final podcast = _findSubscribedPodcast(current.episode.podcastId);
+    // On a cold start the resumed episode is shown before playback actually
+    // starts, so currentPlayingPodcast is still null - fall back to the
+    // pending resume data (see _restoreLastPlayedForDisplay).
+    final episode =
+        audioHandler.currentPlayingPodcast?.episode ??
+        audioHandler.pendingPodcastResume?.episode;
+    if (episode == null) return;
+    final podcast = _findSubscribedPodcast(episode.podcastId);
     if (podcast == null) {
       showToast(context, context.l10n!.podcastNotSubscribed);
       return;
