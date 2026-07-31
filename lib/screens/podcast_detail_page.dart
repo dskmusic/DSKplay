@@ -25,6 +25,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
@@ -233,18 +234,25 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
     await Clipboard.setData(
       ClipboardData(text: podcastEpisodeCopyText(_podcast.title, episode)),
     );
-    if (mounted) showToast(context, context.l10n!.episodeInfoCopied);
+    if (mounted) {
+      showToast(context, context.l10n!.episodeInfoCopied, aboveDialogs: true);
+    }
+  }
+
+  Future<void> _shareEpisodeInfo(PodcastEpisode episode) async {
+    await SharePlus.instance.share(
+      ShareParams(
+        text: podcastEpisodeCopyText(_podcast.title, episode),
+        subject: episode.title,
+      ),
+    );
   }
 
   Future<void> _showEpisodeOptions(PodcastEpisode episode) async {
     final action = await showDialog<_EpisodeAction>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(
-          episode.title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
+        title: Text(episode.title),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -270,10 +278,20 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
         ),
         actionsAlignment: MainAxisAlignment.spaceBetween,
         actions: [
-          IconButton(
-            tooltip: context.l10n!.copyEpisodeInfo,
-            onPressed: () => _copyEpisodeInfo(episode),
-            icon: const Icon(FluentIcons.copy_24_regular),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                tooltip: context.l10n!.copyEpisodeInfo,
+                onPressed: () => _copyEpisodeInfo(episode),
+                icon: const Icon(FluentIcons.copy_24_regular),
+              ),
+              IconButton(
+                tooltip: context.l10n!.share,
+                onPressed: () => _shareEpisodeInfo(episode),
+                icon: const Icon(FluentIcons.share_24_regular),
+              ),
+            ],
           ),
           Row(
             mainAxisSize: MainAxisSize.min,

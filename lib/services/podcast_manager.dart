@@ -70,6 +70,21 @@ class PodcastManager {
         as bool,
   );
 
+  final ValueNotifier<bool> subscriptionsGridView = ValueNotifier<bool>(
+    Hive.box('user').get('podcastSubscriptionsGridView', defaultValue: false)
+        as bool,
+  );
+
+  // Ordered by the sequence they were pinned in (not alphabetical/date) - the
+  // subscriptions list always shows these first, in this exact order, ahead
+  // of whatever ascending/descending sort the user has picked.
+  final ValueNotifier<List<String>> pinnedPodcastIds =
+      ValueNotifier<List<String>>(
+        List<String>.from(
+          Hive.box('user').get('pinnedPodcastIds', defaultValue: []),
+        ),
+      );
+
   // Podcasts don't carry their own "latest episode" date - it only becomes
   // known once its feed has been fetched (subscribing or opening its detail
   // page). Recorded progressively so the subscriptions list can sort by it
@@ -121,6 +136,7 @@ class PodcastManager {
         .where((p) => p.id != podcastId)
         .toList();
     await _persistSubscriptions();
+    await _unpin(podcastId);
   }
 
   Future<void> _persistSubscriptions() => addOrUpdateData<List>(
@@ -128,6 +144,31 @@ class PodcastManager {
     'podcastSubscriptions',
     subscriptions.value.map((p) => p.toMap()).toList(),
   );
+
+  bool isPinned(String podcastId) =>
+      pinnedPodcastIds.value.contains(podcastId);
+
+  /// Pins are appended to the end of the list, so the pinned section of the
+  /// subscriptions list reflects the order podcasts were pinned in.
+  Future<void> togglePinned(String podcastId) async {
+    if (isPinned(podcastId)) {
+      await _unpin(podcastId);
+    } else {
+      pinnedPodcastIds.value = [...pinnedPodcastIds.value, podcastId];
+      await _persistPinned();
+    }
+  }
+
+  Future<void> _unpin(String podcastId) async {
+    if (!isPinned(podcastId)) return;
+    pinnedPodcastIds.value = pinnedPodcastIds.value
+        .where((id) => id != podcastId)
+        .toList();
+    await _persistPinned();
+  }
+
+  Future<void> _persistPinned() =>
+      addOrUpdateData<List>('user', 'pinnedPodcastIds', pinnedPodcastIds.value);
 
   bool isListened(String episodeKey) =>
       listenedEpisodeKeys.value.contains(episodeKey);
@@ -305,6 +346,15 @@ class PodcastManager {
     );
   }
 
+  Future<void> setSubscriptionsGridView(bool gridView) async {
+    subscriptionsGridView.value = gridView;
+    await addOrUpdateData<bool>(
+      'user',
+      'podcastSubscriptionsGridView',
+      gridView,
+    );
+  }
+
   // Backup/restore swaps the 'user'/'userNoBackup' Hive box files on disk,
   // but these ValueNotifiers were only seeded once at app start - refresh
   // them manually afterwards, same as reloadRadioStationsStateFromStorage.
@@ -321,6 +371,11 @@ class PodcastManager {
     episodeSortAscending.value =
         Hive.box('user').get('podcastEpisodeSortAscending', defaultValue: false)
             as bool;
+    subscriptionsGridView.value =
+        Hive.box(
+              'user',
+            ).get('podcastSubscriptionsGridView', defaultValue: false)
+            as bool;
     latestEpisodeDates.value = Map<String, String>.from(
       Hive.box('user').get('podcastLatestEpisodeDates', defaultValue: {}),
     );
@@ -330,6 +385,9 @@ class PodcastManager {
               (key, value) =>
                   MapEntry(key as String, List<String>.from(value as List)),
             );
+    pinnedPodcastIds.value = List<String>.from(
+      Hive.box('user').get('pinnedPodcastIds', defaultValue: []),
+    );
   }
 
   /// Watches playback progress and auto-marks the currently playing episode

@@ -31,6 +31,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_flip_card/flutter_flip_card.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import 'package:share_plus/share_plus.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart' show audioHandler, logger;
 import 'package:dskplay/models/podcast_model.dart';
@@ -159,8 +160,23 @@ class _PodcastDescriptionBackContent extends StatelessWidget {
   const _PodcastDescriptionBackContent({required this.metadata});
   final MediaItem metadata;
 
-  Future<void> _copyEpisodeInfo(BuildContext context) async {
+  // On a cold start the resumed episode is shown before playback actually
+  // starts, so currentPlayingPodcast is still null - fall back to the
+  // pending resume data, same as openCurrentPodcastEpisodeList.
+  ({PodcastEpisode episode, String podcastTitle})? _currentEpisodeInfo() {
     final current = audioHandler.currentPlayingPodcast;
+    if (current != null) {
+      return (episode: current.episode, podcastTitle: current.podcastTitle);
+    }
+    final pending = audioHandler.pendingPodcastResume;
+    if (pending != null) {
+      return (episode: pending.episode, podcastTitle: pending.podcastTitle);
+    }
+    return null;
+  }
+
+  Future<void> _copyEpisodeInfo(BuildContext context) async {
+    final current = _currentEpisodeInfo();
     if (current == null) return;
     await Clipboard.setData(
       ClipboardData(
@@ -170,6 +186,17 @@ class _PodcastDescriptionBackContent extends StatelessWidget {
     if (context.mounted) {
       showToast(context, context.l10n!.episodeInfoCopied);
     }
+  }
+
+  Future<void> _shareEpisodeInfo(BuildContext context) async {
+    final current = _currentEpisodeInfo();
+    if (current == null) return;
+    await SharePlus.instance.share(
+      ShareParams(
+        text: podcastEpisodeCopyText(current.podcastTitle, current.episode),
+        subject: current.episode.title,
+      ),
+    );
   }
 
   @override
@@ -208,21 +235,43 @@ class _PodcastDescriptionBackContent extends StatelessWidget {
         Positioned(
           left: 8,
           bottom: 8,
-          child: Material(
-            color: Colors.black.withValues(alpha: 0.35),
-            borderRadius: BorderRadius.circular(8),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: () => _copyEpisodeInfo(context),
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: Icon(
-                  FluentIcons.copy_24_regular,
-                  color: Colors.white,
-                  size: 18,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Material(
+                color: Colors.black.withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(8),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => _copyEpisodeInfo(context),
+                  child: const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Icon(
+                      FluentIcons.copy_24_regular,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                  ),
                 ),
               ),
-            ),
+              const SizedBox(width: 8),
+              Material(
+                color: Colors.black.withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(8),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => _shareEpisodeInfo(context),
+                  child: const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Icon(
+                      FluentIcons.share_24_regular,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ],

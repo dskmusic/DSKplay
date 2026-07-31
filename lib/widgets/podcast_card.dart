@@ -49,6 +49,9 @@ class PodcastCard extends StatelessWidget {
       margin: EdgeInsets.zero,
       child: GestureDetector(
         onTap: onTap,
+        onLongPress: podcastManager.isSubscribed(podcast.id)
+            ? () => podcastManager.togglePinned(podcast.id)
+            : null,
         child: Padding(
           padding: const EdgeInsets.all(10),
           child: Row(
@@ -78,8 +81,8 @@ class PodcastCard extends StatelessWidget {
                   // New-episode dot: reacts to both notifiers since
                   // hasNewEpisode() compares across them.
                   Positioned(
-                    top: -2,
-                    right: -2,
+                    top: -5,
+                    right: -5,
                     child: ValueListenableBuilder<Map<String, List<String>>>(
                       valueListenable: podcastManager.episodeKeysByPodcast,
                       builder: (context, _, _) =>
@@ -92,14 +95,14 @@ class PodcastCard extends StatelessWidget {
                                 return const SizedBox.shrink();
                               }
                               return Container(
-                                width: 12,
-                                height: 12,
+                                width: 18,
+                                height: 18,
                                 decoration: BoxDecoration(
                                   color: colorScheme.error,
                                   shape: BoxShape.circle,
                                   border: Border.all(
                                     color: colorScheme.surfaceContainer,
-                                    width: 2,
+                                    width: 2.5,
                                   ),
                                 ),
                               );
@@ -115,14 +118,36 @@ class PodcastCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      podcast.title,
-                      style: textTheme.titleSmall?.copyWith(
-                        color: colorScheme.onSurface,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: [
+                        ValueListenableBuilder<List<String>>(
+                          valueListenable: podcastManager.pinnedPodcastIds,
+                          builder: (_, pinnedIds, __) {
+                            if (!pinnedIds.contains(podcast.id)) {
+                              return const SizedBox.shrink();
+                            }
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 4),
+                              child: Icon(
+                                FluentIcons.pin_24_filled,
+                                size: 13,
+                                color: colorScheme.primary,
+                              ),
+                            );
+                          },
+                        ),
+                        Expanded(
+                          child: Text(
+                            podcast.title,
+                            style: textTheme.titleSmall?.copyWith(
+                              color: colorScheme.onSurface,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -197,5 +222,121 @@ class PodcastCard extends StatelessWidget {
     } else {
       await podcastManager.subscribe(podcast);
     }
+  }
+}
+
+/// Compact tile for the subscriptions grid view: just the artwork and a
+/// trimmed title below it, with the same new-episode and pinned badges as
+/// [PodcastCard].
+class PodcastGridTile extends StatelessWidget {
+  const PodcastGridTile({super.key, required this.podcast, required this.onTap});
+
+  final Podcast podcast;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return GestureDetector(
+      onTap: onTap,
+      onLongPress: podcastManager.isSubscribed(podcast.id)
+          ? () => podcastManager.togglePinned(podcast.id)
+          : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AspectRatio(
+            aspectRatio: 1,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image(
+                    image: ArtworkProvider.get(podcast.image),
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      color: colorScheme.primaryContainer,
+                      child: Icon(
+                        FluentIcons.mic_24_regular,
+                        color: colorScheme.onPrimaryContainer,
+                        size: 26,
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: -5,
+                  right: -5,
+                  child: ValueListenableBuilder<Map<String, List<String>>>(
+                    valueListenable: podcastManager.episodeKeysByPodcast,
+                    builder: (context, _, _) =>
+                        ValueListenableBuilder<List<String>>(
+                          valueListenable: podcastManager.listenedEpisodeKeys,
+                          builder: (context, _, _) {
+                            if (!podcastManager.isSubscribed(podcast.id) ||
+                                !podcastManager.hasNewEpisode(podcast.id)) {
+                              return const SizedBox.shrink();
+                            }
+                            return Container(
+                              width: 18,
+                              height: 18,
+                              decoration: BoxDecoration(
+                                color: colorScheme.error,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: colorScheme.surface,
+                                  width: 2.5,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                  ),
+                ),
+                Positioned(
+                  top: -5,
+                  left: -5,
+                  child: ValueListenableBuilder<List<String>>(
+                    valueListenable: podcastManager.pinnedPodcastIds,
+                    builder: (_, pinnedIds, __) {
+                      if (!pinnedIds.contains(podcast.id)) {
+                        return const SizedBox.shrink();
+                      }
+                      return Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: colorScheme.surface,
+                            width: 2,
+                          ),
+                        ),
+                        child: Icon(
+                          FluentIcons.pin_24_filled,
+                          size: 10,
+                          color: colorScheme.onPrimary,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            podcast.title,
+            style: textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
   }
 }

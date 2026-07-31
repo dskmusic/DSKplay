@@ -29,8 +29,57 @@ void showToast(
   String text, {
   Duration duration = const Duration(seconds: 3),
   IconData? icon,
+  // A SnackBar is painted inside the Scaffold's own layout, so it always
+  // renders behind a dialog route's OverlayEntry - set this when calling
+  // from within an open dialog (e.g. AlertDialog) to float above it instead.
+  bool aboveDialogs = false,
 }) {
   final colorScheme = Theme.of(context).colorScheme;
+
+  final content = Row(
+    children: [
+      Icon(
+        icon ?? FluentIcons.checkmark_circle_20_regular,
+        color: colorScheme.onSecondaryContainer,
+        size: 20,
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Text(
+          text,
+          style: TextStyle(
+            color: colorScheme.onSecondaryContainer,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    ],
+  );
+
+  if (aboveDialogs) {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    late final OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (context) => Positioned(
+        left: 16,
+        right: 16,
+        bottom: 24,
+        child: Material(
+          color: colorScheme.secondaryContainer,
+          elevation: 6,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: content,
+          ),
+        ),
+      ),
+    );
+    overlay.insert(entry);
+    Future.delayed(duration, entry.remove);
+    return;
+  }
+
   final isMiniPlayerVisible = audioHandler.mediaItem.value != null;
   final bottomMargin =
       12.0 + (isMiniPlayerVisible ? MiniPlayer.playerHeight : 0.0);
@@ -39,17 +88,7 @@ void showToast(
     SnackBar(
       margin: EdgeInsets.fromLTRB(16, 12, 16, bottomMargin),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      content: Row(
-        children: [
-          Icon(
-            icon ?? FluentIcons.checkmark_circle_20_regular,
-            color: colorScheme.onSecondaryContainer,
-            size: 20,
-          ),
-          const SizedBox(width: 12),
-          Expanded(child: Text(text)),
-        ],
-      ),
+      content: content,
       duration: duration,
     ),
   );

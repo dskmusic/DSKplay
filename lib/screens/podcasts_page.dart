@@ -32,6 +32,8 @@ import 'package:dskplay/services/podcast_manager.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:dskplay/widgets/podcast_card.dart';
 
+const _addPodcastUrlHint = 'https://ejemplo.com/feed.rss';
+
 class PodcastsPage extends StatefulWidget {
   const PodcastsPage({super.key});
 
@@ -46,6 +48,72 @@ class _PodcastsPageState extends State<PodcastsPage> {
     setState(() => _refreshing = true);
     await podcastManager.refreshAllSubscriptions();
     if (mounted) setState(() => _refreshing = false);
+  }
+
+  Future<void> _addPodcastByUrl() async {
+    final controller = TextEditingController();
+    final feedUrl = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Añadir podcast por URL'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.url,
+          decoration: const InputDecoration(
+            hintText: _addPodcastUrlHint,
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(context.l10n!.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+            child: Text(context.l10n!.add),
+          ),
+        ],
+      ),
+    );
+
+    final trimmedUrl = feedUrl?.trim() ?? '';
+    if (trimmedUrl.isEmpty || !mounted) return;
+
+    final uri = Uri.tryParse(trimmedUrl);
+    if (uri == null ||
+        !uri.isAbsolute ||
+        (uri.scheme != 'http' && uri.scheme != 'https')) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('URL no válida')));
+      return;
+    }
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    final result = await fetchPodcastFeed(trimmedUrl);
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).pop();
+
+    if (result == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.l10n!.podcastLoadFailed)));
+      return;
+    }
+
+    await podcastManager.subscribe(result.podcast);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Suscrito a "${result.podcast.title}"')),
+    );
   }
 
   void _openPodcast(Podcast podcast) {
@@ -74,59 +142,99 @@ class _PodcastsPageState extends State<PodcastsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(context.l10n!.podcasts),
-        actions: [
-          IconButton(
-            tooltip: context.l10n!.refresh,
-            onPressed: _refreshing ? null : _refresh,
-            icon: _refreshing
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2.5),
-                  )
-                : const Icon(FluentIcons.arrow_sync_24_regular),
+      appBar: AppBar(title: Text(context.l10n!.podcasts)),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ValueListenableBuilder<bool>(
+                  valueListenable: podcastManager.subscriptionsGridView,
+                  builder: (context, gridView, _) => IconButton(
+                    tooltip: gridView ? 'Ver en lista' : 'Ver en cuadrícula',
+                    onPressed: () =>
+                        podcastManager.setSubscriptionsGridView(!gridView),
+                    icon: Icon(
+                      gridView
+                          ? FluentIcons.list_24_regular
+                          : FluentIcons.grid_24_regular,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: context.l10n!.refresh,
+                  onPressed: _refreshing ? null : _refresh,
+                  icon: _refreshing
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2.5),
+                        )
+                      : const Icon(FluentIcons.arrow_sync_24_regular),
+                ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: podcastManager.episodeSortAscending,
+                  builder: (context, ascending, _) => IconButton(
+                    tooltip: context.l10n!.sortByDate,
+                    onPressed: () =>
+                        podcastManager.setEpisodeSortAscending(!ascending),
+                    icon: Icon(
+                      ascending
+                          ? FluentIcons.arrow_sort_up_24_regular
+                          : FluentIcons.arrow_sort_down_24_regular,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Añadir podcast por URL',
+                  onPressed: _addPodcastByUrl,
+                  icon: const Icon(FluentIcons.add_24_regular),
+                ),
+                IconButton(
+                  tooltip: context.l10n!.search,
+                  onPressed: () => _openDiscover(autoFocusSearch: true),
+                  icon: const Icon(FluentIcons.search_24_regular),
+                ),
+              ],
+            ),
           ),
-          ValueListenableBuilder<bool>(
-            valueListenable: podcastManager.episodeSortAscending,
-            builder: (context, ascending, _) => IconButton(
-              tooltip: context.l10n!.sortByDate,
-              onPressed: () =>
-                  podcastManager.setEpisodeSortAscending(!ascending),
-              icon: Icon(
-                ascending
-                    ? FluentIcons.arrow_sort_up_24_regular
-                    : FluentIcons.arrow_sort_down_24_regular,
+          Expanded(
+            child: ValueListenableBuilder<bool>(
+              valueListenable: podcastManager.subscriptionsGridView,
+              builder: (context, gridView, _) => _SubscriptionsTab(
+                onOpenPodcast: _openPodcast,
+                gridView: gridView,
               ),
             ),
           ),
-          IconButton(
-            tooltip: context.l10n!.search,
-            onPressed: () => _openDiscover(autoFocusSearch: true),
-            icon: const Icon(FluentIcons.search_24_regular),
-          ),
         ],
       ),
-      body: _SubscriptionsTab(onOpenPodcast: _openPodcast),
       bottomNavigationBar: const MiniPlayerBottomSpace(),
     );
   }
 }
 
 class _SubscriptionsTab extends StatelessWidget {
-  const _SubscriptionsTab({required this.onOpenPodcast});
+  const _SubscriptionsTab({
+    required this.onOpenPodcast,
+    required this.gridView,
+  });
 
   final void Function(Podcast podcast) onOpenPodcast;
+  final bool gridView;
 
   List<Podcast> _sorted(
     List<Podcast> podcasts,
     Map<String, String> latestDates,
     bool ascending,
+    List<String> pinnedIds,
   ) {
     final withDate = <Podcast>[];
     final withoutDate = <Podcast>[];
     for (final podcast in podcasts) {
+      if (pinnedIds.contains(podcast.id)) continue;
       (latestDates.containsKey(podcast.id) ? withDate : withoutDate).add(
         podcast,
       );
@@ -136,7 +244,14 @@ class _SubscriptionsTab extends StatelessWidget {
       final dateB = DateTime.parse(latestDates[b.id]!);
       return ascending ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
     });
-    return [...withDate, ...withoutDate];
+
+    // Pinned podcasts always come first, in the order they were pinned -
+    // isolated from the date-based sort above entirely.
+    final pinned = [
+      for (final id in pinnedIds)
+        ...podcasts.where((p) => p.id == id),
+    ];
+    return [...pinned, ...withDate, ...withoutDate];
   }
 
   @override
@@ -154,25 +269,60 @@ class _SubscriptionsTab extends StatelessWidget {
             return ValueListenableBuilder<bool>(
               valueListenable: podcastManager.episodeSortAscending,
               builder: (context, ascending, _) {
-                final sorted = _sorted(subscriptions, latestDates, ascending);
-                return ListView.builder(
-                  padding: commonSingleChildScrollViewPadding,
-                  itemCount: sorted.length,
-                  itemBuilder: (context, index) {
-                    final podcast = sorted[index];
-                    return Padding(
-                      key: ValueKey(podcast.id),
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: PodcastCard(
-                        podcast: podcast,
-                        onTap: () => onOpenPodcast(podcast),
-                      ),
+                return ValueListenableBuilder<List<String>>(
+                  valueListenable: podcastManager.pinnedPodcastIds,
+                  builder: (context, pinnedIds, _) {
+                    final sorted = _sorted(
+                      subscriptions,
+                      latestDates,
+                      ascending,
+                      pinnedIds,
                     );
+                    return gridView ? _buildGrid(sorted) : _buildList(sorted);
                   },
                 );
               },
             );
           },
+        );
+      },
+    );
+  }
+
+  Widget _buildList(List<Podcast> sorted) {
+    return ListView.builder(
+      padding: commonSingleChildScrollViewPadding,
+      itemCount: sorted.length,
+      itemBuilder: (context, index) {
+        final podcast = sorted[index];
+        return Padding(
+          key: ValueKey(podcast.id),
+          padding: const EdgeInsets.only(bottom: 8),
+          child: PodcastCard(
+            podcast: podcast,
+            onTap: () => onOpenPodcast(podcast),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildGrid(List<Podcast> sorted) {
+    return GridView.builder(
+      padding: commonSingleChildScrollViewPadding,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 18,
+        childAspectRatio: 0.8,
+      ),
+      itemCount: sorted.length,
+      itemBuilder: (context, index) {
+        final podcast = sorted[index];
+        return PodcastGridTile(
+          key: ValueKey(podcast.id),
+          podcast: podcast,
+          onTap: () => onOpenPodcast(podcast),
         );
       },
     );
