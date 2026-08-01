@@ -50,7 +50,7 @@ dependencies:
     path: ./packages/youtube_explode_dart
   youtube_music_explode_dart:
     path: ./packages/youtube_music_explode_dart
-
+  sqlite3: ^3.5.0
 dev_dependencies:
   flutter_launcher_icons: ^0.14.4
   flutter_test:

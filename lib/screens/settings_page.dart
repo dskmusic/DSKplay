@@ -19,6 +19,7 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
+import 'package:file_picker/file_picker.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -29,6 +30,7 @@ import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/screens/bottom_navigation_page.dart';
 import 'package:dskplay/screens/search_page.dart';
+import 'package:dskplay/services/antennapod_import_service.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/data_manager.dart';
 import 'package:dskplay/services/listening_stats_service.dart';
@@ -360,11 +362,11 @@ class SettingsPage extends StatelessWidget {
         ),
         const BackupSection(),
         CustomBar(
-          context.l10n!.exportPlaylists,
+          'Exportar datos (listas, podcasts, etc.)',
           FluentIcons.arrow_export_24_regular,
           onTap: () async {
             try {
-              final result = await exportPlaylistsToFile(context);
+              final result = await exportUserDataToFile(context);
               if (context.mounted) {
                 showToast(
                   context,
@@ -375,7 +377,7 @@ class SettingsPage extends StatelessWidget {
                 );
               }
             } catch (e, str) {
-              logger.log('Error exporting playlists', error: e, stackTrace: str);
+              logger.log('Error exporting user data', error: e, stackTrace: str);
               if (context.mounted) {
                 showToast(
                   context,
@@ -387,11 +389,19 @@ class SettingsPage extends StatelessWidget {
           },
         ),
         CustomBar(
-          context.l10n!.importPlaylists,
+          'Importar datos (listas, podcasts, etc.)',
           FluentIcons.arrow_import_24_regular,
           onTap: () async {
+            final confirmed = await _showImportConfirmation(
+              context,
+              'Esto añadirá las listas y los datos de podcast del archivo '
+              'seleccionado a los que ya tienes. No se sobrescribirá ni se '
+              'borrará nada existente.',
+            );
+            if (confirmed != true || !context.mounted) return;
+
             try {
-              final result = await importPlaylistsFromFile(context);
+              final result = await importUserDataFromFile(context);
               if (context.mounted) {
                 showToast(
                   context,
@@ -402,7 +412,7 @@ class SettingsPage extends StatelessWidget {
                 );
               }
             } catch (e, str) {
-              logger.log('Error importing playlists', error: e, stackTrace: str);
+              logger.log('Error importing user data', error: e, stackTrace: str);
               if (context.mounted) {
                 showToast(
                   context,
@@ -413,8 +423,91 @@ class SettingsPage extends StatelessWidget {
             }
           },
         ),
+        CustomBar(
+          'Importar desde otra app',
+          FluentIcons.arrow_import_24_regular,
+          description: 'Migra suscripciones y estadísticas desde un backup'
+              ' (.db) de AntennaPod',
+          borderRadius: commonCustomBarRadiusLast,
+          onTap: () => _importFromOtherApp(context),
+        ),
       ],
     );
+  }
+
+  Future<bool?> _showImportConfirmation(
+    BuildContext context,
+    String message,
+  ) {
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => ConfirmationDialog(
+        confirmationMessage: message,
+        submitMessage: context.l10n!.confirm,
+        onCancel: () => Navigator.of(dialogContext).pop(false),
+        onSubmit: () => Navigator.of(dialogContext).pop(true),
+      ),
+    );
+  }
+
+  Future<void> _importFromOtherApp(BuildContext context) async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['db'],
+    );
+    final path = result?.files.firstOrNull?.path;
+    if (path == null) return;
+
+    late final AntennaPodImportPreview preview;
+    try {
+      preview = analyzeAntennaPodBackup(path);
+    } catch (e, str) {
+      logger.log('Error analyzing AntennaPod backup', error: e, stackTrace: str);
+      if (context.mounted) {
+        showToast(
+          context,
+          'No se ha podido leer el archivo seleccionado',
+          icon: FluentIcons.error_circle_24_regular,
+        );
+      }
+      return;
+    }
+
+    if (!context.mounted) return;
+    if (preview.podcastCount == 0) {
+      showToast(
+        context,
+        'No se han encontrado podcasts en el archivo seleccionado',
+        icon: FluentIcons.error_circle_24_regular,
+      );
+      return;
+    }
+
+    final confirmed = await _showImportConfirmation(
+      context,
+      'Se encontraron ${preview.podcastCount} podcasts, '
+      '${preview.listenedEpisodeCount} episodios escuchados y '
+      '${preview.totalListenedHours.toStringAsFixed(1)} horas de '
+      'reproducción. Esto se añadirá a tus datos actuales sin '
+      'sobrescribir ni borrar nada existente.',
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      await applyAntennaPodImport(preview);
+      if (context.mounted) {
+        showToast(context, '${context.l10n!.restoredSuccess}!');
+      }
+    } catch (e, str) {
+      logger.log('Error importing AntennaPod backup', error: e, stackTrace: str);
+      if (context.mounted) {
+        showToast(
+          context,
+          context.l10n!.error,
+          icon: FluentIcons.error_circle_24_regular,
+        );
+      }
+    }
   }
 
   Widget _buildSponsorSection(BuildContext context) {

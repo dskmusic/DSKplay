@@ -466,6 +466,80 @@ class PodcastManager {
     );
   }
 
+  /// Merges externally-imported podcast data (subscriptions, listened
+  /// episodes, pinned podcasts and listening-time stats) into the current
+  /// state without ever discarding anything already present - shared by the
+  /// "import data"/"import from other app" settings features so imports are
+  /// always additive, never destructive.
+  Future<int> mergeImportedPodcastData({
+    List<Podcast> subscriptions = const [],
+    List<String> listenedEpisodeKeys = const [],
+    List<String> pinnedPodcastIds = const [],
+    Map<String, int> listenedSecondsByPodcast = const {},
+    Map<String, int> listenedSecondsByMonth = const {},
+    Map<String, int> listenedSecondsByDay = const {},
+  }) async {
+    var addedCount = 0;
+
+    for (final podcast in subscriptions) {
+      if (!isSubscribed(podcast.id)) {
+        await subscribe(podcast);
+        addedCount++;
+      }
+    }
+
+    if (listenedEpisodeKeys.isNotEmpty) {
+      final before = this.listenedEpisodeKeys.value.length;
+      await setAllListened(listenedEpisodeKeys, listened: true);
+      addedCount += this.listenedEpisodeKeys.value.length - before;
+    }
+
+    for (final id in pinnedPodcastIds) {
+      if (!isPinned(id)) {
+        await togglePinned(id);
+        addedCount++;
+      }
+    }
+
+    await _mergeStatsMax(
+      'podcastListenedSecondsByPodcast',
+      this.listenedSecondsByPodcast,
+      listenedSecondsByPodcast,
+    );
+    await _mergeStatsMax(
+      'podcastListenedSecondsByMonth',
+      this.listenedSecondsByMonth,
+      listenedSecondsByMonth,
+    );
+    await _mergeStatsMax(
+      'podcastListenedSecondsByDay',
+      this.listenedSecondsByDay,
+      listenedSecondsByDay,
+    );
+
+    return addedCount;
+  }
+
+  // ponytail: merges by keeping the larger value per key instead of summing,
+  // so re-importing the same source file twice doesn't double-count listened
+  // time. Trade-off: if two sources both hold genuine, different time for the
+  // same key, only the larger one survives - acceptable for a manual, rare
+  // import compared to the risk of inflating stats on every re-import.
+  Future<void> _mergeStatsMax(
+    String hiveKey,
+    ValueNotifier<Map<String, int>> notifier,
+    Map<String, int> incoming,
+  ) async {
+    if (incoming.isEmpty) return;
+    final merged = Map<String, int>.from(notifier.value);
+    for (final entry in incoming.entries) {
+      final current = merged[entry.key] ?? 0;
+      if (entry.value > current) merged[entry.key] = entry.value;
+    }
+    notifier.value = merged;
+    await addOrUpdateData<Map>('user', hiveKey, merged);
+  }
+
   // Backup/restore swaps the 'user'/'userNoBackup' Hive box files on disk,
   // but these ValueNotifiers were only seeded once at app start - refresh
   // them manually afterwards, same as reloadRadioStationsStateFromStorage.

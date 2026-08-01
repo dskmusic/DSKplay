@@ -30,10 +30,12 @@ import 'package:dskplay/database/albums.db.dart';
 import 'package:dskplay/database/playlists.db.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart' show logger;
+import 'package:dskplay/models/podcast_model.dart';
 import 'package:dskplay/services/artist_service.dart';
 import 'package:dskplay/services/data_manager.dart';
 import 'package:dskplay/services/io_service.dart';
 import 'package:dskplay/services/playlist_download_service.dart';
+import 'package:dskplay/services/podcast_manager.dart';
 import 'package:dskplay/services/proxy_manager.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/utilities/app_utils.dart';
@@ -62,10 +64,37 @@ final pinnedPlaylistIds = ValueNotifier<List<String>>(
 );
 final onlinePlaylists = ValueNotifier<List<Map>>([]);
 
-Future<({String message, bool success})> exportPlaylistsToFile(
+/// Builds the full exportable data map: user-created playlists plus every
+/// piece of podcast state ([PodcastManager]'s subscriptions, listened
+/// episodes, pinned podcasts and listening-time stats). Kept as a plain
+/// `Map` (rather than a single `List` like the old playlists-only export)
+/// so [importUserDataFromFile] can tell the two file formats apart.
+Map<String, dynamic> _buildExportableUserData() {
+  return {
+    'customPlaylists': userCustomPlaylists.value,
+    'podcastSubscriptions': podcastManager.subscriptions.value
+        .map((p) => p.toMap())
+        .toList(),
+    'listenedPodcastEpisodes': podcastManager.listenedEpisodeKeys.value,
+    'pinnedPodcastIds': podcastManager.pinnedPodcastIds.value,
+    'podcastListenedSecondsByPodcast':
+        podcastManager.listenedSecondsByPodcast.value,
+    'podcastListenedSecondsByMonth':
+        podcastManager.listenedSecondsByMonth.value,
+    'podcastListenedSecondsByDay': podcastManager.listenedSecondsByDay.value,
+  };
+}
+
+/// Exports every user-created playlist and all podcast data (subscriptions,
+/// listened episodes, pinned podcasts, listening stats) to a single JSON
+/// file the user picks a folder for. Non-destructive on import: see
+/// [importUserDataFromFile].
+Future<({String message, bool success})> exportUserDataToFile(
   BuildContext context,
 ) async {
-  if (userCustomPlaylists.value.isEmpty) {
+  final hasPlaylists = userCustomPlaylists.value.isNotEmpty;
+  final hasPodcasts = podcastManager.subscriptions.value.isNotEmpty;
+  if (!hasPlaylists && !hasPodcasts) {
     return (message: context.l10n!.noCustomPlaylists, success: false);
   }
 
@@ -77,16 +106,96 @@ Future<({String message, bool success})> exportPlaylistsToFile(
 
   try {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final file = File('$dirPath/dskplay_playlists_$timestamp.json');
-    await file.writeAsString(json.encode(userCustomPlaylists.value));
+    final file = File('$dirPath/dskplay_data_$timestamp.json');
+    await file.writeAsString(json.encode(_buildExportableUserData()));
     return (message: '${context.l10n!.backedupSuccess}!', success: true);
   } catch (e, stackTrace) {
-    logger.log('Error exporting playlists', error: e, stackTrace: stackTrace);
+    logger.log('Error exporting user data', error: e, stackTrace: stackTrace);
     return (message: '${context.l10n!.backupError}: $e', success: false);
   }
 }
 
-Future<({String message, bool success})> importPlaylistsFromFile(
+/// Merges [incomingPlaylists] into [userCustomPlaylists], skipping any that
+/// already exist (same logic the old playlists-only import used). Returns
+/// how many were actually added.
+int _mergeIncomingPlaylists(List incomingPlaylistsRaw) {
+  final incomingPlaylists = incomingPlaylistsRaw
+      .whereType<Map>()
+      .map(Map<String, dynamic>.from)
+      .toList();
+  final updatedPlaylists = List<Map>.from(userCustomPlaylists.value);
+  var addedCount = 0;
+
+  for (final playlist in incomingPlaylists) {
+    final songs = playlist['list'] as List? ?? [];
+    final incomingYtids = songs
+        .map((s) => s is Map ? s['ytid']?.toString() : null)
+        .whereType<String>()
+        .toList();
+
+    if (PlaylistUtils.playlistExists(
+      playlist,
+      incomingYtids,
+      updatedPlaylists,
+    )) {
+      continue;
+    }
+
+    playlist['ytid'] ??= PlaylistUtils.generateCustomPlaylistId();
+    updatedPlaylists.add(playlist);
+    addedCount++;
+  }
+
+  if (addedCount > 0) {
+    userCustomPlaylists.value = updatedPlaylists;
+    unawaited(
+      addOrUpdateData<List>('user', 'customPlaylists', updatedPlaylists),
+    );
+  }
+  return addedCount;
+}
+
+Map<String, int> _intMapFrom(dynamic raw) {
+  return (raw as Map? ?? {}).map(
+    (key, value) => MapEntry(key.toString(), (value as num).toInt()),
+  );
+}
+
+/// Merges the podcast section of an imported data file (if present) via
+/// [PodcastManager.mergeImportedPodcastData]. Returns how many things were
+/// actually added.
+Future<int> _mergeIncomingPodcastData(Map decoded) async {
+  final podcasts = (decoded['podcastSubscriptions'] as List? ?? [])
+      .whereType<Map>()
+      .map((m) => Podcast.fromMap(Map<String, dynamic>.from(m)))
+      .toList();
+
+  return podcastManager.mergeImportedPodcastData(
+    subscriptions: podcasts,
+    listenedEpisodeKeys: List<String>.from(
+      decoded['listenedPodcastEpisodes'] as List? ?? [],
+    ),
+    pinnedPodcastIds: List<String>.from(
+      decoded['pinnedPodcastIds'] as List? ?? [],
+    ),
+    listenedSecondsByPodcast: _intMapFrom(
+      decoded['podcastListenedSecondsByPodcast'],
+    ),
+    listenedSecondsByMonth: _intMapFrom(
+      decoded['podcastListenedSecondsByMonth'],
+    ),
+    listenedSecondsByDay: _intMapFrom(decoded['podcastListenedSecondsByDay']),
+  );
+}
+
+/// Imports a file previously written by [exportUserDataToFile] and merges
+/// it into the current app data - never overwrites or removes anything
+/// already present, only adds what's missing (duplicate playlists are
+/// skipped, podcast subscriptions/listened episodes/pins are unioned, and
+/// listening-time stats keep the larger value per day/month/podcast). Also
+/// accepts the old playlists-only export format (a plain JSON list) for
+/// backwards compatibility.
+Future<({String message, bool success})> importUserDataFromFile(
   BuildContext context,
 ) async {
   final result = await FilePicker.pickFiles();
@@ -97,48 +206,27 @@ Future<({String message, bool success})> importPlaylistsFromFile(
 
   try {
     final decoded = json.decode(await File(pickedPath).readAsString());
-    if (decoded is! List) {
+    if (decoded is! List && decoded is! Map) {
       return (message: context.l10n!.restoreError, success: false);
     }
 
-    final incomingPlaylists = decoded
-        .whereType<Map>()
-        .map(Map<String, dynamic>.from)
-        .toList();
-    final updatedPlaylists = List<Map>.from(userCustomPlaylists.value);
-    var addedCount = 0;
+    final playlistsRaw = decoded is List
+        ? decoded
+        : (decoded as Map)['customPlaylists'] as List? ?? [];
+    final addedPlaylists = _mergeIncomingPlaylists(playlistsRaw);
 
-    for (final playlist in incomingPlaylists) {
-      final songs = playlist['list'] as List? ?? [];
-      final incomingYtids = songs
-          .map((s) => s is Map ? s['ytid']?.toString() : null)
-          .whereType<String>()
-          .toList();
-
-      if (PlaylistUtils.playlistExists(
-        playlist,
-        incomingYtids,
-        updatedPlaylists,
-      )) {
-        continue;
-      }
-
-      playlist['ytid'] ??= PlaylistUtils.generateCustomPlaylistId();
-      updatedPlaylists.add(playlist);
-      addedCount++;
-    }
-
-    userCustomPlaylists.value = updatedPlaylists;
-    await addOrUpdateData<List>('user', 'customPlaylists', updatedPlaylists);
+    final addedPodcastThings = decoded is Map
+        ? await _mergeIncomingPodcastData(decoded)
+        : 0;
 
     return (
-      message: addedCount > 0
+      message: (addedPlaylists > 0 || addedPodcastThings > 0)
           ? '${context.l10n!.restoredSuccess}!'
           : context.l10n!.playlistAlreadyExists,
       success: true,
     );
   } catch (e, stackTrace) {
-    logger.log('Error importing playlists', error: e, stackTrace: stackTrace);
+    logger.log('Error importing user data', error: e, stackTrace: stackTrace);
     return (message: '${context.l10n!.restoreError}: $e', success: false);
   }
 }
