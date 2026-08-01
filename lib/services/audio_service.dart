@@ -965,17 +965,34 @@ class DskPlayAudioHandler extends BaseAudioHandler {
 
   Future<void> _handleSongCompletion() async {
     try {
-      if (_currentPlayingPodcast != null) {
-        // Podcast episodes play outside _queueList, so there's never a
-        // "next" to advance to here - close the notification outright
-        // instead of just pausing, otherwise just_audio leaves `playing`
-        // true after it finishes on its own and the notification would
-        // keep showing a pause button forever.
-        await stop();
-        // Nothing left to play - kill the process outright (unless a
-        // download is in flight) instead of leaving it idling in the
-        // background, same as when the sleep timer expires.
-        _exitIfIdle();
+      final isPodcastEpisode =
+          _currentQueueIndex >= 0 &&
+          _currentQueueIndex < _queueList.length &&
+          _queueList[_currentQueueIndex]['isPodcastEpisode'] == true;
+
+      if (isPodcastEpisode) {
+        // Podcast episodes now live in the real _queueList too, so advance
+        // through it exactly like a song queue - but skip the
+        // autoplay/recommendation fallback _canRetryPlayback offers songs,
+        // since podcasts are never auto-added: "nothing left queued" always
+        // means stop here, regardless of playNextSongAutomatically.
+        if (repeatNotifier.value == AudioServiceRepeatMode.one) {
+          await playAgain();
+        } else if (hasNext ||
+            (repeatNotifier.value == AudioServiceRepeatMode.all &&
+                _queueList.isNotEmpty)) {
+          await skipToNext();
+        } else {
+          // Nothing left in the podcast queue - close the notification
+          // outright instead of just pausing, otherwise just_audio leaves
+          // `playing` true after it finishes on its own and the
+          // notification would keep showing a pause button forever.
+          await stop();
+          // Kill the process outright (unless a download is in flight)
+          // instead of leaving it idling in the background, same as when
+          // the sleep timer expires.
+          _exitIfIdle();
+        }
         return;
       }
 
@@ -3000,6 +3017,24 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     return addToQueue(_buildEpisodeSong(episode, podcastTitle, localPath));
   }
 
+  /// Appends several episodes, in order, to the end of whatever is currently
+  /// queued - the multi-selection equivalent of [addPodcastEpisodeToQueue].
+  Future<void> addPodcastEpisodesToQueue(
+    List<PodcastEpisode> episodes, {
+    required String podcastTitle,
+    Map<String, String>? localPathsByEpisodeKey,
+  }) async {
+    for (final episode in episodes) {
+      await addToQueue(
+        _buildEpisodeSong(
+          episode,
+          podcastTitle,
+          localPathsByEpisodeKey?[episode.key],
+        ),
+      );
+    }
+  }
+
   /// Builds the audio source for [episodeSong] and starts playback, updating
   /// [_currentPlayingPodcast] and the listening-stats session - shared by
   /// [playPodcastEpisode]/[playPodcastEpisodesQueue] (the first episode of a
@@ -3265,7 +3300,12 @@ class DskPlayAudioHandler extends BaseAudioHandler {
           song,
           duration: audioPlayer.duration,
         );
-        unawaited(updateRecentlyPlayed(song['ytid'], songFallback: song));
+        // Podcast episodes now reach repeat-one through this same method, but
+        // "recently played songs" is a music-only feature - don't pollute it
+        // with an episode id.
+        if (song['isPodcastEpisode'] != true) {
+          unawaited(updateRecentlyPlayed(song['ytid'], songFallback: song));
+        }
       }
     } catch (e, stackTrace) {
       logger.log('Error playing again', error: e, stackTrace: stackTrace);

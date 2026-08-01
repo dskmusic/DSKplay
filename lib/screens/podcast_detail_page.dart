@@ -396,6 +396,24 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
           episode.key: path,
     };
 
+    final somethingIsPlaying =
+        audioHandler.mediaItem.valueOrNull?.extras?['isPodcastEpisode'] ==
+            true &&
+        audioHandler.audioPlayer.playing;
+    if (somethingIsPlaying) {
+      final addToQueue = await _confirmAddToQueueOrPlayNow();
+      if (addToQueue == null || !mounted) return;
+      if (addToQueue) {
+        await audioHandler.addPodcastEpisodesToQueue(
+          episodes,
+          podcastTitle: _podcast.title,
+          localPathsByEpisodeKey: localPathsByEpisodeKey,
+        );
+        if (mounted) showToast(context, context.l10n!.addToQueue);
+        return;
+      }
+    }
+
     final success = await audioHandler.playPodcastEpisodesQueue(
       episodes,
       podcastTitle: _podcast.title,
