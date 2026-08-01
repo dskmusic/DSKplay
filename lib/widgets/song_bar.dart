@@ -26,6 +26,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
@@ -44,6 +45,7 @@ import 'package:dskplay/widgets/no_artwork_cube.dart';
 import 'package:dskplay/widgets/overflow_menu_button.dart';
 import 'package:dskplay/widgets/popup_menu_item.dart';
 import 'package:dskplay/widgets/rename_song_dialog.dart';
+import 'package:dskplay/widgets/swipe_action_pane.dart';
 import 'package:share_plus/share_plus.dart';
 
 List<PopupMenuEntry<String>> _buildSongMenuItems({
@@ -498,6 +500,7 @@ class SongBar extends StatefulWidget {
     this.onRemoveFromTimeMachine,
     this.borderRadius = BorderRadius.zero,
     this.isFromLikedSongs = false,
+    this.isFromOfflineSongsList = false,
     this.showQueueActions = true,
     this.showPlayTime = false,
     this.playlistId,
@@ -519,6 +522,10 @@ class SongBar extends StatefulWidget {
   final bool showPlayTime;
   final BorderRadius borderRadius;
   final bool isFromLikedSongs;
+  // Offline downloads tab: the swipe-left action just removes it from
+  // offline instead of also offering a separate "download to device" /
+  // "make offline" pair that would be redundant here.
+  final bool isFromOfflineSongsList;
   final bool showQueueActions;
   final String? playlistId;
   final VoidCallback? onRenamed;
@@ -612,7 +619,7 @@ class _SongBarState extends State<SongBar> {
                     0
         : null;
 
-    return Material(
+    final row = Material(
       color: widget.backgroundColor ?? colorScheme.surfaceContainerLow,
       borderRadius: widget.borderRadius,
       clipBehavior: Clip.antiAlias,
@@ -656,18 +663,7 @@ class _SongBarState extends State<SongBar> {
               ),
 
               OverflowMenuButton<String>(
-                onSelected: (value) => _handleSongMenuAction(
-                  context: context,
-                  value: value,
-                  song: widget.song,
-                  ytid: _ytid,
-                  songLikeStatus: _songLikeStatus,
-                  songOfflineStatus: _songOfflineStatus,
-                  onRemove: widget.onRemove,
-                  onDismissSuggestion: widget.onDismissSuggestion,
-                  onRename: () => _handleRenameSong(context),
-                  onRemoveFromTimeMachine: widget.onRemoveFromTimeMachine,
-                ),
+                onSelected: _runMenuAction,
                 itemBuilder: (context) => _buildMenuItems(context, colorScheme),
               ),
             ],
@@ -675,6 +671,162 @@ class _SongBarState extends State<SongBar> {
         ),
       ),
     );
+
+    return Slidable(
+      key: ValueKey(_ytid.isNotEmpty ? _ytid : identityHashCode(widget.song)),
+      startActionPane: buildSwipeActionPane(_buildStartActions(colorScheme)),
+      endActionPane: buildSwipeActionPane(_buildEndActions(colorScheme)),
+      child: row,
+    );
+  }
+
+  Future<void> _runMenuAction(String value) => _handleSongMenuAction(
+    context: context,
+    value: value,
+    song: widget.song,
+    ytid: _ytid,
+    songLikeStatus: _songLikeStatus,
+    songOfflineStatus: _songOfflineStatus,
+    onRemove: widget.onRemove,
+    onDismissSuggestion: widget.onDismissSuggestion,
+    onRename: () => _handleRenameSong(context),
+    onRemoveFromTimeMachine: widget.onRemoveFromTimeMachine,
+  );
+
+  List<SlidableAction> _buildStartActions(ColorScheme colorScheme) {
+    return [
+      if (widget.showQueueActions) ...[
+        SlidableAction(
+          onPressed: (_) => _runMenuAction('play_next'),
+          backgroundColor: colorScheme.primaryContainer,
+          foregroundColor: colorScheme.onPrimaryContainer,
+          icon: FluentIcons.receipt_play_24_regular,
+          label: 'Siguiente',
+        ),
+        SlidableAction(
+          onPressed: (_) => _runMenuAction('add_to_queue'),
+          backgroundColor: colorScheme.primaryContainer,
+          foregroundColor: colorScheme.onPrimaryContainer,
+          icon: FluentIcons.text_bullet_list_add_24_regular,
+          label: 'Cola',
+        ),
+      ],
+      if (!offlineMode.value)
+        SlidableAction(
+          onPressed: (_) => _runMenuAction('add_to_playlist'),
+          backgroundColor: colorScheme.primaryContainer,
+          foregroundColor: colorScheme.onPrimaryContainer,
+          icon: FluentIcons.album_add_24_regular,
+          label: 'Lista',
+        ),
+    ];
+  }
+
+  // Priority order mirrors the popup menu: whichever context-specific action
+  // applies (remove from playlist / recents / suggestions / time machine)
+  // takes the primary slot, then offline + share round it out for every
+  // context (search results, YT playlists & albums fall through to case 5).
+  // ponytail: reads _songOfflineStatus.value once per build, so the label
+  // only refreshes on the next rebuild (e.g. after tapping it), not live
+  // like the popup menu's ValueListenableBuilder. Upgrade if that's ever
+  // noticeable in practice.
+  Future<void> _confirmRemoveOffline() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => ConfirmationDialog(
+        confirmationMessage: '¿Eliminar esta canción de las descargas offline?',
+        submitMessage: 'Eliminar',
+        isDangerous: true,
+        onCancel: () => Navigator.of(dialogContext).pop(false),
+        onSubmit: () => Navigator.of(dialogContext).pop(true),
+      ),
+    );
+    if (confirmed == true) await _runMenuAction('offline');
+  }
+
+  List<SlidableAction> _buildEndActions(ColorScheme colorScheme) {
+    final l10n = context.l10n!;
+    if (widget.isFromOfflineSongsList) {
+      return [
+        SlidableAction(
+          onPressed: (_) => _confirmRemoveOffline(),
+          backgroundColor: colorScheme.errorContainer,
+          foregroundColor: colorScheme.onErrorContainer,
+          icon: FluentIcons.delete_24_regular,
+          label: 'Eliminar',
+        ),
+        SlidableAction(
+          onPressed: (_) => _runMenuAction('share'),
+          backgroundColor: colorScheme.secondaryContainer,
+          foregroundColor: colorScheme.onSecondaryContainer,
+          icon: FluentIcons.share_24_regular,
+          label: l10n.share,
+        ),
+      ];
+    }
+    final SlidableAction primary;
+    if (widget.onRemove != null) {
+      primary = SlidableAction(
+        onPressed: (_) => _runMenuAction('remove'),
+        backgroundColor: colorScheme.errorContainer,
+        foregroundColor: colorScheme.onErrorContainer,
+        icon: FluentIcons.delete_24_regular,
+        label: 'Eliminar',
+      );
+    } else if (widget.isRecentSong == true) {
+      primary = SlidableAction(
+        onPressed: (_) => _runMenuAction('remove_from_recents'),
+        backgroundColor: colorScheme.errorContainer,
+        foregroundColor: colorScheme.onErrorContainer,
+        icon: FluentIcons.delete_24_regular,
+        label: 'Eliminar',
+      );
+    } else if (widget.onDismissSuggestion != null) {
+      primary = SlidableAction(
+        onPressed: (_) => _runMenuAction('dismiss_suggestion'),
+        backgroundColor: colorScheme.errorContainer,
+        foregroundColor: colorScheme.onErrorContainer,
+        icon: FluentIcons.eye_off_24_regular,
+        label: 'Descartar',
+      );
+    } else if (widget.onRemoveFromTimeMachine != null) {
+      primary = SlidableAction(
+        onPressed: (_) => _runMenuAction('remove_from_time_machine'),
+        backgroundColor: colorScheme.errorContainer,
+        foregroundColor: colorScheme.onErrorContainer,
+        icon: FluentIcons.delete_24_regular,
+        label: 'Eliminar',
+      );
+    } else {
+      primary = SlidableAction(
+        onPressed: (_) => _runMenuAction('export_device'),
+        backgroundColor: colorScheme.secondaryContainer,
+        foregroundColor: colorScheme.onSecondaryContainer,
+        icon: FluentIcons.arrow_download_24_regular,
+        label: 'Descargar',
+      );
+    }
+
+    return [
+      primary,
+      if (!offlineMode.value || _songOfflineStatus.value)
+        SlidableAction(
+          onPressed: (_) => _runMenuAction('offline'),
+          backgroundColor: colorScheme.secondaryContainer,
+          foregroundColor: colorScheme.onSecondaryContainer,
+          icon: _songOfflineStatus.value
+              ? FluentIcons.cloud_dismiss_24_regular
+              : FluentIcons.cloud_arrow_down_24_regular,
+          label: 'Offline',
+        ),
+      SlidableAction(
+        onPressed: (_) => _runMenuAction('share'),
+        backgroundColor: colorScheme.secondaryContainer,
+        foregroundColor: colorScheme.onSecondaryContainer,
+        icon: FluentIcons.share_24_regular,
+        label: l10n.share,
+      ),
+    ];
   }
 
   void _handleSongTap() {

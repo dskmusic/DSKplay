@@ -24,6 +24,7 @@ import 'dart:io';
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/screens/bottom_navigation_page.dart';
@@ -37,6 +38,7 @@ import 'package:dskplay/widgets/confirmation_dialog.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:dskplay/widgets/overflow_menu_button.dart';
 import 'package:dskplay/widgets/popup_menu_item.dart';
+import 'package:dskplay/widgets/swipe_action_pane.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -1014,7 +1016,7 @@ class _LocalFileRowState extends State<_LocalFileRow> {
     final artist = (_song['artist'] as String?)?.trim() ?? '';
     final artworkPath = _song['artworkPath'] as String?;
 
-    return ListTile(
+    final row = ListTile(
       onTap: widget.onTap,
       onLongPress: widget.onLongPress,
       leading: Container(
@@ -1092,6 +1094,59 @@ class _LocalFileRowState extends State<_LocalFileRow> {
                 ),
               ],
             ),
+    );
+
+    if (widget.selectionMode) return row;
+
+    return Slidable(
+      key: ValueKey(widget.file.path),
+      startActionPane: buildSwipeActionPane([
+        SlidableAction(
+          onPressed: (_) => _handleMenuAction('play_next'),
+          backgroundColor: colorScheme.primaryContainer,
+          foregroundColor: colorScheme.onPrimaryContainer,
+          icon: FluentIcons.receipt_play_24_regular,
+          label: 'Siguiente',
+        ),
+        SlidableAction(
+          onPressed: (_) => _handleMenuAction('add_to_queue'),
+          backgroundColor: colorScheme.primaryContainer,
+          foregroundColor: colorScheme.onPrimaryContainer,
+          icon: FluentIcons.text_bullet_list_add_24_regular,
+          label: 'Cola',
+        ),
+        SlidableAction(
+          onPressed: (_) => _handleMenuAction('add_to_playlist'),
+          backgroundColor: colorScheme.primaryContainer,
+          foregroundColor: colorScheme.onPrimaryContainer,
+          icon: FluentIcons.album_add_24_regular,
+          label: 'Lista',
+        ),
+      ]),
+      endActionPane: buildSwipeActionPane([
+        SlidableAction(
+          onPressed: (_) => _handleMenuAction('share'),
+          backgroundColor: colorScheme.secondaryContainer,
+          foregroundColor: colorScheme.onSecondaryContainer,
+          icon: FluentIcons.share_24_regular,
+          label: l10n.share,
+        ),
+        SlidableAction(
+          onPressed: (_) => _handleMenuAction('edit_tags'),
+          backgroundColor: colorScheme.secondaryContainer,
+          foregroundColor: colorScheme.onSecondaryContainer,
+          icon: FluentIcons.edit_24_regular,
+          label: 'Etiquetas',
+        ),
+        SlidableAction(
+          onPressed: (_) => _handleMenuAction('delete'),
+          backgroundColor: colorScheme.errorContainer,
+          foregroundColor: colorScheme.onErrorContainer,
+          icon: FluentIcons.delete_24_regular,
+          label: l10n.delete,
+        ),
+      ]),
+      child: row,
     );
   }
 

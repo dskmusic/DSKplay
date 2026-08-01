@@ -3013,8 +3013,12 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     PodcastEpisode episode, {
     required String podcastTitle,
     String? localPath,
+    bool playNext = false,
   }) {
-    return addToQueue(_buildEpisodeSong(episode, podcastTitle, localPath));
+    return addToQueue(
+      _buildEpisodeSong(episode, podcastTitle, localPath),
+      playNext: playNext,
+    );
   }
 
   /// Appends several episodes, in order, to the end of whatever is currently

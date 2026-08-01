@@ -22,6 +22,7 @@ import 'dart:async';
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/database/radio_stations.db.dart';
 import 'package:dskplay/extensions/l10n.dart';
@@ -90,34 +91,74 @@ class RadioStationsPage extends StatelessWidget {
                               station,
                             );
 
+                            final removeDismissible = DismissiblePane(
+                              dismissThreshold: 0.28,
+                              closeOnCancel: true,
+                              confirmDismiss: () =>
+                                  _askRemoveConfirmation(context, station),
+                              onDismissed: () =>
+                                  _removeStation(station, isCustom: isCustom),
+                            );
+                            final removeAction = SlidableAction(
+                              onPressed: (_) =>
+                                  _confirmRemoveStation(
+                                    context,
+                                    station,
+                                    isCustom: isCustom,
+                                  ),
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.errorContainer,
+                              foregroundColor: Theme.of(
+                                context,
+                              ).colorScheme.onErrorContainer,
+                              icon: FluentIcons.delete_24_regular,
+                              label: 'Eliminar',
+                            );
+
                             return Padding(
                               key: ValueKey(station.id),
                               padding: const EdgeInsets.only(bottom: 8),
-                              child: GestureDetector(
-                                onLongPress: () => _confirmRemoveStation(
-                                  context,
-                                  station,
-                                  isCustom: isCustom,
+                              child: Slidable(
+                                key: ValueKey('radio_${station.id}'),
+                                startActionPane: ActionPane(
+                                  motion: const DrawerMotion(),
+                                  extentRatio: 0.28,
+                                  dismissible: removeDismissible,
+                                  children: [removeAction],
                                 ),
-                                child: RadioStationCard(
-                                  station: station,
-                                  onPressed: () async {
-                                    final success = await audioHandler
-                                        .playRadioStream(
-                                          id: station.id,
-                                          name: station.name,
-                                          streamUrl: station.streamUrl,
-                                          image: station.image,
-                                          genre: station.genre,
-                                        );
+                                endActionPane: ActionPane(
+                                  motion: const DrawerMotion(),
+                                  extentRatio: 0.28,
+                                  dismissible: removeDismissible,
+                                  children: [removeAction],
+                                ),
+                                child: GestureDetector(
+                                  onLongPress: () => _confirmRemoveStation(
+                                    context,
+                                    station,
+                                    isCustom: isCustom,
+                                  ),
+                                  child: RadioStationCard(
+                                    station: station,
+                                    onPressed: () async {
+                                      final success = await audioHandler
+                                          .playRadioStream(
+                                            id: station.id,
+                                            name: station.name,
+                                            streamUrl: station.streamUrl,
+                                            image: station.image,
+                                            genre: station.genre,
+                                          );
 
-                                    if (!success && context.mounted) {
-                                      showToast(
-                                        context,
-                                        'Failed to play radio station',
-                                      );
-                                    }
-                                  },
+                                      if (!success && context.mounted) {
+                                        showToast(
+                                          context,
+                                          'Failed to play radio station',
+                                        );
+                                      }
+                                    },
+                                  ),
                                 ),
                               ),
                             );
@@ -136,11 +177,10 @@ class RadioStationsPage extends StatelessWidget {
   }
 }
 
-Future<void> _confirmRemoveStation(
+Future<bool> _askRemoveConfirmation(
   BuildContext context,
-  RadioStation station, {
-  required bool isCustom,
-}) async {
+  RadioStation station,
+) async {
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
@@ -158,13 +198,22 @@ Future<void> _confirmRemoveStation(
       ],
     ),
   );
+  return confirmed == true;
+}
 
-  if (confirmed != true) return;
+Future<void> _removeStation(RadioStation station, {required bool isCustom}) {
+  return isCustom
+      ? removeCustomRadioStation(station.id)
+      : hideBuiltInRadioStation(station.id);
+}
 
-  if (isCustom) {
-    await removeCustomRadioStation(station.id);
-  } else {
-    await hideBuiltInRadioStation(station.id);
+Future<void> _confirmRemoveStation(
+  BuildContext context,
+  RadioStation station, {
+  required bool isCustom,
+}) async {
+  if (await _askRemoveConfirmation(context, station)) {
+    await _removeStation(station, isCustom: isCustom);
   }
 }
 

@@ -227,16 +227,13 @@ class _UserSongsPageState extends State<UserSongsPage> {
                     },
                   ),
                 ),
+                if (isRecentlyPlayed) ...[
+                  const SizedBox(width: 12),
+                  _buildClearRecentsButton(colorScheme.primary),
+                ],
               ],
             ),
           ),
-          if (isRecentlyPlayed) ...[
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [_buildClearRecentsButton(colorScheme.primary)],
-            ),
-          ],
         ],
         if (isOfflineSongs && songsLength > 1) ...[
           const SizedBox(height: 20),
@@ -282,7 +279,10 @@ class _UserSongsPageState extends State<UserSongsPage> {
     final isLandscape = screenWidth > MediaQuery.sizeOf(context).height;
     return PlaylistCube(
       {'title': title},
-      size: isLandscape ? 250 : screenWidth / commonPlaylistArtworkDivision,
+      // Half the usual playlist artwork size: these library tabs (recents,
+      // liked, offline) show a generic icon, not real artwork, so the
+      // normal full-width cube wastes vertical space here.
+      size: (isLandscape ? 250 : screenWidth / commonPlaylistArtworkDivision) / 2,
       cubeIcon: icon,
     );
   }
@@ -372,6 +372,7 @@ class _UserSongsPageState extends State<UserSongsPage> {
                 borderRadius,
                 playlist,
                 isRecentSong: isRecentlyPlayed,
+                isOfflineSongsList: isOfflineSongs,
               ),
             );
           }, childCount: displayList.length),
@@ -386,6 +387,7 @@ class _UserSongsPageState extends State<UserSongsPage> {
     BorderRadius borderRadius,
     Map playlist, {
     bool isRecentSong = false,
+    bool isOfflineSongsList = false,
   }) {
     final isLikedSongs = playlist['title'] == context.l10n!.likedSongs;
 
@@ -411,6 +413,7 @@ class _UserSongsPageState extends State<UserSongsPage> {
       borderRadius: borderRadius,
       isRecentSong: isRecentSong,
       isFromLikedSongs: isLikedSongs,
+      isFromOfflineSongsList: isOfflineSongsList,
     );
   }
 

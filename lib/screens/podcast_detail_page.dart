@@ -38,6 +38,7 @@ import 'package:dskplay/utilities/artwork_provider.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/formatter.dart';
 import 'package:dskplay/widgets/confirmation_dialog.dart';
+import 'package:dskplay/widgets/fullscreen_artwork_viewer.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:dskplay/widgets/playback_icon_button.dart';
 import 'package:dskplay/widgets/podcast_episode_bar.dart';
@@ -61,6 +62,8 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
   bool get _selectionMode => _selectedKeys.isNotEmpty;
 
   String _episodeQuery = '';
+  // null = show all episodes; true = only listened; false = only pending.
+  bool? _listenedFilter;
   bool _descriptionExpanded = false;
   final _searchController = TextEditingController();
 
@@ -140,9 +143,46 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
       return ascending ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
     });
 
+    var filtered = sorted;
+    if (_listenedFilter != null) {
+      filtered = filtered
+          .where((e) => podcastManager.isListened(e.key) == _listenedFilter)
+          .toList();
+    }
+
     final query = _episodeQuery.trim().toLowerCase();
-    if (query.isEmpty) return sorted;
-    return sorted.where((e) => e.title.toLowerCase().contains(query)).toList();
+    if (query.isEmpty) return filtered;
+    return filtered
+        .where((e) => e.title.toLowerCase().contains(query))
+        .toList();
+  }
+
+  // Shared row layout (icon + label + optional trailing check) so every
+  // item in the episode overflow menu looks the same, whether it's a
+  // one-shot action or one of the mutually-exclusive filter options.
+  PopupMenuItem<String> _episodeMenuItem({
+    required String value,
+    required IconData icon,
+    required String label,
+    bool selected = false,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return PopupMenuItem(
+      value: value,
+      child: Row(
+        children: [
+          Icon(icon, size: 20),
+          const SizedBox(width: 12),
+          Expanded(child: Text(label)),
+          if (selected)
+            Icon(
+              FluentIcons.checkmark_24_filled,
+              size: 18,
+              color: colorScheme.primary,
+            ),
+        ],
+      ),
+    );
   }
 
   void _toggleSelection(String key) {
@@ -555,17 +595,55 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
                     );
                   },
                 ),
-                PopupMenuButton<bool>(
-                  onSelected: (listened) =>
-                      _markAllEpisodes(listened: listened),
+                PopupMenuButton<String>(
+                  onSelected: (value) {
+                    switch (value) {
+                      case 'mark_all_listened':
+                        _markAllEpisodes(listened: true);
+                        break;
+                      case 'mark_all_not_listened':
+                        _markAllEpisodes(listened: false);
+                        break;
+                      case 'filter_all':
+                        setState(() => _listenedFilter = null);
+                        break;
+                      case 'filter_listened':
+                        setState(() => _listenedFilter = true);
+                        break;
+                      case 'filter_pending':
+                        setState(() => _listenedFilter = false);
+                        break;
+                    }
+                  },
                   itemBuilder: (context) => [
-                    PopupMenuItem(
-                      value: true,
-                      child: Text(context.l10n!.markAllAsListened),
+                    _episodeMenuItem(
+                      value: 'mark_all_listened',
+                      icon: FluentIcons.checkmark_circle_24_regular,
+                      label: context.l10n!.markAllAsListened,
                     ),
-                    PopupMenuItem(
-                      value: false,
-                      child: Text(context.l10n!.markAllAsNotListened),
+                    _episodeMenuItem(
+                      value: 'mark_all_not_listened',
+                      icon: FluentIcons.circle_24_regular,
+                      label: context.l10n!.markAllAsNotListened,
+                    ),
+                    const PopupMenuDivider(),
+                    _episodeMenuItem(
+                      value: 'filter_all',
+                      icon: FluentIcons.apps_list_24_regular,
+                      label: 'Ver todos',
+                      selected: _listenedFilter == null,
+                    ),
+                    _episodeMenuItem(
+                      value: 'filter_listened',
+                      icon: FluentIcons.checkmark_circle_24_filled,
+                      label: 'Ver solo reproducidos',
+                      selected: _listenedFilter == true,
+                    ),
+                    _episodeMenuItem(
+                      value: 'filter_pending',
+                      icon: FluentIcons.circle_24_filled,
+                      label: 'Ver solo pendientes',
+                      selected: _listenedFilter == false,
                     ),
                   ],
                 ),
@@ -587,9 +665,12 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
                 ],
               ),
             )
-          : ValueListenableBuilder<Map<String, bool>>(
-              valueListenable: podcastManager.episodeSortAscendingByPodcast,
-              builder: (context, _, _) {
+          : ListenableBuilder(
+              listenable: Listenable.merge([
+                podcastManager.episodeSortAscendingByPodcast,
+                podcastManager.listenedEpisodeKeys,
+              ]),
+              builder: (context, _) {
                 final episodes = _sortedEpisodes(
                   podcastManager.episodeSortAscendingFor(_podcast.id),
                 );
@@ -618,15 +699,25 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: Image(
-                                          image: ArtworkProvider.get(
-                                            _podcast.image,
+                                      GestureDetector(
+                                        onTap: () =>
+                                            FullscreenArtworkViewer.show(
+                                              context,
+                                              artwork: _podcast.image,
+                                              fileName: _podcast.title,
+                                            ),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
                                           ),
-                                          width: 88,
-                                          height: 88,
-                                          fit: BoxFit.cover,
+                                          child: Image(
+                                            image: ArtworkProvider.get(
+                                              _podcast.image,
+                                            ),
+                                            width: 88,
+                                            height: 88,
+                                            fit: BoxFit.cover,
+                                          ),
                                         ),
                                       ),
                                       const SizedBox(width: 12),

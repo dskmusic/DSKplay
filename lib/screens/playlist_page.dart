@@ -44,6 +44,7 @@ import 'package:dskplay/utilities/playlist_utils.dart';
 import 'package:dskplay/utilities/song_filtering.dart';
 import 'package:dskplay/utilities/sort_utils.dart';
 import 'package:dskplay/widgets/edit_playlist_dialog.dart';
+import 'package:dskplay/widgets/fullscreen_artwork_viewer.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:dskplay/widgets/playlist_cube.dart';
 import 'package:dskplay/widgets/playlist_page/empty_playlist_state.dart';
@@ -266,11 +267,23 @@ class _PlaylistPageState extends State<PlaylistPage> {
             ),
           }
         : _playlist;
-    return PlaylistCube(
+    final cube = PlaylistCube(
       playlist,
       size: isLandscape ? 250 : screenWidth / commonPlaylistArtworkDivision,
       cubeIcon: widget.cubeIcon,
       showTypeLabel: false,
+    );
+
+    final artwork = playlist['image']?.toString();
+    if (artwork == null || artwork.isEmpty) return cube;
+
+    return GestureDetector(
+      onTap: () => FullscreenArtworkViewer.show(
+        context,
+        artwork: artwork,
+        fileName: _playlist['title']?.toString() ?? 'DSKplay',
+      ),
+      child: cube,
     );
   }
 

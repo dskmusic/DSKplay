@@ -92,7 +92,13 @@ Future<({Podcast podcast, List<PodcastEpisode> episodes})?> fetchPodcastFeed(
         .timeout(const Duration(seconds: 15));
     if (response.statusCode != 200) return null;
 
-    final document = XmlDocument.parse(response.body);
+    // Podcast feeds are almost universally UTF-8 (declared in the XML
+    // prolog), but many omit a charset in the HTTP Content-Type header, so
+    // package:http's `response.body` falls back to latin1 and mangles any
+    // accented character - decode the raw bytes as UTF-8 explicitly instead.
+    final document = XmlDocument.parse(
+      utf8.decode(response.bodyBytes, allowMalformed: true),
+    );
     final channels = document.findAllElements('channel');
     if (channels.isEmpty) return null;
     final channel = channels.first;
