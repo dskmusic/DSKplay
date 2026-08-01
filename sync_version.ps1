@@ -3,5 +3,6 @@
 # if no WSL distro is installed, so this avoids bash entirely.
 $pubspec = Get-Content pubspec.yaml -Raw
 if ($pubspec -match 'version:\s*([\d.]+)\+(\d+)') {
-    Set-Content -Path 'lib/constants/version.dart' -Value "const appVersion = '$($matches[1])';"
+    $content = "const appVersion = '$($matches[1])';`nconst appBuildNumber = '$($matches[2])';`n"
+    Set-Content -Path 'lib/constants/version.dart' -Value $content -NoNewline
 }

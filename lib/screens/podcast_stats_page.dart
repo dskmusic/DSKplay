@@ -97,52 +97,64 @@ class _SubscriptionsStatsTab extends StatelessWidget {
             return ValueListenableBuilder<List<Podcast>>(
               valueListenable: podcastManager.subscriptions,
               builder: (context, subscriptions, _) {
-                final totalSeconds = byPodcast.values.fold(
-                  0,
-                  (sum, value) => sum + value,
-                );
+                return ValueListenableBuilder<List<String>>(
+                  valueListenable: podcastManager.listenedEpisodeKeys,
+                  builder: (context, listenedEpisodeKeys, _) {
+                    final totalSeconds = byPodcast.values.fold(
+                      0,
+                      (sum, value) => sum + value,
+                    );
 
-                final ranked =
-                    subscriptions
-                        .where((p) => (byPodcast[p.id] ?? 0) > 0)
-                        .toList()
-                      ..sort(
-                        (a, b) => (byPodcast[b.id] ?? 0).compareTo(
-                          byPodcast[a.id] ?? 0,
-                        ),
+                    final ranked =
+                        subscriptions
+                            .where((p) => (byPodcast[p.id] ?? 0) > 0)
+                            .toList()
+                          ..sort(
+                            (a, b) => (byPodcast[b.id] ?? 0).compareTo(
+                              byPodcast[a.id] ?? 0,
+                            ),
+                          );
+
+                    final monthKeys = byMonth.keys.toList()..sort();
+                    String rangeLabel = '';
+                    if (monthKeys.isNotEmpty) {
+                      final first = monthKeys.first.split('-');
+                      final last = monthKeys.last.split('-');
+                      final start = _monthYearLabel(
+                        context,
+                        int.parse(first[0]),
+                        int.parse(first[1]),
                       );
+                      final end = _monthYearLabel(
+                        context,
+                        int.parse(last[0]),
+                        int.parse(last[1]),
+                      );
+                      rangeLabel = 'Reproducido entre $start y $end';
+                    }
 
-                final monthKeys = byMonth.keys.toList()..sort();
-                String rangeLabel = '';
-                if (monthKeys.isNotEmpty) {
-                  final first = monthKeys.first.split('-');
-                  final last = monthKeys.last.split('-');
-                  final start = _monthYearLabel(
-                    context,
-                    int.parse(first[0]),
-                    int.parse(first[1]),
-                  );
-                  final end = _monthYearLabel(
-                    context,
-                    int.parse(last[0]),
-                    int.parse(last[1]),
-                  );
-                  rangeLabel = 'Reproducido entre $start y $end';
-                }
-
-                return ListView(
-                  padding: commonSingleChildScrollViewPadding,
-                  children: [
-                    const SizedBox(height: 16),
-                    _ArcGauge(totalSeconds: totalSeconds, rangeLabel: rangeLabel),
-                    const SizedBox(height: 24),
-                    for (var i = 0; i < ranked.length; i++)
-                      _SubscriptionStatRow(
-                        podcast: ranked[i],
-                        seconds: byPodcast[ranked[i].id] ?? 0,
-                        highlighted: i == 0,
-                      ),
-                  ],
+                    return ListView(
+                      padding: commonSingleChildScrollViewPadding,
+                      children: [
+                        const SizedBox(height: 16),
+                        _ArcGauge(
+                          totalSeconds: totalSeconds,
+                          totalEpisodes: listenedEpisodeKeys.length,
+                          rangeLabel: rangeLabel,
+                        ),
+                        const SizedBox(height: 24),
+                        for (var i = 0; i < ranked.length; i++)
+                          _SubscriptionStatRow(
+                            podcast: ranked[i],
+                            seconds: byPodcast[ranked[i].id] ?? 0,
+                            episodes: listenedEpisodeKeys
+                                .where((k) => k.startsWith('${ranked[i].id}_'))
+                                .length,
+                            highlighted: i == 0,
+                          ),
+                      ],
+                    );
+                  },
                 );
               },
             );
@@ -154,9 +166,14 @@ class _SubscriptionsStatsTab extends StatelessWidget {
 }
 
 class _ArcGauge extends StatelessWidget {
-  const _ArcGauge({required this.totalSeconds, required this.rangeLabel});
+  const _ArcGauge({
+    required this.totalSeconds,
+    required this.totalEpisodes,
+    required this.rangeLabel,
+  });
 
   final int totalSeconds;
+  final int totalEpisodes;
   final String rangeLabel;
 
   @override
@@ -189,6 +206,12 @@ class _ArcGauge extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+        Text(
+          '$totalEpisodes ${totalEpisodes == 1 ? 'episodio' : 'episodios'}',
+          style: textTheme.bodyMedium?.copyWith(
+            color: colorScheme.onSurfaceVariant,
           ),
         ),
         if (rangeLabel.isNotEmpty)
@@ -247,11 +270,13 @@ class _SubscriptionStatRow extends StatelessWidget {
   const _SubscriptionStatRow({
     required this.podcast,
     required this.seconds,
+    required this.episodes,
     required this.highlighted,
   });
 
   final Podcast podcast;
   final int seconds;
+  final int episodes;
   final bool highlighted;
 
   @override
@@ -279,7 +304,9 @@ class _SubscriptionStatRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 6),
-          Text(_formatHours(seconds)),
+          Text(
+            '${_formatHours(seconds)} · $episodes ${episodes == 1 ? 'episodio' : 'episodios'}',
+          ),
         ],
       ),
     );

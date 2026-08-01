@@ -127,7 +127,7 @@ class _AboutPageState extends State<AboutPage> {
                         borderRadius: BorderRadius.circular(24),
                       ),
                       child: Text(
-                        'v$appVersion',
+                        'v$appVersion ($appBuildNumber)',
                         style: TextStyle(
                           color: Theme.of(
                             context,
