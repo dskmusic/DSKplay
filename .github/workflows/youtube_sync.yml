@@ -161,7 +161,7 @@ jobs:
             $build = [int]$matches[2] + 1
             $pubspec = $pubspec -replace 'version:\s*[\d.]+\+\d+', "version: $verNum+$build"
             Set-Content -Path pubspec.yaml -Value $pubspec -NoNewline
-            Set-Content -Path lib/constants/version.dart -Value "const appVersion = '$verNum';"
+            Set-Content -Path lib/constants/version.dart -Value "const appVersion = '$verNum';`nconst appBuildNumber = '$build';" -NoNewline
             "verNum=$verNum" >> $env:GITHUB_OUTPUT
             "build=$build" >> $env:GITHUB_OUTPUT
           }
