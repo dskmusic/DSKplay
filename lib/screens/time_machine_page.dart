@@ -80,10 +80,13 @@ class _TimeMachinePageState extends State<TimeMachinePage> {
       builder: (context, isOffline, _) {
         if (isOffline) return const UserSongsPage(page: 'offline');
 
-        return ValueListenableBuilder<bool>(
-          valueListenable: wrappedEnabled,
-          builder: (context, isEnabled, _) {
-            if (!isEnabled || !listeningStatsService.hasStats) {
+        return ListenableBuilder(
+          listenable: Listenable.merge([
+            wrappedEnabled,
+            includePodcastsInTimeMachine,
+          ]),
+          builder: (context, _) {
+            if (!wrappedEnabled.value || !listeningStatsService.hasStats) {
               return _buildEmptyState(context);
             }
 

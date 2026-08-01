@@ -48,6 +48,10 @@ final wrappedEnabled = ValueNotifier<bool>(
   Hive.box('settings').get('wrappedEnabled', defaultValue: true),
 );
 
+final includePodcastsInTimeMachine = ValueNotifier<bool>(
+  Hive.box('settings').get('includePodcastsInTimeMachine', defaultValue: true),
+);
+
 final rememberLastPlayback = ValueNotifier<bool>(
   Hive.box('settings').get('rememberLastPlayback', defaultValue: true),
 );

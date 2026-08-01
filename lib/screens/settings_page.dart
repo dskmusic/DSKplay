@@ -184,6 +184,22 @@ class SettingsPage extends StatelessWidget {
           },
         ),
         ValueListenableBuilder<bool>(
+          valueListenable: includePodcastsInTimeMachine,
+          builder: (_, value, __) {
+            return CustomBar(
+              'Incluir podcasts en máquina del tiempo',
+              FluentIcons.mic_24_regular,
+              description:
+                  'Muestra u oculta los podcasts en las estadísticas de máquina del tiempo',
+              trailing: Switch(
+                value: value,
+                onChanged: (value) =>
+                    _toggleIncludePodcastsInTimeMachine(context, value),
+              ),
+            );
+          },
+        ),
+        ValueListenableBuilder<bool>(
           valueListenable: rememberLastPlayback,
           builder: (_, value, __) {
             return CustomBar(
@@ -954,6 +970,12 @@ class SettingsPage extends StatelessWidget {
     if (context.mounted) {
       showToast(context, context.l10n!.settingChangedMsg);
     }
+  }
+
+  void _toggleIncludePodcastsInTimeMachine(BuildContext context, bool value) {
+    addOrUpdateData<bool>('settings', 'includePodcastsInTimeMachine', value);
+    includePodcastsInTimeMachine.value = value;
+    showToast(context, context.l10n!.settingChangedMsg);
   }
 
   void _toggleOfflineMode(BuildContext context, bool value) {

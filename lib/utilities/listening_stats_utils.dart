@@ -143,6 +143,7 @@ Map<String, dynamic> applyListeningTimeDelta(
   Map<String, dynamic> source, {
   required Duration listenedDuration,
   required DateTime listenedAt,
+  bool isPodcastEpisode = false,
 }) {
   final seconds = listenedDuration.inSeconds;
   final stats = normalizeListeningStats(source, listenedAt);
@@ -150,6 +151,10 @@ Map<String, dynamic> applyListeningTimeDelta(
 
   final monthStats = _monthStatsForDelta(stats, listenedAt);
   monthStats['totalSeconds'] = _readInt(monthStats['totalSeconds']) + seconds;
+  if (isPodcastEpisode) {
+    monthStats['podcastSeconds'] =
+        _readInt(monthStats['podcastSeconds']) + seconds;
+  }
 
   return _storeDeltaMonth(stats, listenedAt, monthStats);
 }
@@ -168,6 +173,7 @@ Map<String, dynamic> applyListeningStatsDelta(
           source,
           listenedDuration: listenedDuration,
           listenedAt: listenedAt,
+          isPodcastEpisode: song['isPodcastEpisode'] == true,
         )
       : normalizeListeningStats(source, listenedAt);
 
@@ -381,6 +387,9 @@ int monthDisplayMinutes(Map<String, dynamic>? monthStats) {
 
 Map<String, dynamic> _createEmptyMonth() => {
   'totalSeconds': 0,
+  // Tracked separately from totalSeconds (rather than derived from the songs
+  // map) so it stays accurate even once old songs get trimmed off that map.
+  'podcastSeconds': 0,
   'songs': <String, dynamic>{},
 };
 
@@ -393,6 +402,7 @@ Map<String, dynamic> _normalizeMonth(dynamic raw) {
   final month = _normalizeMap(raw);
   return {
     'totalSeconds': _readInt(month['totalSeconds']),
+    'podcastSeconds': _readInt(month['podcastSeconds']),
     'songs': _normalizeMap(month['songs']),
   };
 }
@@ -407,6 +417,9 @@ Map<String, dynamic> _mergeMonthStats(
 
   merged['totalSeconds'] =
       _readInt(merged['totalSeconds']) + _readInt(sourceMonth['totalSeconds']);
+  merged['podcastSeconds'] =
+      _readInt(merged['podcastSeconds']) +
+      _readInt(sourceMonth['podcastSeconds']);
 
   final mergedSongs = _normalizeMap(merged['songs']);
   final sourceSongs = _normalizeMap(sourceMonth['songs']);

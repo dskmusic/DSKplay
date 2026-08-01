@@ -55,7 +55,7 @@ class ListeningStatsService {
 
   bool get hasStats {
     final now = DateTime.now();
-    final stats = _readStats(now);
+    final stats = _filteredStats(now);
     final history = stats['history'] as Map<String, dynamic>;
     return hasDisplayableListeningStats(_asMap(stats['currentMonth'])) ||
         history.values.any(
@@ -69,23 +69,23 @@ class ListeningStatsService {
     final now = DateTime.now();
     if (!isListeningStatsAnnualWindow(now)) return false;
 
-    return hasDisplayableAnnualListeningStats(_readStats(now), now);
+    return hasDisplayableAnnualListeningStats(_filteredStats(now), now);
   }
 
   int get year => listeningStatsAnnualYear(DateTime.now());
 
   int get yearTotalSeconds {
     final now = DateTime.now();
-    return annualTotalSecondsFromStats(_readStats(now), now);
+    return annualTotalSecondsFromStats(_filteredStats(now), now);
   }
 
   List<String> get availableMonthKeys {
     final now = DateTime.now();
-    return visibleListeningStatsMonthKeys(_readStats(now), now);
+    return visibleListeningStatsMonthKeys(_filteredStats(now), now);
   }
 
   Map<String, dynamic>? monthStats(String monthKey) {
-    final stats = _readStats();
+    final stats = _filteredStats();
     Map<String, dynamic>? month;
     if (monthKey == stats['currentMonthKey']?.toString()) {
       month = _asMap(stats['currentMonth']);
@@ -109,11 +109,15 @@ class ListeningStatsService {
     int limit = wrappedAnnualSongsLimit,
   }) {
     final now = DateTime.now();
-    final months = annualListeningMonthsFromStats(_readStats(now), now);
+    final months = annualListeningMonthsFromStats(_filteredStats(now), now);
     return annualListeningSongsFromMonths(months, limit: limit);
   }
 
-  void recordListeningTime(Duration listenedDuration, {DateTime? listenedAt}) {
+  void recordListeningTime(
+    Duration listenedDuration, {
+    DateTime? listenedAt,
+    bool isPodcastEpisode = false,
+  }) {
     if (!wrappedEnabled.value) return;
     if (listenedDuration <= Duration.zero) return;
 
@@ -127,6 +131,7 @@ class ListeningStatsService {
       _readStats(now),
       listenedDuration: Duration(seconds: wholeSeconds),
       listenedAt: now,
+      isPodcastEpisode: isPodcastEpisode,
     );
     _markDirty();
   }
@@ -248,6 +253,7 @@ class ListeningStatsService {
     recordListeningTime(
       listenedDuration,
       listenedAt: now,
+      isPodcastEpisode: song['isPodcastEpisode'] == true,
     );
 
     if (!_sessionQualified) {
@@ -449,6 +455,48 @@ class ListeningStatsService {
       _markDirty();
     }
     return _stats!;
+  }
+
+  /// Same as [_readStats], but with podcast episodes stripped out of every
+  /// month (songs list and their share of totalSeconds) when the user has
+  /// disabled podcasts in Time Machine. Every read used for display goes
+  /// through here so the toggle applies consistently everywhere Time Machine
+  /// data is shown, without duplicating the filter at each call site.
+  Map<String, dynamic> _filteredStats([DateTime? now]) {
+    final stats = _readStats(now);
+    if (includePodcastsInTimeMachine.value) return stats;
+
+    final filtered = Map<String, dynamic>.from(stats);
+    filtered['currentMonth'] = _stripPodcastsFromMonth(stats['currentMonth']);
+    final history = _asMap(stats['history']) ?? <String, dynamic>{};
+    filtered['history'] = Map<String, dynamic>.fromEntries(
+      history.entries.map(
+        (entry) => MapEntry(entry.key, _stripPodcastsFromMonth(entry.value)),
+      ),
+    );
+    return filtered;
+  }
+
+  Map<String, dynamic> _stripPodcastsFromMonth(dynamic month) {
+    final monthMap = _asMap(month);
+    if (monthMap == null) return <String, dynamic>{};
+
+    final totalSeconds = _readInt(monthMap['totalSeconds']);
+    final podcastSeconds = _readInt(monthMap['podcastSeconds']);
+    final songs = (_asMap(monthMap['songs']) ?? <String, dynamic>{})
+      ..removeWhere((_, value) => _asMap(value)?['isPodcastEpisode'] == true);
+
+    return {
+      ...monthMap,
+      'totalSeconds': (totalSeconds - podcastSeconds).clamp(0, totalSeconds),
+      'songs': songs,
+    };
+  }
+
+  int _readInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   void _markDirty() {

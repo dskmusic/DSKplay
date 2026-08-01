@@ -259,10 +259,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildCurrentMonthRecapSection() {
-    return ValueListenableBuilder<bool>(
-      valueListenable: wrappedEnabled,
-      builder: (_, isEnabled, __) {
-        if (!isEnabled) return const SizedBox.shrink();
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        wrappedEnabled,
+        includePodcastsInTimeMachine,
+      ]),
+      builder: (context, __) {
+        if (!wrappedEnabled.value) return const SizedBox.shrink();
 
         final currentMonthKey = listeningStatsMonthKey(DateTime.now());
         final monthStats = listeningStatsService.monthStats(currentMonthKey);
