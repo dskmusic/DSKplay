@@ -482,13 +482,29 @@ class ListeningStatsService {
     if (monthMap == null) return <String, dynamic>{};
 
     final totalSeconds = _readInt(monthMap['totalSeconds']);
+    final allSongs = _asMap(monthMap['songs']) ?? <String, dynamic>{};
+
+    var podcastSecondsFromSongs = 0;
+    final songs = Map<String, dynamic>.from(allSongs)
+      ..removeWhere((_, value) {
+        final isPodcast = _asMap(value)?['isPodcastEpisode'] == true;
+        if (isPodcast) {
+          podcastSecondsFromSongs += _readInt(_asMap(value)?['seconds']);
+        }
+        return isPodcast;
+      });
+
+    // The podcastSeconds ledger is only accurate for time recorded after this
+    // feature shipped; older data only has it derivable from the songs map,
+    // so use whichever is larger.
     final podcastSeconds = _readInt(monthMap['podcastSeconds']);
-    final songs = (_asMap(monthMap['songs']) ?? <String, dynamic>{})
-      ..removeWhere((_, value) => _asMap(value)?['isPodcastEpisode'] == true);
+    final subtractSeconds = podcastSeconds > podcastSecondsFromSongs
+        ? podcastSeconds
+        : podcastSecondsFromSongs;
 
     return {
       ...monthMap,
-      'totalSeconds': (totalSeconds - podcastSeconds).clamp(0, totalSeconds),
+      'totalSeconds': (totalSeconds - subtractSeconds).clamp(0, totalSeconds),
       'songs': songs,
     };
   }
