@@ -250,15 +250,20 @@ class ListeningStatsService {
     }
 
     _sessionListened += listenedDuration;
-    recordListeningTime(
-      listenedDuration,
-      listenedAt: now,
-      isPodcastEpisode: song['isPodcastEpisode'] == true,
-    );
 
     if (!_sessionQualified) {
+      // Below the qualification threshold, listened time is only tracked
+      // in-memory (_sessionListened) and never written to totalSeconds. If
+      // the song is skipped before qualifying, this time is discarded
+      // entirely, so a month's total minutes always matches the sum of the
+      // songs actually listed for it - no "invisible" minutes from skips.
       if (_sessionListened >= qualifiedPlaybackThreshold(_sessionDuration)) {
         _sessionQualified = true;
+        recordListeningTime(
+          _sessionListened,
+          listenedAt: now,
+          isPodcastEpisode: song['isPodcastEpisode'] == true,
+        );
         recordListening(
           song,
           _sessionListened,
@@ -270,6 +275,11 @@ class ListeningStatsService {
       return;
     }
 
+    recordListeningTime(
+      listenedDuration,
+      listenedAt: now,
+      isPodcastEpisode: song['isPodcastEpisode'] == true,
+    );
     recordListening(
       song,
       listenedDuration,
