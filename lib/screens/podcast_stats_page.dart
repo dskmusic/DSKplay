@@ -98,8 +98,8 @@ class _SubscriptionsStatsTab extends StatelessWidget {
               valueListenable: podcastManager.subscriptions,
               builder: (context, subscriptions, _) {
                 return ValueListenableBuilder<List<String>>(
-                  valueListenable: podcastManager.listenedEpisodeKeys,
-                  builder: (context, listenedEpisodeKeys, _) {
+                  valueListenable: podcastManager.playedEpisodeKeys,
+                  builder: (context, playedEpisodeKeys, _) {
                     final totalSeconds = byPodcast.values.fold(
                       0,
                       (sum, value) => sum + value,
@@ -139,7 +139,7 @@ class _SubscriptionsStatsTab extends StatelessWidget {
                         const SizedBox(height: 16),
                         _ArcGauge(
                           totalSeconds: totalSeconds,
-                          totalEpisodes: listenedEpisodeKeys.length,
+                          totalEpisodes: playedEpisodeKeys.length,
                           rangeLabel: rangeLabel,
                         ),
                         const SizedBox(height: 24),
@@ -147,7 +147,7 @@ class _SubscriptionsStatsTab extends StatelessWidget {
                           _SubscriptionStatRow(
                             podcast: ranked[i],
                             seconds: byPodcast[ranked[i].id] ?? 0,
-                            episodes: listenedEpisodeKeys
+                            episodes: playedEpisodeKeys
                                 .where((k) => k.startsWith('${ranked[i].id}_'))
                                 .length,
                             highlighted: i == 0,
@@ -494,6 +494,13 @@ class _HistoryBarChart extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Text(
+          'Horas',
+          style: textTheme.labelSmall?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 4),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

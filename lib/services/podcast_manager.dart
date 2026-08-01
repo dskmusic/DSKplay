@@ -54,6 +54,18 @@ class PodcastManager {
         ),
       );
 
+  // Distinct episodes that have genuinely accrued playback time (via
+  // [recordListenedTime]), unlike [listenedEpisodeKeys] which also includes
+  // episodes bulk-marked as listened (e.g. "mark all as listened" on
+  // subscribing) - used by the statistics screen so its episode counts
+  // reflect real listening, not that bulk marking.
+  final ValueNotifier<List<String>> playedEpisodeKeys =
+      ValueNotifier<List<String>>(
+        List<String>.from(
+          Hive.box('user').get('playedPodcastEpisodes', defaultValue: []),
+        ),
+      );
+
   // Each entry is a PodcastEpisode.toMap() plus 'key', 'podcastTitle' and
   // 'audioPath' (the local downloaded file) so downloads stay browsable and
   // playable even when the podcast/episode isn't in the live feed anymore.
@@ -127,10 +139,22 @@ class PodcastManager {
   Future<void> recordListenedTime(
     String podcastId,
     Duration listenedDuration,
-    DateTime at,
-  ) async {
+    DateTime at, {
+    String? episodeKey,
+  }) async {
     final seconds = listenedDuration.inSeconds;
     if (seconds <= 0) return;
+
+    if (episodeKey != null &&
+        episodeKey.isNotEmpty &&
+        !playedEpisodeKeys.value.contains(episodeKey)) {
+      playedEpisodeKeys.value = [...playedEpisodeKeys.value, episodeKey];
+      await addOrUpdateData<List>(
+        'user',
+        'playedPodcastEpisodes',
+        playedEpisodeKeys.value,
+      );
+    }
 
     listenedSecondsByPodcast.value = {
       ...listenedSecondsByPodcast.value,
@@ -474,6 +498,7 @@ class PodcastManager {
   Future<int> mergeImportedPodcastData({
     List<Podcast> subscriptions = const [],
     List<String> listenedEpisodeKeys = const [],
+    List<String> playedEpisodeKeys = const [],
     List<String> pinnedPodcastIds = const [],
     Map<String, int> listenedSecondsByPodcast = const {},
     Map<String, int> listenedSecondsByMonth = const {},
@@ -492,6 +517,16 @@ class PodcastManager {
       final before = this.listenedEpisodeKeys.value.length;
       await setAllListened(listenedEpisodeKeys, listened: true);
       addedCount += this.listenedEpisodeKeys.value.length - before;
+    }
+
+    if (playedEpisodeKeys.isNotEmpty) {
+      final merged = {...this.playedEpisodeKeys.value, ...playedEpisodeKeys};
+      this.playedEpisodeKeys.value = merged.toList();
+      await addOrUpdateData<List>(
+        'user',
+        'playedPodcastEpisodes',
+        this.playedEpisodeKeys.value,
+      );
     }
 
     for (final id in pinnedPodcastIds) {
@@ -547,6 +582,9 @@ class PodcastManager {
     subscriptions.value = _loadSubscriptions();
     listenedEpisodeKeys.value = List<String>.from(
       Hive.box('user').get('listenedPodcastEpisodes', defaultValue: []),
+    );
+    playedEpisodeKeys.value = List<String>.from(
+      Hive.box('user').get('playedPodcastEpisodes', defaultValue: []),
     );
     downloadedEpisodes.value = List<Map>.from(
       Hive.box(

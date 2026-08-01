@@ -30,6 +30,7 @@ class AntennaPodImportPreview {
   const AntennaPodImportPreview({
     required this.podcasts,
     required this.listenedEpisodeKeys,
+    required this.playedEpisodeKeys,
     required this.listenedSecondsByPodcast,
     required this.listenedSecondsByMonth,
     required this.listenedSecondsByDay,
@@ -38,6 +39,10 @@ class AntennaPodImportPreview {
 
   final List<Podcast> podcasts;
   final List<String> listenedEpisodeKeys;
+  // Subset of [listenedEpisodeKeys] with real played_duration evidence (not
+  // just AntennaPod's `read` flag, which can be set in bulk without actually
+  // listening) - what the statistics screen's episode counts are seeded from.
+  final List<String> playedEpisodeKeys;
   final Map<String, int> listenedSecondsByPodcast;
   final Map<String, int> listenedSecondsByMonth;
   final Map<String, int> listenedSecondsByDay;
@@ -85,6 +90,7 @@ AntennaPodImportPreview analyzeAntennaPodBackup(String dbPath) {
     }
 
     final listenedEpisodeKeys = <String>[];
+    final playedEpisodeKeys = <String>[];
     final listenedSecondsByPodcast = <String, int>{};
     final listenedSecondsByMonth = <String, int>{};
     final listenedSecondsByDay = <String, int>{};
@@ -108,7 +114,9 @@ AntennaPodImportPreview analyzeAntennaPodBackup(String dbPath) {
       final hasPlayedTime = playedDurationMs != null && playedDurationMs > 0;
 
       if (guid != null && guid.isNotEmpty && (isRead || hasPlayedTime)) {
-        listenedEpisodeKeys.add('${podcastId}_${guid.hashCode}');
+        final episodeKey = '${podcastId}_${guid.hashCode}';
+        listenedEpisodeKeys.add(episodeKey);
+        if (hasPlayedTime) playedEpisodeKeys.add(episodeKey);
       }
 
       if (!hasPlayedTime) continue;
@@ -135,6 +143,7 @@ AntennaPodImportPreview analyzeAntennaPodBackup(String dbPath) {
     return AntennaPodImportPreview(
       podcasts: podcasts,
       listenedEpisodeKeys: listenedEpisodeKeys,
+      playedEpisodeKeys: playedEpisodeKeys,
       listenedSecondsByPodcast: listenedSecondsByPodcast,
       listenedSecondsByMonth: listenedSecondsByMonth,
       listenedSecondsByDay: listenedSecondsByDay,
@@ -151,6 +160,7 @@ Future<int> applyAntennaPodImport(AntennaPodImportPreview preview) {
   return podcastManager.mergeImportedPodcastData(
     subscriptions: preview.podcasts,
     listenedEpisodeKeys: preview.listenedEpisodeKeys,
+    playedEpisodeKeys: preview.playedEpisodeKeys,
     listenedSecondsByPodcast: preview.listenedSecondsByPodcast,
     listenedSecondsByMonth: preview.listenedSecondsByMonth,
     listenedSecondsByDay: preview.listenedSecondsByDay,

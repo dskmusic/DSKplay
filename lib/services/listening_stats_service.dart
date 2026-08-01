@@ -153,7 +153,12 @@ class ListeningStatsService {
       final podcastId = song['podcastId']?.toString();
       if (podcastId != null && podcastId.isNotEmpty) {
         unawaited(
-          podcastManager.recordListenedTime(podcastId, listenedDuration, now),
+          podcastManager.recordListenedTime(
+            podcastId,
+            listenedDuration,
+            now,
+            episodeKey: song['ytid']?.toString(),
+          ),
         );
       }
     }
