@@ -54,11 +54,11 @@ class PodcastStatsPage extends StatelessWidget {
         appBar: AppBar(
           title: const Text('Estadísticas'),
           bottom: const TabBar(
-            tabs: [Tab(text: 'Suscripciones'), Tab(text: 'Años')],
+            tabs: [Tab(text: 'Por podcast'), Tab(text: 'Historial')],
           ),
         ),
         body: const TabBarView(
-          children: [_SubscriptionsStatsTab(), _YearsStatsTab()],
+          children: [_SubscriptionsStatsTab(), _HistoryStatsTab()],
         ),
       ),
     );
@@ -286,88 +286,183 @@ class _SubscriptionStatRow extends StatelessWidget {
   }
 }
 
-class _YearsStatsTab extends StatelessWidget {
-  const _YearsStatsTab();
+enum _Granularity {
+  day('Días', 30),
+  week('Semanas', 12),
+  month('Meses', 12),
+  year('Años', 10);
+
+  const _Granularity(this.label, this.maxBuckets);
+
+  final String label;
+  final int maxBuckets;
+}
+
+typedef _Bucket = ({DateTime date, int seconds});
+
+class _HistoryStatsTab extends StatefulWidget {
+  const _HistoryStatsTab();
+
+  @override
+  State<_HistoryStatsTab> createState() => _HistoryStatsTabState();
+}
+
+class _HistoryStatsTabState extends State<_HistoryStatsTab> {
+  _Granularity _granularity = _Granularity.week;
+
+  List<_Bucket> _buckets(Map<String, int> byDay, Map<String, int> byMonth) {
+    switch (_granularity) {
+      case _Granularity.day:
+        return _recent(byDay.keys, _granularity.maxBuckets)
+            .map((k) => (date: DateTime.parse(k), seconds: byDay[k]!))
+            .toList();
+      case _Granularity.week:
+        {
+          final totals = <String, int>{};
+          for (final entry in byDay.entries) {
+            final date = DateTime.parse(entry.key);
+            final monday = date.subtract(Duration(days: date.weekday - 1));
+            final key = DateFormat('yyyy-MM-dd').format(monday);
+            totals[key] = (totals[key] ?? 0) + entry.value;
+          }
+          return _recent(totals.keys, _granularity.maxBuckets)
+              .map((k) => (date: DateTime.parse(k), seconds: totals[k]!))
+              .toList();
+        }
+      case _Granularity.month:
+        return _recent(byMonth.keys, _granularity.maxBuckets)
+            .map((k) {
+              final parts = k.split('-');
+              return (
+                date: DateTime(int.parse(parts[0]), int.parse(parts[1])),
+                seconds: byMonth[k]!,
+              );
+            })
+            .toList();
+      case _Granularity.year:
+        {
+          final totals = <int, int>{};
+          for (final entry in byMonth.entries) {
+            final year = int.parse(entry.key.split('-')[0]);
+            totals[year] = (totals[year] ?? 0) + entry.value;
+          }
+          return _recent(totals.keys.map((y) => '$y'), _granularity.maxBuckets)
+              .map(
+                (k) => (date: DateTime(int.parse(k)), seconds: totals[int.parse(k)]!),
+              )
+              .toList();
+        }
+    }
+  }
+
+  List<String> _recent(Iterable<String> keys, int max) {
+    final sorted = keys.toList()..sort();
+    return sorted.length > max
+        ? sorted.sublist(sorted.length - max)
+        : sorted;
+  }
+
+  String _label(BuildContext context, List<_Bucket> buckets, int index) {
+    final bucket = buckets[index];
+    final locale = Localizations.localeOf(context).toString();
+    final newYear = index == 0 || buckets[index - 1].date.year != bucket.date.year;
+    switch (_granularity) {
+      case _Granularity.year:
+        return '${bucket.date.year}';
+      case _Granularity.month:
+        {
+          final raw = DateFormat.MMM(
+            locale,
+          ).format(bucket.date).replaceAll('.', '');
+          return newYear ? '$raw ${bucket.date.year}' : raw;
+        }
+      case _Granularity.day:
+      case _Granularity.week:
+        {
+          final raw = DateFormat(
+            'd MMM',
+            locale,
+          ).format(bucket.date).replaceAll('.', '');
+          return newYear ? '$raw ${bucket.date.year}' : raw;
+        }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<Map<String, int>>(
-      valueListenable: podcastManager.listenedSecondsByMonth,
-      builder: (context, byMonth, _) {
-        if (byMonth.isEmpty) return const _EmptyStats();
+      valueListenable: podcastManager.listenedSecondsByDay,
+      builder: (context, byDay, _) {
+        return ValueListenableBuilder<Map<String, int>>(
+          valueListenable: podcastManager.listenedSecondsByMonth,
+          builder: (context, byMonth, _) {
+            if (byDay.isEmpty && byMonth.isEmpty) return const _EmptyStats();
 
-        final sortedKeys = byMonth.keys.toList()..sort();
-        final months = [
-          for (final key in sortedKeys)
-            (
-              year: int.parse(key.split('-')[0]),
-              month: int.parse(key.split('-')[1]),
-              seconds: byMonth[key]!,
-            ),
-        ];
+            final buckets = _buckets(byDay, byMonth);
 
-        final yearTotals = <int, int>{};
-        for (final m in months) {
-          yearTotals[m.year] = (yearTotals[m.year] ?? 0) + m.seconds;
-        }
-        final sortedYears = yearTotals.keys.toList()
-          ..sort((a, b) => b.compareTo(a));
-
-        final maxHours = months
-            .map((m) => m.seconds / 3600)
-            .reduce(math.max);
-        final niceMax = maxHours <= 0
-            ? 30
-            : (((maxHours / 30).ceil()) * 30).clamp(30, 1 << 30);
-
-        return ListView(
-          padding: commonSingleChildScrollViewPadding,
-          children: [
-            const SizedBox(height: 16),
-            _MonthlyBarChart(months: months, niceMax: niceMax),
-            const SizedBox(height: 8),
-            Center(
-              child: Text(
-                'Tiempo reproducido por mes',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+            return ListView(
+              padding: commonSingleChildScrollViewPadding,
+              children: [
+                const SizedBox(height: 16),
+                Center(
+                  child: SegmentedButton<_Granularity>(
+                    segments: [
+                      for (final g in _Granularity.values)
+                        ButtonSegment(value: g, label: Text(g.label)),
+                    ],
+                    selected: {_granularity},
+                    onSelectionChanged: (selection) =>
+                        setState(() => _granularity = selection.first),
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Divider(height: 1),
-            for (final year in sortedYears)
-              ListTile(
-                title: Text('$year'),
-                subtitle: Text(_formatHours(yearTotals[year]!)),
-              ),
-          ],
+                const SizedBox(height: 24),
+                if (buckets.isEmpty)
+                  const _EmptyStats()
+                else ...[
+                  _HistoryBarChart(
+                    buckets: buckets,
+                    labelBuilder: (i) => _label(context, buckets, i),
+                  ),
+                  const SizedBox(height: 8),
+                  Center(
+                    child: Text(
+                      'Tiempo reproducido por ${_granularity.label.toLowerCase()}',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            );
+          },
         );
       },
     );
   }
 }
 
-typedef _MonthBucket = ({int year, int month, int seconds});
+class _HistoryBarChart extends StatelessWidget {
+  const _HistoryBarChart({required this.buckets, required this.labelBuilder});
 
-Color _yearColor(ColorScheme colorScheme, List<int> years, int year) {
-  final index = years.indexOf(year);
-  return index.isEven ? colorScheme.primary : colorScheme.tertiary;
-}
-
-class _MonthlyBarChart extends StatelessWidget {
-  const _MonthlyBarChart({required this.months, required this.niceMax});
-
-  final List<_MonthBucket> months;
-  final int niceMax;
+  final List<_Bucket> buckets;
+  final String Function(int index) labelBuilder;
 
   static const _height = 180.0;
+  static const _maxVisibleLabels = 6;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final years = <int>[for (final m in months) m.year].toSet().toList();
+
+    final maxHours = buckets.map((b) => b.seconds / 3600).reduce(math.max);
+    final niceMax = _niceMaxHours(maxHours);
+
+    final labelStride = (buckets.length / _maxVisibleLabels).ceil().clamp(
+      1,
+      1 << 30,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -382,8 +477,8 @@ class _MonthlyBarChart extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text('$niceMax', style: textTheme.labelSmall),
-                  Text('${niceMax ~/ 2}', style: textTheme.labelSmall),
+                  Text(_axisLabel(niceMax), style: textTheme.labelSmall),
+                  Text(_axisLabel(niceMax / 2), style: textTheme.labelSmall),
                   const SizedBox(height: 12),
                 ],
               ),
@@ -394,7 +489,12 @@ class _MonthlyBarChart extends StatelessWidget {
                 height: _height,
                 child: Stack(
                   children: [
-                    const Positioned(top: 0, left: 0, right: 0, child: Divider(height: 1)),
+                    const Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      child: Divider(height: 1),
+                    ),
                     Positioned(
                       top: _height / 2,
                       left: 0,
@@ -405,13 +505,7 @@ class _MonthlyBarChart extends StatelessWidget {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          for (var i = 0; i < months.length; i++) ...[
-                            if (i > 0 && months[i].year != months[i - 1].year)
-                              Container(
-                                width: 1,
-                                height: _height,
-                                color: colorScheme.outlineVariant,
-                              ),
+                          for (var i = 0; i < buckets.length; i++)
                             Expanded(
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(
@@ -419,16 +513,14 @@ class _MonthlyBarChart extends StatelessWidget {
                                 ),
                                 child: FractionallySizedBox(
                                   heightFactor:
-                                      ((months[i].seconds / 3600) / niceMax)
+                                      ((buckets[i].seconds / 3600) / niceMax)
                                           .clamp(0.01, 1.0),
                                   alignment: Alignment.bottomCenter,
                                   child: Container(
                                     decoration: BoxDecoration(
-                                      color: _yearColor(
-                                        colorScheme,
-                                        years,
-                                        months[i].year,
-                                      ),
+                                      color: i.isEven
+                                          ? colorScheme.primary
+                                          : colorScheme.tertiary,
                                       borderRadius: const BorderRadius.vertical(
                                         top: Radius.circular(3),
                                       ),
@@ -437,7 +529,6 @@ class _MonthlyBarChart extends StatelessWidget {
                                 ),
                               ),
                             ),
-                          ],
                         ],
                       ),
                     ),
@@ -454,10 +545,16 @@ class _MonthlyBarChart extends StatelessWidget {
             Expanded(
               child: Row(
                 children: [
-                  for (final year in years)
+                  for (var i = 0; i < buckets.length; i++)
                     Expanded(
-                      flex: months.where((m) => m.year == year).length,
-                      child: Text('$year', style: textTheme.labelSmall),
+                      child: (i % labelStride == 0 ||
+                              i == buckets.length - 1)
+                          ? Text(
+                              labelBuilder(i),
+                              style: textTheme.labelSmall,
+                              overflow: TextOverflow.ellipsis,
+                            )
+                          : const SizedBox.shrink(),
                     ),
                 ],
               ),
@@ -467,4 +564,44 @@ class _MonthlyBarChart extends StatelessWidget {
       ],
     );
   }
+}
+
+// Fixed 30-hour gridlines suited months/years buckets but rendered a whole
+// week/day's listening (usually well under an hour) as an invisible sliver -
+// round up to whichever of these common step sizes fits, so a bar for a
+// few minutes' listening is still readable.
+const _niceSteps = [
+  0.25,
+  0.5,
+  1,
+  2,
+  3,
+  5,
+  10,
+  15,
+  20,
+  30,
+  50,
+  75,
+  100,
+  150,
+  200,
+  300,
+  500,
+  750,
+  1000,
+];
+
+double _niceMaxHours(double maxHours) {
+  if (maxHours <= 0) return 1;
+  for (final step in _niceSteps) {
+    if (maxHours <= step) return step.toDouble();
+  }
+  return (maxHours / 500).ceil() * 500;
+}
+
+String _axisLabel(double hours) {
+  if (hours < 1) return '${(hours * 60).round()} min';
+  if (hours == hours.roundToDouble()) return '${hours.toInt()}';
+  return hours.toStringAsFixed(1).replaceAll('.', ',');
 }

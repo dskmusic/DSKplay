@@ -25,6 +25,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/extensions/l10n.dart';
@@ -35,6 +36,7 @@ import 'package:dskplay/services/podcast_feed_service.dart';
 import 'package:dskplay/services/podcast_manager.dart';
 import 'package:dskplay/utilities/artwork_provider.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
+import 'package:dskplay/utilities/formatter.dart';
 import 'package:dskplay/widgets/confirmation_dialog.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:dskplay/widgets/playback_icon_button.dart';
@@ -310,6 +312,22 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
                   ),
                 ),
               ),
+              if (episode.pubDate != null || episode.durationSeconds != null) ...[
+                const SizedBox(height: 12),
+                Center(
+                  child: Text(
+                    [
+                      if (episode.pubDate != null)
+                        DateFormat.yMMMd().format(episode.pubDate!),
+                      if (episode.durationSeconds != null)
+                        formatDuration(episode.durationSeconds!),
+                    ].join(' • '),
+                    style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
               if (episode.description.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Text(episode.description),

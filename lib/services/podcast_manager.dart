@@ -100,10 +100,22 @@ class PodcastManager {
       );
 
   // Total seconds listened per calendar month (key 'yyyy-MM'), across every
-  // podcast - drives the statistics screen's "Años" bar chart.
+  // podcast - drives the statistics screen's history bar chart at month/year
+  // granularity.
   final ValueNotifier<Map<String, int>> listenedSecondsByMonth =
       ValueNotifier<Map<String, int>>(
         (Hive.box('user').get('podcastListenedSecondsByMonth', defaultValue: {})
+                as Map)
+            .map((key, value) => MapEntry(key as String, value as int)),
+      );
+
+  // Total seconds listened per calendar day (key 'yyyy-MM-dd'), across every
+  // podcast - only day/week granularity in the statistics screen's history
+  // chart, so data predating this field simply won't show at those zoom
+  // levels.
+  final ValueNotifier<Map<String, int>> listenedSecondsByDay =
+      ValueNotifier<Map<String, int>>(
+        (Hive.box('user').get('podcastListenedSecondsByDay', defaultValue: {})
                 as Map)
             .map((key, value) => MapEntry(key as String, value as int)),
       );
@@ -141,6 +153,18 @@ class PodcastManager {
       'user',
       'podcastListenedSecondsByMonth',
       listenedSecondsByMonth.value,
+    );
+
+    final dayKey =
+        '$monthKey-${at.day.toString().padLeft(2, '0')}';
+    listenedSecondsByDay.value = {
+      ...listenedSecondsByDay.value,
+      dayKey: (listenedSecondsByDay.value[dayKey] ?? 0) + seconds,
+    };
+    await addOrUpdateData<Map>(
+      'user',
+      'podcastListenedSecondsByDay',
+      listenedSecondsByDay.value,
     );
   }
 
@@ -494,6 +518,12 @@ class PodcastManager {
         (Hive.box(
                   'user',
                 ).get('podcastListenedSecondsByMonth', defaultValue: {})
+                as Map)
+            .map((key, value) => MapEntry(key as String, value as int));
+    listenedSecondsByDay.value =
+        (Hive.box(
+                  'user',
+                ).get('podcastListenedSecondsByDay', defaultValue: {})
                 as Map)
             .map((key, value) => MapEntry(key as String, value as int));
   }
