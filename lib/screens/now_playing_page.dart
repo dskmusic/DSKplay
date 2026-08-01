@@ -24,6 +24,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_flip_card/flutter_flip_card.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/services/router_service.dart';
 import 'package:dskplay/widgets/now_playing/bottom_actions_row.dart';
@@ -151,14 +152,36 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            onPressed: () async {
-              await audioHandler.stopAndClearNowPlaying();
-              if (context.mounted) Navigator.pop(context);
-            },
+            onPressed: () => _confirmStopAndClose(context),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _confirmStopAndClose(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('¿Detener y cerrar?'),
+        content: const Text(
+          'Se detendrá la reproducción actual y se cerrará el reproductor.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(dialogContext.l10n!.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Detener y cerrar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await audioHandler.stopAndClearNowPlaying();
+    if (context.mounted) Navigator.pop(context);
   }
 }
 

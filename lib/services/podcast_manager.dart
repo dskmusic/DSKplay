@@ -70,6 +70,19 @@ class PodcastManager {
         as bool,
   );
 
+  // Per-podcast override for the episode list order within its detail page
+  // (unlike [episodeSortAscending] above, which only orders the
+  // subscriptions list by latest episode date). Absent entries default to
+  // newest-first (ascending: false), matching the app-wide default.
+  final ValueNotifier<Map<String, bool>> episodeSortAscendingByPodcast =
+      ValueNotifier<Map<String, bool>>(
+        (Hive.box(
+                  'user',
+                ).get('podcastEpisodeSortAscendingByPodcast', defaultValue: {})
+                as Map)
+            .map((key, value) => MapEntry(key as String, value as bool)),
+      );
+
   final ValueNotifier<bool> subscriptionsGridView = ValueNotifier<bool>(
     Hive.box('user').get('podcastSubscriptionsGridView', defaultValue: false)
         as bool,
@@ -402,6 +415,24 @@ class PodcastManager {
     );
   }
 
+  bool episodeSortAscendingFor(String podcastId) =>
+      episodeSortAscendingByPodcast.value[podcastId] ?? false;
+
+  Future<void> setEpisodeSortAscendingFor(
+    String podcastId,
+    bool ascending,
+  ) async {
+    episodeSortAscendingByPodcast.value = {
+      ...episodeSortAscendingByPodcast.value,
+      podcastId: ascending,
+    };
+    await addOrUpdateData<Map>(
+      'user',
+      'podcastEpisodeSortAscendingByPodcast',
+      episodeSortAscendingByPodcast.value,
+    );
+  }
+
   Future<void> setSubscriptionsGridView(bool gridView) async {
     subscriptionsGridView.value = gridView;
     await addOrUpdateData<bool>(
@@ -432,6 +463,15 @@ class PodcastManager {
               'user',
             ).get('podcastSubscriptionsGridView', defaultValue: false)
             as bool;
+    episodeSortAscendingByPodcast.value =
+        (Hive.box(
+                  'user',
+                ).get(
+                  'podcastEpisodeSortAscendingByPodcast',
+                  defaultValue: {},
+                )
+                as Map)
+            .map((key, value) => MapEntry(key as String, value as bool));
     latestEpisodeDates.value = Map<String, String>.from(
       Hive.box('user').get('podcastLatestEpisodeDates', defaultValue: {}),
     );

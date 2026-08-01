@@ -367,7 +367,7 @@ String _formatSpeed(double speed) =>
         : speed.toStringAsFixed(1);
 
 void _showPlaybackSpeedDialog(BuildContext context, double currentSpeed) {
-  const speeds = [0.5, 0.8, 1.0, 1.2, 1.5, 1.8, 2.0];
+  const speeds = [0.5, 0.8, 1.0, 1.2, 1.5, 1.8, 2.0, 2.5, 3.0];
 
   showDialog<void>(
     context: context,

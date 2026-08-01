@@ -1546,22 +1546,29 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         mediaId: uniqueId,
       );
 
-      final success = await playSong(
-        _queueList[index],
-        mediaId: uniqueId,
-        transitionId: currentTransitionId,
-      );
+      final isPodcastEpisode = currentSong['isPodcastEpisode'] == true;
+      final success = isPodcastEpisode
+          ? await _playPodcastQueueEntry(currentSong)
+          : await playSong(
+              _queueList[index],
+              mediaId: uniqueId,
+              transitionId: currentTransitionId,
+            );
 
       // Only process result if this is still the current transition
       if (currentTransitionId == _currentLoadingTransitionId) {
         if (success) {
           _consecutiveErrors = 0;
-          _preloadUpcomingSongs();
-          _persistQueueState();
-          // Trigger background song addition if auto-play is enabled
-          if (playNextSongAutomatically.value) {
-            unawaited(_backgroundAddSongsToQueue());
+          // Podcast episodes stream from their own audioUrl and aren't
+          // followed by auto-recommended songs, so neither preloading nor
+          // background queue growth applies to them.
+          if (!isPodcastEpisode) {
+            _preloadUpcomingSongs();
+            if (playNextSongAutomatically.value) {
+              unawaited(_backgroundAddSongsToQueue());
+            }
           }
+          _persistQueueState();
         } else {
           _currentQueueIndex = previousQueueIndex;
           if (previousMediaItem != null) {
@@ -1597,7 +1604,11 @@ class DskPlayAudioHandler extends BaseAudioHandler {
             final nextSong = _queueList[nextIndex];
             final ytid = nextSong['ytid'];
 
+            // Podcast episodes stream from their own audioUrl, not a
+            // fetchSongStreamUrl(ytid) lookup - preloading would just waste a
+            // network call against a fake id.
             if (ytid != null &&
+                nextSong['isPodcastEpisode'] != true &&
                 !isSongAlreadyOffline(ytid) &&
                 !_preloadedYtIds.contains(ytid) &&
                 !_preloadingYtIds.contains(ytid)) {
@@ -1758,6 +1769,20 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       // shouldn't overwrite what a cold start remembers as "what you were
       // playing" - leave whatever was persisted before the share untouched.
       if (currentSong?['externalShare'] == true) return;
+
+      // Podcast queues keep their own resume bookkeeping (_persistPodcastState,
+      // driven by _currentPlayingPodcast/_persistPodcastPositionIfNeeded) -
+      // don't clobber it here, and don't persist podcast entries as the
+      // "regular queue" to restore on a cold start.
+      // ponytail: a multi-episode podcast queue itself isn't restored across
+      // app restarts (only the currently-playing episode+position is, same
+      // as before this queue existed) - add if users ask for it.
+      if (_queueList[_currentQueueIndex.clamp(0, _queueList.length - 1)]
+              ['isPodcastEpisode'] ==
+          true) {
+        return;
+      }
+
       // A regular song is now playing, so it - not whatever podcast episode
       // was last playing, if any - is what a cold start should resume.
       _currentPlayingPodcast = null;
@@ -2853,37 +2878,141 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     }
   }
 
+  Map<String, dynamic> _buildEpisodeSong(
+    PodcastEpisode episode,
+    String podcastTitle,
+    String? localPath,
+  ) {
+    return {
+      'id': episode.key,
+      'ytid': episode.key,
+      'title': episode.title,
+      'artist': podcastTitle,
+      'album': podcastTitle,
+      'highResImage': episode.image,
+      'lowResImage': episode.image,
+      'duration': episode.durationSeconds,
+      'isLive': false,
+      'isPodcastEpisode': true,
+      'description': episode.description,
+      // Kept so a Time Machine recap entry, or a later queue entry reached
+      // via _playFromQueue, can replay this episode - it needs a real
+      // PodcastEpisode, not a fetchSongStreamUrl(ytid) lookup like a song.
+      'audioUrl': episode.audioUrl,
+      'guid': episode.guid,
+      'podcastId': episode.podcastId,
+      'isOffline': localPath != null,
+      'localPath': localPath,
+    };
+  }
+
+  /// Reconstructs the [PodcastEpisode] a queue entry map was built from (see
+  /// [_buildEpisodeSong]) - needed because [_currentPlayingPodcast] and the
+  /// resume/download features want a real episode object, not a plain Map.
+  PodcastEpisode _episodeFromQueueSong(Map song) {
+    return PodcastEpisode(
+      guid: song['guid']?.toString() ?? '',
+      podcastId: song['podcastId']?.toString() ?? '',
+      title: song['title']?.toString() ?? '',
+      audioUrl: song['audioUrl']?.toString() ?? '',
+      image: song['highResImage']?.toString() ?? '',
+      description: song['description']?.toString() ?? '',
+      durationSeconds: song['duration'] as int?,
+    );
+  }
+
   /// Plays a podcast episode, online (streamed from [episode.audioUrl]) or
-  /// from a [localPath] if it was downloaded. Modeled on [playRadioStream]
-  /// - a podcast episode is likewise a plain, ready-to-play audio file, just
-  /// not live and with a real duration.
+  /// from a [localPath] if it was downloaded. Starts a brand-new,
+  /// single-episode queue - use [addPodcastEpisodeToQueue] to append instead,
+  /// or [playPodcastEpisodesQueue] to start a queue with several episodes.
   Future<bool> playPodcastEpisode(
     PodcastEpisode episode, {
     required String podcastTitle,
     String? localPath,
     Duration? initialPosition,
   }) async {
+    final episodeSong = _buildEpisodeSong(episode, podcastTitle, localPath);
+
+    _queueList
+      ..clear()
+      ..add(episodeSong);
+    _originalQueueList
+      ..clear()
+      ..add(cloneMap(episodeSong));
+    _currentQueueIndex = 0;
+    _currentLoadingIndex = -1;
+    _currentLoadingTransitionId = -1;
+    _resetPreloadingState();
+    // Set as soon as the episode's mediaItem is shown, not after playback
+    // actually starts: the play call below can await on network I/O, and
+    // until it resolves this was left null even though the episode was
+    // already visibly "current" - e.g. the full player's "View podcast"
+    // button would find nothing during that window.
+    _updateQueueMediaItems();
+
+    return _playPodcastQueueEntry(episodeSong, initialPosition: initialPosition);
+  }
+
+  /// Replaces the queue with [episodes] and starts playing at [startIndex] -
+  /// used by the podcast multi-selection "play" button so the whole
+  /// selection becomes a real, reorderable queue, like [addPlaylistToQueue]
+  /// does for songs, instead of only playing the first episode.
+  Future<bool> playPodcastEpisodesQueue(
+    List<PodcastEpisode> episodes, {
+    required String podcastTitle,
+    int startIndex = 0,
+    Map<String, String>? localPathsByEpisodeKey,
+  }) async {
+    if (episodes.isEmpty) return false;
+
+    final songs = [
+      for (final episode in episodes)
+        _buildEpisodeSong(
+          episode,
+          podcastTitle,
+          localPathsByEpisodeKey?[episode.key],
+        ),
+    ];
+
+    _queueList
+      ..clear()
+      ..addAll(songs);
+    _originalQueueList
+      ..clear()
+      ..addAll(cloneMaps(songs));
+    _currentQueueIndex = startIndex.clamp(0, songs.length - 1);
+    _currentLoadingIndex = -1;
+    _currentLoadingTransitionId = -1;
+    _resetPreloadingState();
+    _updateQueueMediaItems();
+
+    return _playPodcastQueueEntry(songs[_currentQueueIndex]);
+  }
+
+  /// Appends a single episode to the end of whatever is currently queued
+  /// (song or podcast) - used by the "add to queue instead of playing now"
+  /// choice when the user taps an episode while something else is playing.
+  Future<void> addPodcastEpisodeToQueue(
+    PodcastEpisode episode, {
+    required String podcastTitle,
+    String? localPath,
+  }) {
+    return addToQueue(_buildEpisodeSong(episode, podcastTitle, localPath));
+  }
+
+  /// Builds the audio source for [episodeSong] and starts playback, updating
+  /// [_currentPlayingPodcast] and the listening-stats session - shared by
+  /// [playPodcastEpisode]/[playPodcastEpisodesQueue] (the first episode of a
+  /// new queue) and [_playFromQueue] (reaching a later podcast entry in an
+  /// existing queue), so both behave identically.
+  Future<bool> _playPodcastQueueEntry(
+    Map episodeSong, {
+    Duration? initialPosition,
+  }) async {
     try {
-      final isOffline = localPath != null;
-      final episodeSong = {
-        'id': episode.key,
-        'ytid': episode.key,
-        'title': episode.title,
-        'artist': podcastTitle,
-        'album': podcastTitle,
-        'highResImage': episode.image,
-        'lowResImage': episode.image,
-        'duration': episode.durationSeconds,
-        'isLive': false,
-        'isPodcastEpisode': true,
-        'description': episode.description,
-        // Kept so a Time Machine recap entry can replay this episode later
-        // via playPodcastEpisode - it needs a real PodcastEpisode, not a
-        // fetchSongStreamUrl(ytid) lookup like a regular song.
-        'audioUrl': episode.audioUrl,
-        'guid': episode.guid,
-        'podcastId': episode.podcastId,
-      };
+      final isOffline = episodeSong['isOffline'] == true;
+      final localPath = episodeSong['localPath'] as String?;
+      final audioUrl = episodeSong['audioUrl'] as String?;
 
       _lastError = null;
       if (audioPlayer.playing) {
@@ -2893,29 +3022,21 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         await audioPlayer.pause();
       }
 
-      final mediaItem = mapToMediaItem(episodeSong);
-      this.mediaItem.add(mediaItem);
-      queue.add([mediaItem]);
-      // Set as soon as the episode's mediaItem is shown, not after playback
-      // actually starts: buildAudioSource/setAudioSource below can await on
-      // network I/O, and until they resolve this was left null even though
-      // the episode was already visibly "current" - e.g. the full player's
-      // "View podcast" button would find nothing during that window.
       _currentPlayingPodcast = (
-        episode: episode,
-        podcastTitle: podcastTitle,
+        episode: _episodeFromQueueSong(episodeSong),
+        podcastTitle: episodeSong['artist']?.toString() ?? '',
         localPath: localPath,
       );
 
       final audioSource = await buildAudioSource(
         episodeSong,
-        isOffline ? localPath : episode.audioUrl,
+        isOffline ? (localPath ?? '') : (audioUrl ?? ''),
         isOffline,
       );
 
       if (audioSource == null) {
         logger.log(
-          'Failed to build audio source for podcast episode: ${episode.key}',
+          'Failed to build audio source for podcast episode: ${episodeSong['id']}',
         );
         _lastError = 'Failed to load podcast episode';
         _currentPlayingPodcast = null;
@@ -2939,8 +3060,8 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         )
         ..startListeningSession(
           episodeSong,
-          duration: episode.durationSeconds != null
-              ? Duration(seconds: episode.durationSeconds!)
+          duration: episodeSong['duration'] != null
+              ? Duration(seconds: episodeSong['duration'] as int)
               : Duration.zero,
         );
 
@@ -2954,12 +3075,15 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       });
 
       _updatePlaybackState();
-      _persistPodcastState(
-        episode,
-        podcastTitle,
-        localPath,
-        initialPosition ?? Duration.zero,
-      );
+      final playingPodcast = _currentPlayingPodcast;
+      if (playingPodcast != null) {
+        _persistPodcastState(
+          playingPodcast.episode,
+          playingPodcast.podcastTitle,
+          playingPodcast.localPath,
+          initialPosition ?? Duration.zero,
+        );
+      }
       return true;
     } catch (e, stackTrace) {
       logger.log(

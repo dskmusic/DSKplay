@@ -138,9 +138,23 @@ class ListeningStatsService {
     bool countTotalSeconds = true,
     DateTime? listenedAt,
   }) {
+    final now = listenedAt ?? DateTime.now();
+
+    // Podcast statistics have their own dedicated stats screen and are not
+    // part of the monthly/annual "Wrapped" summaries, so they're recorded
+    // regardless of the wrappedEnabled toggle - a user who disables Wrapped
+    // (a song-recap feature) shouldn't silently lose podcast tracking too.
+    if (song['isPodcastEpisode'] == true) {
+      final podcastId = song['podcastId']?.toString();
+      if (podcastId != null && podcastId.isNotEmpty) {
+        unawaited(
+          podcastManager.recordListenedTime(podcastId, listenedDuration, now),
+        );
+      }
+    }
+
     if (!wrappedEnabled.value) return;
 
-    final now = listenedAt ?? DateTime.now();
     _stats = applyListeningStatsDelta(
       _readStats(now),
       song: song,
@@ -151,15 +165,6 @@ class ListeningStatsService {
     );
     if (incrementPlayCount || listenedDuration > Duration.zero) {
       _markDirty();
-    }
-
-    if (song['isPodcastEpisode'] == true) {
-      final podcastId = song['podcastId']?.toString();
-      if (podcastId != null && podcastId.isNotEmpty) {
-        unawaited(
-          podcastManager.recordListenedTime(podcastId, listenedDuration, now),
-        );
-      }
     }
   }
 
@@ -177,7 +182,9 @@ class ListeningStatsService {
     Duration? duration,
     DateTime? startedAt,
   }) {
-    if (!wrappedEnabled.value) return;
+    // Podcast episodes track listening time unconditionally (see
+    // recordListening); everything else stays gated on Wrapped.
+    if (!wrappedEnabled.value && song['isPodcastEpisode'] != true) return;
 
     final ytid = song['ytid']?.toString();
     if (ytid == null || ytid.isEmpty) return;
@@ -194,10 +201,9 @@ class ListeningStatsService {
   }
 
   void resumeListeningSession({Map? currentSong}) {
-    if (!wrappedEnabled.value) return;
-
     final song = currentSong;
     if (song == null) return;
+    if (!wrappedEnabled.value && song['isPodcastEpisode'] != true) return;
 
     final ytid = song['ytid']?.toString();
     if (ytid == null || ytid.isEmpty) return;
@@ -234,7 +240,7 @@ class ListeningStatsService {
     final listenedDuration = now.difference(lastTick);
     if (listenedDuration <= Duration.zero) return;
 
-    if (!wrappedEnabled.value) {
+    if (!wrappedEnabled.value && song['isPodcastEpisode'] != true) {
       return;
     }
 

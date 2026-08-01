@@ -235,43 +235,41 @@ class _PodcastDescriptionBackContent extends StatelessWidget {
         Positioned(
           left: 8,
           bottom: 8,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Material(
-                color: Colors.black.withValues(alpha: 0.35),
-                borderRadius: BorderRadius.circular(8),
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  onTap: () => _copyEpisodeInfo(context),
-                  child: const Padding(
-                    padding: EdgeInsets.all(8),
-                    child: Icon(
-                      FluentIcons.copy_24_regular,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                  ),
+          child: Material(
+            color: Colors.black.withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(8),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => _copyEpisodeInfo(context),
+              child: const Padding(
+                padding: EdgeInsets.all(8),
+                child: Icon(
+                  FluentIcons.copy_24_regular,
+                  color: Colors.white,
+                  size: 18,
                 ),
               ),
-              const SizedBox(width: 8),
-              Material(
-                color: Colors.black.withValues(alpha: 0.35),
-                borderRadius: BorderRadius.circular(8),
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  onTap: () => _shareEpisodeInfo(context),
-                  child: const Padding(
-                    padding: EdgeInsets.all(8),
-                    child: Icon(
-                      FluentIcons.share_24_regular,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                  ),
+            ),
+          ),
+        ),
+        Positioned(
+          right: 8,
+          bottom: 8,
+          child: Material(
+            color: Colors.black.withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(8),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => _shareEpisodeInfo(context),
+              child: const Padding(
+                padding: EdgeInsets.all(8),
+                child: Icon(
+                  FluentIcons.share_24_regular,
+                  color: Colors.white,
+                  size: 18,
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ],

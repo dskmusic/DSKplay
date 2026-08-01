@@ -220,6 +220,25 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
 
     final downloaded = podcastManager.getDownloadedEpisode(episode.key);
     final localPath = downloaded?['audioPath'] as String?;
+
+    final somethingIsPlaying =
+        audioHandler.mediaItem.valueOrNull?.extras?['isPodcastEpisode'] ==
+            true &&
+        audioHandler.audioPlayer.playing;
+    if (somethingIsPlaying) {
+      final addToQueue = await _confirmAddToQueueOrPlayNow();
+      if (addToQueue == null || !mounted) return;
+      if (addToQueue) {
+        await audioHandler.addPodcastEpisodeToQueue(
+          episode,
+          podcastTitle: _podcast.title,
+          localPath: localPath,
+        );
+        if (mounted) showToast(context, context.l10n!.addToQueue);
+        return;
+      }
+    }
+
     final success = await audioHandler.playPodcastEpisode(
       episode,
       podcastTitle: _podcast.title,
@@ -228,6 +247,28 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
     if (!success && mounted) {
       showToast(context, context.l10n!.playbackFailed);
     }
+  }
+
+  // Mirrors confirmResumePodcast's dialog style; kept local since it's only
+  // relevant to this page's episode-tap flow.
+  Future<bool?> _confirmAddToQueueOrPlayNow() {
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Ya se está reproduciendo un episodio'),
+        content: const Text('¿Qué quieres hacer con este episodio?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Reproducir ahora'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(context.l10n!.addToQueue),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _copyEpisodeInfo(PodcastEpisode episode) async {
@@ -341,6 +382,30 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
     await downloadPodcastEpisodes(_podcast, episodes);
   }
 
+  Future<void> _playSelected() async {
+    final episodes = _episodes
+        .where((e) => _selectedKeys.contains(e.key))
+        .toList();
+    setState(_selectedKeys.clear);
+    if (episodes.isEmpty) return;
+
+    final localPathsByEpisodeKey = <String, String>{
+      for (final episode in episodes)
+        if (podcastManager.getDownloadedEpisode(episode.key)?['audioPath']
+            case final String path)
+          episode.key: path,
+    };
+
+    final success = await audioHandler.playPodcastEpisodesQueue(
+      episodes,
+      podcastTitle: _podcast.title,
+      localPathsByEpisodeKey: localPathsByEpisodeKey,
+    );
+    if (!success && mounted) {
+      showToast(context, context.l10n!.playbackFailed);
+    }
+  }
+
   Future<void> _markAllEpisodes({required bool listened}) async {
     await podcastManager.setAllListened(
       _episodes.map((e) => e.key).toList(),
@@ -407,20 +472,32 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
                   icon: const Icon(FluentIcons.arrow_download_24_regular),
                   onPressed: _downloadSelected,
                 ),
+                IconButton(
+                  tooltip: context.l10n!.play,
+                  icon: const Icon(FluentIcons.play_24_regular),
+                  onPressed: _playSelected,
+                ),
               ]
             : [
-                ValueListenableBuilder<bool>(
-                  valueListenable: podcastManager.episodeSortAscending,
-                  builder: (context, ascending, _) => IconButton(
-                    tooltip: context.l10n!.sortByDate,
-                    onPressed: () =>
-                        podcastManager.setEpisodeSortAscending(!ascending),
-                    icon: Icon(
-                      ascending
-                          ? FluentIcons.arrow_sort_up_24_regular
-                          : FluentIcons.arrow_sort_down_24_regular,
-                    ),
-                  ),
+                ValueListenableBuilder<Map<String, bool>>(
+                  valueListenable: podcastManager.episodeSortAscendingByPodcast,
+                  builder: (context, _, _) {
+                    final ascending = podcastManager.episodeSortAscendingFor(
+                      _podcast.id,
+                    );
+                    return IconButton(
+                      tooltip: context.l10n!.sortByDate,
+                      onPressed: () => podcastManager.setEpisodeSortAscendingFor(
+                        _podcast.id,
+                        !ascending,
+                      ),
+                      icon: Icon(
+                        ascending
+                            ? FluentIcons.arrow_sort_up_24_regular
+                            : FluentIcons.arrow_sort_down_24_regular,
+                      ),
+                    );
+                  },
                 ),
                 ValueListenableBuilder<List<Podcast>>(
                   valueListenable: podcastManager.subscriptions,
@@ -474,10 +551,12 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
                 ],
               ),
             )
-          : ValueListenableBuilder<bool>(
-              valueListenable: podcastManager.episodeSortAscending,
-              builder: (context, ascending, _) {
-                final episodes = _sortedEpisodes(ascending);
+          : ValueListenableBuilder<Map<String, bool>>(
+              valueListenable: podcastManager.episodeSortAscendingByPodcast,
+              builder: (context, _, _) {
+                final episodes = _sortedEpisodes(
+                  podcastManager.episodeSortAscendingFor(_podcast.id),
+                );
                 return StreamBuilder<MediaItem?>(
                   stream: audioHandler.mediaItem,
                   builder: (context, snapshot) {
