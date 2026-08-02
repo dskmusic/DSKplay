@@ -82,7 +82,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   // loaded), cleared on resume/stop - fires the same backup-then-exit as a
   // real stop if the user leaves it paused for the configured duration
   // instead of ever coming back to it.
-  Timer? _pauseAutoCloseTimer;
+  Timer? _idleAutoCloseTimer;
 
   // Set around stop() calls that should just halt playback and leave the
   // app open - the user closing the player from within the app, or giving
@@ -811,14 +811,17 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       final bufferedPosition = audioPlayer.bufferedPosition;
 
       if (isPlaying) {
-        _pauseAutoCloseTimer?.cancel();
-      } else if (currentState?.playing == true &&
-          newProcessingState != AudioProcessingState.idle) {
-        // Just transitioned from playing to paused (not stopped) - arm the
-        // configurable auto-close so leaving it paused and forgotten still
-        // eventually frees the process, same as the notification's own
-        // close button.
-        _schedulePauseAutoClose();
+        _idleAutoCloseTimer?.cancel();
+      } else if (currentState == null ||
+          (currentState.playing &&
+              newProcessingState != AudioProcessingState.idle)) {
+        // Just went idle - either a genuine playing-to-paused transition,
+        // or the very first state emitted at cold start with nothing ever
+        // played. Arm once here; this event fires repeatedly (just_audio
+        // polls position every ~100-800ms even while paused), so re-arming
+        // unconditionally on every tick would keep resetting the countdown
+        // and the timer would never actually elapse.
+        _scheduleIdleAutoClose();
       }
 
       final shouldEmitProgressTick =
@@ -2247,6 +2250,11 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   // dismissed, the sleep timer expiring, or a podcast episode finishing
   // on its own with nothing queued after it.
   Future<void> _exitIfIdle() async {
+    logger.log(
+      'exitIfIdle called '
+      '(playing=${audioPlayer.playing}, '
+      'downloadActive=${DownloadForegroundService.isActive})',
+    );
     if (!audioPlayer.playing && !DownloadForegroundService.isActive) {
       // Last chance to persist any pending changes before the process dies
       // outright - a bounded wait so a slow/dead network can't stall the
@@ -2255,18 +2263,33 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         const Duration(seconds: 8),
         onTimeout: () => false,
       );
+      logger.log('exitIfIdle: calling exit(0) now');
       exit(0);
     }
   }
 
-  /// Arms (or re-arms) the configurable "close after N minutes paused"
-  /// timer - a value of 0 disables it (user chose "never").
-  void _schedulePauseAutoClose() {
-    _pauseAutoCloseTimer?.cancel();
+  /// Arms (or re-arms) the configurable "close after N minutes idle" timer
+  /// - a value of 0 disables it (user chose "never"). Idle means not
+  /// playing; a download in flight still blocks the actual exit (see
+  /// [_exitIfIdle]), in which case this just checks again later instead of
+  /// giving up, so the process still closes once the download finishes.
+  void _scheduleIdleAutoClose() {
+    _idleAutoCloseTimer?.cancel();
     final minutes = autoCloseAfterPauseMinutes.value;
     if (minutes <= 0) return;
-    _pauseAutoCloseTimer = Timer(Duration(minutes: minutes), () {
-      if (!audioPlayer.playing) unawaited(_exitIfIdle());
+    logger.log('Idle auto-close armed for $minutes min');
+    _idleAutoCloseTimer = Timer(Duration(minutes: minutes), () {
+      logger.log(
+        'Idle auto-close timer fired '
+        '(playing=${audioPlayer.playing}, '
+        'downloadActive=${DownloadForegroundService.isActive})',
+      );
+      if (audioPlayer.playing) return;
+      if (DownloadForegroundService.isActive) {
+        _scheduleIdleAutoClose();
+        return;
+      }
+      unawaited(_exitIfIdle());
     });
   }
 
@@ -2362,7 +2385,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   @override
   Future<void> stop() async {
     _debounceTimer?.cancel();
-    _pauseAutoCloseTimer?.cancel();
+    _idleAutoCloseTimer?.cancel();
     _completionEventPending = false;
     _currentLoadingIndex = -1;
     _currentLoadingTransitionId = -1;
@@ -2389,6 +2412,10 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     // action that should leave the app open (see _keepAppOpenOnStop).
     if (!_keepAppOpenOnStop) {
       unawaited(_exitIfIdle());
+    } else {
+      // Staying open on purpose, but still idle now - arm the idle-close
+      // timer so it isn't left running forever with nothing playing.
+      _scheduleIdleAutoClose();
     }
   }
 

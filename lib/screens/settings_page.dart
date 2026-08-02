@@ -217,11 +217,11 @@ class SettingsPage extends StatelessWidget {
           valueListenable: autoCloseAfterPauseMinutes,
           builder: (_, value, __) {
             return CustomBar(
-              'Cierre automático en pausa',
+              'Cierre automático por inactividad',
               FluentIcons.timer_24_regular,
               description: value <= 0
                   ? 'Nunca se cierra sola'
-                  : 'Se cierra tras $value min en pausa',
+                  : 'Se cierra tras $value min inactiva',
               onTap: () => _showAutoCloseAfterPausePicker(context),
             );
           },
@@ -939,9 +939,10 @@ class SettingsPage extends StatelessWidget {
   }
 
   void _showAutoCloseAfterPausePicker(BuildContext context) {
-    const options = [0, 5, 10, 15, 30, 60];
+    const options = [0, 1, 5, 10, 15, 30, 60];
     const labels = [
       'Nunca',
+      '1 minuto',
       '5 minutos',
       '10 minutos',
       '15 minutos',
