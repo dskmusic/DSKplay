@@ -76,6 +76,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Static app shortcuts (long-press launcher icon) -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -84,6 +89,13 @@
                     android:scheme="dskplay"
                     android:host="playlist"
                     android:pathPattern="/custom/.*" />
+            </intent-filter>
+
+            <!-- Intent filter for app shortcut navigation (see xml/shortcuts.xml) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="dskplay" android:host="nav" />
             </intent-filter>
             <!-- Intent filter for handling text sharing -->
             <intent-filter>

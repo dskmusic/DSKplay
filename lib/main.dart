@@ -629,7 +629,14 @@ Future<void> _migrateOfflineFilesToExternalStorage(String oldRootPath) async {
 }
 
 void handleIncomingLink(Uri? uri) async {
-  if (uri == null || uri.scheme != 'dskplay' || uri.host != 'playlist') return;
+  if (uri == null || uri.scheme != 'dskplay') return;
+
+  if (uri.host == 'nav') {
+    _handleShortcutNavigation(uri);
+    return;
+  }
+
+  if (uri.host != 'playlist') return;
 
   if (uri.pathSegments.length < 2 || uri.pathSegments[0] != 'custom') return;
 
@@ -682,6 +689,19 @@ void handleIncomingLink(Uri? uri) async {
   } catch (e) {
     _showPlaylistError();
   }
+}
+
+void _handleShortcutNavigation(Uri uri) {
+  final target = uri.pathSegments.isNotEmpty ? uri.pathSegments[0] : '';
+  final path = switch (target) {
+    'podcasts' => NavigationManager.podcastsPath,
+    'radio' => '${NavigationManager.libraryPath}/radioStations',
+    'library' => NavigationManager.libraryPath,
+    'localFiles' => NavigationManager.localFilesPath,
+    'search' => NavigationManager.searchPath,
+    _ => null,
+  };
+  if (path != null) NavigationManager.router.go(path);
 }
 
 void _showPlaylistError() {

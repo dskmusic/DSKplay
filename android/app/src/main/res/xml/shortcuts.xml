@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="search"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_search"
+        android:shortcutShortLabel="@string/shortcut_search_short"
+        android:shortcutLongLabel="@string/shortcut_search_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.dskmusic.dskplay"
+            android:targetClass="com.ryanheise.audioservice.AudioServiceActivity"
+            android:data="dskplay://nav/search" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="podcasts"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_podcasts"
+        android:shortcutShortLabel="@string/shortcut_podcasts_short"
+        android:shortcutLongLabel="@string/shortcut_podcasts_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.dskmusic.dskplay"
+            android:targetClass="com.ryanheise.audioservice.AudioServiceActivity"
+            android:data="dskplay://nav/podcasts" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="radio"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_radio"
+        android:shortcutShortLabel="@string/shortcut_radio_short"
+        android:shortcutLongLabel="@string/shortcut_radio_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.dskmusic.dskplay"
+            android:targetClass="com.ryanheise.audioservice.AudioServiceActivity"
+            android:data="dskplay://nav/radio" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="library"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_library"
+        android:shortcutShortLabel="@string/shortcut_library_short"
+        android:shortcutLongLabel="@string/shortcut_library_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.dskmusic.dskplay"
+            android:targetClass="com.ryanheise.audioservice.AudioServiceActivity"
+            android:data="dskplay://nav/library" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="localFiles"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_local_files"
+        android:shortcutShortLabel="@string/shortcut_local_files_short"
+        android:shortcutLongLabel="@string/shortcut_local_files_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.dskmusic.dskplay"
+            android:targetClass="com.ryanheise.audioservice.AudioServiceActivity"
+            android:data="dskplay://nav/localFiles" />
+    </shortcut>
+</shortcuts>

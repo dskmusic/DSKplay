@@ -37,6 +37,8 @@ import 'package:dskplay/services/playlists_manager.dart';
 import 'package:dskplay/services/router_service.dart';
 import 'package:dskplay/utilities/app_utils.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
+import 'package:dskplay/utilities/formatter.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:dskplay/widgets/artist_bar.dart';
 import 'package:dskplay/widgets/confirmation_dialog.dart';
 import 'package:dskplay/widgets/custom_bar.dart';
@@ -70,6 +72,11 @@ void reloadSearchHistoryFromStorage() {
     'user',
   ).get('searchHistory', defaultValue: []);
 }
+
+// Gates URL parsing below to actual YouTube/YT Music links - otherwise a
+// plain search query that happens to look like a bare 11-char video id
+// would be misdetected as a video paste.
+final _youtubeUrlRegex = RegExp(r'(youtube\.com|youtu\.be)');
 
 class _SearchPageState extends State<SearchPage> {
   final TextEditingController _searchBar = TextEditingController();
@@ -138,6 +145,8 @@ class _SearchPageState extends State<SearchPage> {
     }
 
     try {
+      if (await _handlePastedYoutubeUrl(query)) return;
+
       final results = await Future.wait<List<dynamic>>([
         fetchSongsList(query),
         searchArtists(query),
@@ -175,6 +184,47 @@ class _SearchPageState extends State<SearchPage> {
       _fetchingSongs.value = false;
       if (mounted) setState(() {});
     }
+  }
+
+  /// If [query] is a pasted YouTube/YT Music link, resolves it directly
+  /// (as a playlist if it carries `list=`, otherwise as a single video) and
+  /// shows it as a search result instead of running a text search on the
+  /// raw URL. Returns whether the query was handled this way.
+  Future<bool> _handlePastedYoutubeUrl(String query) async {
+    if (!_youtubeUrlRegex.hasMatch(query)) return false;
+
+    final playlistId = PlaylistId.parsePlaylistId(query);
+    if (playlistId != null) {
+      final playlist = await getPlaylistInfoForWidget(playlistId);
+      _songsSearchResult = [];
+      _artistsSearchResult = [];
+      _albumsSearchResult = [];
+      _radioStationsSearchResult = [];
+      _playlistsSearchResult = playlist != null ? [playlist] : [];
+      return true;
+    }
+
+    final songId = getSongId(query);
+    if (songId != null) {
+      try {
+        final song = await getSongDetails(0, songId);
+        _songsSearchResult = [song];
+      } catch (e, stackTrace) {
+        logger.log(
+          'Error resolving pasted song URL',
+          error: e,
+          stackTrace: stackTrace,
+        );
+        _songsSearchResult = [];
+      }
+      _artistsSearchResult = [];
+      _albumsSearchResult = [];
+      _playlistsSearchResult = [];
+      _radioStationsSearchResult = [];
+      return true;
+    }
+
+    return false;
   }
 
   Future<List<dynamic>> _fetchSongsForResolvedArtist(String query) async {

@@ -43,8 +43,16 @@ import 'package:rxdart/rxdart.dart';
 class DskPlayAudioHandler extends BaseAudioHandler {
   DskPlayAudioHandler() {
     _androidEqualizer = AndroidEqualizer();
+    _androidLoudnessEnhancer = AndroidLoudnessEnhancer();
+    unawaited(
+      _androidLoudnessEnhancer.setTargetGain(_normalizationTargetGainDb),
+    );
+    unawaited(_applyVolumeNormalizationSetting());
+    volumeNormalizationEnabled.addListener(_applyVolumeNormalizationSetting);
     audioPlayer = AudioPlayer(
-      audioPipeline: AudioPipeline(androidAudioEffects: [_androidEqualizer]),
+      audioPipeline: AudioPipeline(
+        androidAudioEffects: [_androidEqualizer, _androidLoudnessEnhancer],
+      ),
       audioLoadConfiguration: const AudioLoadConfiguration(
         androidLoadControl: AndroidLoadControl(
           maxBufferDuration: Duration(seconds: 60),
@@ -68,7 +76,13 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   }
 
   late final AndroidEqualizer _androidEqualizer;
+  late final AndroidLoudnessEnhancer _androidLoudnessEnhancer;
+  // ponytail: fixed boost rather than true per-track loudness analysis
+  // (ReplayGain-style), which would need decoding/analyzing audio upfront.
+  // Reasonable default that noticeably lifts quiet tracks without clipping.
+  static const double _normalizationTargetGainDb = 6;
   late final AudioPlayer audioPlayer;
+
   bool _equalizerInitialized = false;
   Future<bool>? _equalizerInitFuture;
   DateTime _equalizerRetryNotBefore = DateTime.fromMillisecondsSinceEpoch(0);
@@ -693,6 +707,20 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         stackTrace: stackTrace,
       );
       return false;
+    }
+  }
+
+  Future<void> _applyVolumeNormalizationSetting() async {
+    try {
+      await _androidLoudnessEnhancer.setEnabled(
+        volumeNormalizationEnabled.value,
+      );
+    } catch (e, stackTrace) {
+      logger.log(
+        'Failed to apply volume normalization setting',
+        error: e,
+        stackTrace: stackTrace,
+      );
     }
   }
 

@@ -130,6 +130,20 @@ class SettingsPage extends StatelessWidget {
           FluentIcons.data_histogram_24_regular,
           onTap: () => context.push('/settings/equalizer'),
         ),
+        ValueListenableBuilder<bool>(
+          valueListenable: volumeNormalizationEnabled,
+          builder: (_, value, __) {
+            return CustomBar(
+              'Normalización de volumen',
+              FluentIcons.speaker_2_24_regular,
+              description: 'Iguala el volumen entre canciones',
+              trailing: Switch(
+                value: value,
+                onChanged: (value) => _toggleVolumeNormalization(context, value),
+              ),
+            );
+          },
+        ),
         CustomBar(
           context.l10n!.dynamicColor,
           FluentIcons.toggle_left_24_regular,
@@ -978,6 +992,12 @@ class SettingsPage extends StatelessWidget {
         },
       ),
     );
+  }
+
+  void _toggleVolumeNormalization(BuildContext context, bool value) {
+    addOrUpdateData<bool>('settings', 'volumeNormalizationEnabled', value);
+    volumeNormalizationEnabled.value = value;
+    showToast(context, context.l10n!.settingChangedMsg);
   }
 
   void _toggleSystemColor(BuildContext context, bool value) {

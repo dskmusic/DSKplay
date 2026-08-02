@@ -101,6 +101,10 @@ final equalizerEnabled = ValueNotifier<bool>(
 
 final equalizerBandGains = ValueNotifier<List<double>>(_readEqualizerGains());
 
+final volumeNormalizationEnabled = ValueNotifier<bool>(
+  Hive.box('settings').get('volumeNormalizationEnabled', defaultValue: false),
+);
+
 Locale languageSetting = getLocaleFromLanguageCode(
   Hive.box(
         'settings',

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcut_podcasts_short">Podcasts</string>
+    <string name="shortcut_podcasts_long">Abrir podcasts</string>
+
+    <string name="shortcut_radio_short">Radio</string>
+    <string name="shortcut_radio_long">Abrir emisoras de radio</string>
+
+    <string name="shortcut_library_short">Biblioteca</string>
+    <string name="shortcut_library_long">Abrir biblioteca</string>
+
+    <string name="shortcut_local_files_short">Archivos locales</string>
+    <string name="shortcut_local_files_long">Abrir archivos locales</string>
+
+    <string name="shortcut_search_short">Buscar</string>
+    <string name="shortcut_search_long">Buscar música</string>
+</resources>
