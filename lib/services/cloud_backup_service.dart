@@ -49,14 +49,17 @@ class CloudBackupService {
 
   static final CloudBackupService instance = CloudBackupService._();
 
-  static const _autoBackupDebounce = Duration(seconds: 8);
   static const _periodicBackupInterval = Duration(hours: 6);
 
   bool _ready = false;
   String? _deviceId;
-  Timer? _debounceTimer;
   Timer? _periodicTimer;
   Future<void>? _initFuture;
+  // Set whenever a backed-up box changes, cleared after a successful
+  // upload - lets the background/periodic triggers skip re-uploading the
+  // same 1MB+ file every time the app is merely opened and closed again
+  // with nothing new to save.
+  bool _dirty = false;
 
   /// Idempotent: safe to call from multiple places (app bootstrap fires it
   /// without awaiting, while upload/download/timestamp calls await it here
@@ -109,16 +112,15 @@ class CloudBackupService {
 
   Reference? get _reference => _referenceFor(_backupKey);
 
-  /// Debounced auto-backup: called on every backed-up data change, but only
-  /// actually uploads once the changes settle for a few seconds, so a burst
-  /// of edits results in a single upload instead of one per change.
+  /// Marks the backup as needing a re-upload. Doesn't upload immediately -
+  /// that happens when the app is backgrounded/closed (see
+  /// [DskPlayAudioHandler.onTaskRemoved] and the app lifecycle listener in
+  /// main.dart) or by the periodic timer below, so a whole listening
+  /// session's worth of changes goes out as one upload instead of one per
+  /// change.
   void scheduleAutoBackup() {
     if (!_ready) return;
-    _debounceTimer?.cancel();
-    _debounceTimer = Timer(
-      _autoBackupDebounce,
-      () => unawaited(uploadBackup()),
-    );
+    _dirty = true;
   }
 
   static const _networkTimeout = Duration(seconds: 20);
@@ -132,7 +134,13 @@ class CloudBackupService {
   /// generic "backup failed" that gives no clue what to fix.
   String? lastUploadError;
 
-  Future<bool> uploadBackup() async {
+  /// Uploads the current backup. Skips the actual upload (returning `true`
+  /// as if it succeeded) when nothing has changed since the last successful
+  /// one, unless [force] is set - used by the manual "back up now" button,
+  /// which should always upload even if that just re-confirms the existing
+  /// backup.
+  Future<bool> uploadBackup({bool force = false}) async {
+    if (!force && !_dirty) return true;
     lastUploadError = null;
     try {
       // Auth/device-id setup involves network calls with no built-in
@@ -170,6 +178,7 @@ class CloudBackupService {
         'lastCloudBackupAt',
         DateTime.now(),
       );
+      _dirty = false;
       return true;
     } catch (e, stackTrace) {
       logger.log('Cloud backup upload failed', error: e, stackTrace: stackTrace);

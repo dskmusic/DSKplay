@@ -29,6 +29,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/models/podcast_model.dart';
 import 'package:dskplay/models/position_data.dart';
+import 'package:dskplay/services/cloud_backup_service.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/data_manager.dart';
 import 'package:dskplay/services/download_foreground_service.dart';
@@ -884,7 +885,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
           // The sleep timer expiring should end the listening session
           // outright, not just pause it - whether the app is foregrounded
           // or only alive via the notification in the background.
-          _exitIfIdle();
+          unawaited(_exitIfIdle());
           return;
         }
 
@@ -991,7 +992,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
           // Kill the process outright (unless a download is in flight)
           // instead of leaving it idling in the background, same as when
           // the sleep timer expires.
-          _exitIfIdle();
+          unawaited(_exitIfIdle());
         }
         return;
       }
@@ -1010,7 +1011,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         // situation as a podcast finishing with nothing left, so close the
         // notification and free the process the same way.
         await stop();
-        _exitIfIdle();
+        unawaited(_exitIfIdle());
       } else {
         // For all other cases (next song, repeat all, auto-play), skipToNext handles it
         await skipToNext();
@@ -2228,7 +2229,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     // there's no reason to keep the process alive draining battery in the
     // background, so kill it outright instead of leaving it idling in the
     // OS's recent-process cache.
-    _exitIfIdle();
+    unawaited(_exitIfIdle());
   }
 
   // Nothing playing and no download (individual or batch) in flight - no
@@ -2237,8 +2238,15 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   // pausing it: the app being swiped away, the notification being
   // dismissed, the sleep timer expiring, or a podcast episode finishing
   // on its own with nothing queued after it.
-  void _exitIfIdle() {
+  Future<void> _exitIfIdle() async {
     if (!audioPlayer.playing && !DownloadForegroundService.isActive) {
+      // Last chance to persist any pending changes before the process dies
+      // outright - a bounded wait so a slow/dead network can't stall the
+      // app's own shutdown indefinitely.
+      await cloudBackupService.uploadBackup().timeout(
+        const Duration(seconds: 8),
+        onTimeout: () => false,
+      );
       exit(0);
     }
   }
@@ -2261,7 +2269,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       );
     }
 
-    _exitIfIdle();
+    unawaited(_exitIfIdle());
   }
 
   /// Starts the podcast episode restored from a cold start. Called by default
@@ -3453,7 +3461,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         // The sleep timer expiring should end the listening session
         // outright, not just pause it - whether the app is foregrounded or
         // only alive via the notification in the background.
-        _exitIfIdle();
+        unawaited(_exitIfIdle());
       });
     } catch (e, stackTrace) {
       logger.log('Error setting sleep timer', error: e, stackTrace: stackTrace);

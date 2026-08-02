@@ -207,7 +207,7 @@ class _BackupSectionState extends State<BackupSection> {
   });
 
   Future<void> _backupCloud() => _run(actionKey: 'cloud_backup', () async {
-    final success = await cloudBackupService.uploadBackup();
+    final success = await cloudBackupService.uploadBackup(force: true);
     final error = cloudBackupService.lastUploadError;
     return (
       message: success
