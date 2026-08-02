@@ -2366,13 +2366,17 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     mediaItem.add(null);
     _pendingPodcastResume = null;
     _currentPlayingPodcast = null;
+    // Awaited (unlike the fire-and-forget pattern elsewhere in this file):
+    // this is a deliberate, final user action, and a common follow-up is
+    // closing/killing the app right away - a pending unawaited write can
+    // lose the race against process death, leaving the stale queue on disk
+    // for the mini player to restore on the next cold start.
     final userBox = Hive.box('user');
-    unawaited(
-      Future.wait([
-        userBox.delete(_lastQueueStateKey),
-        userBox.delete(_lastPodcastStateKey),
-      ]).then((_) => userBox.flush()),
-    );
+    await Future.wait([
+      userBox.delete(_lastQueueStateKey),
+      userBox.delete(_lastPodcastStateKey),
+    ]);
+    await userBox.flush();
   }
 
   /// Returns unplayed manually added songs after the current queue index.

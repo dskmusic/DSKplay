@@ -20,24 +20,30 @@
  */
 
 import 'dart:async';
+import 'dart:convert';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:dskplay/main.dart' show logger;
 import 'package:dskplay/services/data_manager.dart';
 import 'package:dskplay/services/io_service.dart';
 
 /// Anonymous, no-personal-data cloud backup: sign-in is anonymous (no
-/// name/email/Google account involved), but the backup document itself is
-/// keyed by this Android install's stable `ANDROID_ID` (see
-/// [getAndroidDeviceId]) rather than the anonymous auth uid, so the same
-/// device code keeps working across an uninstall/reinstall. Firestore
-/// security rules must allow any authenticated (incl. anonymous) user to
-/// read/write `/backups/{userId}` for this to work - there's no way to
-/// verify from the client alone that a given ANDROID_ID "belongs" to the
-/// caller, so this trades a bit of write security (anyone with the code
-/// could overwrite that backup) for the code surviving reinstalls.
+/// name/email/Google account involved), but the backup file itself is keyed
+/// by this Android install's stable `ANDROID_ID` (see [getAndroidDeviceId])
+/// rather than the anonymous auth uid, so the same device code keeps working
+/// across an uninstall/reinstall. Storage security rules must allow any
+/// authenticated (incl. anonymous) user to read/write `backups/*` for this
+/// to work - there's no way to verify from the client alone that a given
+/// ANDROID_ID "belongs" to the caller, so this trades a bit of write
+/// security (anyone with the code could overwrite that backup) for the code
+/// surviving reinstalls.
+///
+/// The whole backup is a single JSON file per device (`backups/<key>.json`)
+/// instead of many small documents - one file write is one Storage
+/// operation regardless of how much history it contains, unlike Firestore
+/// where every top-level box key was its own document write.
 class CloudBackupService {
   CloudBackupService._();
 
@@ -87,8 +93,8 @@ class CloudBackupService {
 
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
-  /// The Firestore document key for this device: its stable ANDROID_ID
-  /// when available (survives uninstall/reinstall), falling back to the
+  /// The Storage file key for this device: its stable ANDROID_ID when
+  /// available (survives uninstall/reinstall), falling back to the
   /// anonymous auth uid off Android or if reading ANDROID_ID failed.
   String? get _backupKey => _deviceId ?? _uid;
 
@@ -96,13 +102,12 @@ class CloudBackupService {
   /// restore this backup from a different install.
   String? get deviceCode => _backupKey;
 
-  DocumentReference<Map<String, dynamic>>? _documentFor(String? key) {
+  Reference? _referenceFor(String? key) {
     if (key == null) return null;
-    return FirebaseFirestore.instance.collection('backups').doc(key);
+    return FirebaseStorage.instance.ref('backups/$key.json');
   }
 
-  DocumentReference<Map<String, dynamic>>? get _document =>
-      _documentFor(_backupKey);
+  Reference? get _reference => _referenceFor(_backupKey);
 
   /// Debounced auto-backup: called on every backed-up data change, but only
   /// actually uploads once the changes settle for a few seconds, so a burst
@@ -116,47 +121,49 @@ class CloudBackupService {
     );
   }
 
+  static const _networkTimeout = Duration(seconds: 20);
+  // The upload's size scales with how much history the user has (song
+  // library, wrapped stats, podcast episodes...) - give it more room before
+  // giving up than the other, fixed-size calls here.
+  static const _uploadTimeout = Duration(seconds: 60);
+
+  /// Set on every failed [uploadBackup] call, so the settings UI can show
+  /// the real reason (e.g. a Storage permission-denied) instead of a
+  /// generic "backup failed" that gives no clue what to fix.
+  String? lastUploadError;
+
   Future<bool> uploadBackup() async {
-    await init();
-    final document = _document;
-    if (document == null) return false;
+    lastUploadError = null;
+    try {
+      // Auth/device-id setup involves network calls with no built-in
+      // timeout - without this, a bad connection can leave the upload
+      // hanging indefinitely with no error and no feedback, which reads to
+      // the user as "nothing is happening".
+      await init().timeout(
+        _networkTimeout,
+        onTimeout: () => throw TimeoutException('init/sign-in'),
+      );
+    } catch (e, stackTrace) {
+      logger.log('Cloud backup init timed out', error: e, stackTrace: stackTrace);
+      lastUploadError = e.toString();
+      return false;
+    }
+    final reference = _reference;
+    if (reference == null) {
+      lastUploadError = 'No device/account id available (auth failed?)';
+      return false;
+    }
 
     try {
       final snapshot = await buildBackupSnapshot();
+      final bytes = utf8.encode(jsonEncode(snapshot));
 
-      // Firestore caps a single document at 1 MiB. Writing the whole backup
-      // (song library, wrapped stats, and every podcast's subscriptions,
-      // listened episodes and per-podcast stats) as one nested field on one
-      // document can blow past that for a long-time user or a large podcast
-      // history, which fails the *entire* upload silently - nothing gets
-      // backed up, not just the part that grew too big. Splitting into one
-      // small document per top-level box key keeps each write far under the
-      // limit no matter how much history any single box key accumulates.
-      final entries = document.collection('entries');
-      final existing = await entries.get();
-      final batch = FirebaseFirestore.instance.batch();
-      for (final doc in existing.docs) {
-        batch.delete(doc.reference);
-      }
-      for (final boxEntry in snapshot.entries) {
-        final boxData = boxEntry.value;
-        if (boxData is! Map) continue;
-        for (final keyEntry in boxData.entries) {
-          batch.set(entries.doc('${boxEntry.key}__${keyEntry.key}'), {
-            'box': boxEntry.key,
-            'key': keyEntry.key,
-            'value': keyEntry.value,
-          });
-        }
-      }
-      // A plain DateTime (not FieldValue.serverTimestamp()) so it reads
-      // back immediately: a server timestamp resolves to null on reads
-      // until the write is acknowledged by the server, which can take a
-      // while - this value is only ever shown to the device that wrote it.
-      // Replaces the document outright, which also drops any legacy 'data'
-      // field from a pre-chunking backup.
-      batch.set(document, {'updatedAt': DateTime.now()});
-      await batch.commit();
+      await reference
+          .putData(bytes, SettableMetadata(contentType: 'application/json'))
+          .timeout(
+            _uploadTimeout,
+            onTimeout: () => throw TimeoutException('uploading backup'),
+          );
 
       await addOrUpdateData(
         'userNoBackup',
@@ -166,6 +173,7 @@ class CloudBackupService {
       return true;
     } catch (e, stackTrace) {
       logger.log('Cloud backup upload failed', error: e, stackTrace: stackTrace);
+      lastUploadError = e.toString();
       return false;
     }
   }
@@ -176,43 +184,15 @@ class CloudBackupService {
     String? code,
   }) async {
     await init();
-    final document = _documentFor(code ?? _backupKey);
-    if (document == null) return (data: null, updatedAt: null);
+    final reference = _referenceFor(code ?? _backupKey);
+    if (reference == null) return (data: null, updatedAt: null);
 
     try {
-      final docSnapshot = await document.get();
-      final raw = docSnapshot.data();
-      if (raw == null) return (data: null, updatedAt: null);
-
-      final entriesSnapshot = await document.collection('entries').get();
-      final data = <String, Map<String, dynamic>>{};
-      if (entriesSnapshot.docs.isEmpty) {
-        // Legacy pre-chunking backups nested everything under a single
-        // 'data' field - keep reading those so a device that hasn't
-        // re-uploaded since the chunking change doesn't lose its backup.
-        final legacy = (raw['data'] as Map?)?.cast<String, dynamic>();
-        if (legacy != null) {
-          for (final boxEntry in legacy.entries) {
-            final boxData = boxEntry.value;
-            if (boxData is Map) {
-              data[boxEntry.key] = boxData.cast<String, dynamic>();
-            }
-          }
-        }
-      } else {
-        for (final entryDoc in entriesSnapshot.docs) {
-          final entryData = entryDoc.data();
-          final box = entryData['box'] as String?;
-          final key = entryData['key'] as String?;
-          if (box == null || key == null) continue;
-          (data[box] ??= <String, dynamic>{})[key] = entryData['value'];
-        }
-      }
-
-      final normalized = _normalizeFirestoreValue(data) as Map<String, dynamic>;
-      final timestamp = raw['updatedAt'];
-      final updatedAt = timestamp is Timestamp ? timestamp.toDate() : null;
-      return (data: normalized, updatedAt: updatedAt);
+      final bytes = await reference.getData(20 * 1024 * 1024);
+      if (bytes == null) return (data: null, updatedAt: null);
+      final data = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
+      final metadata = await reference.getMetadata();
+      return (data: data, updatedAt: metadata.updated);
     } catch (e, stackTrace) {
       logger.log(
         'Cloud backup download failed',
@@ -225,14 +205,16 @@ class CloudBackupService {
 
   Future<DateTime?> getCloudBackupTimestamp() async {
     await init();
-    final document = _document;
-    if (document == null) return null;
+    final reference = _reference;
+    if (reference == null) return null;
 
     try {
-      final snapshot = await document.get();
-      final timestamp = snapshot.data()?['updatedAt'];
-      return timestamp is Timestamp ? timestamp.toDate() : null;
+      final metadata = await reference.getMetadata().timeout(_networkTimeout);
+      return metadata.updated;
     } catch (e, stackTrace) {
+      // Also the expected path for "no backup yet" (object-not-found), so
+      // this stays quiet instead of logging every first-run check.
+      if (e is FirebaseException && e.code == 'object-not-found') return null;
       logger.log(
         'Failed to read cloud backup timestamp',
         error: e,
@@ -241,23 +223,6 @@ class CloudBackupService {
       return null;
     }
   }
-}
-
-/// Converts any raw Firestore [Timestamp]s back into [DateTime]s. Needed
-/// for backups uploaded before dates were JSON-encoded as ISO strings,
-/// which Firestore instead stored using its own native Timestamp type.
-dynamic _normalizeFirestoreValue(dynamic value) {
-  if (value is Timestamp) {
-    return value.toDate();
-  } else if (value is Map) {
-    return {
-      for (final entry in value.entries)
-        entry.key.toString(): _normalizeFirestoreValue(entry.value),
-    };
-  } else if (value is List) {
-    return value.map(_normalizeFirestoreValue).toList();
-  }
-  return value;
 }
 
 final cloudBackupService = CloudBackupService.instance;

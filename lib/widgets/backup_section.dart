@@ -49,6 +49,10 @@ class _BackupSectionState extends State<BackupSection> {
   DateTime? _localBackupAt;
   DateTime? _cloudBackupAt;
   bool _busy = false;
+  // Which action is running, so only that row shows a spinner instead of
+  // the whole section just going quietly unresponsive - that silence was
+  // what made a slow/stuck backup look like nothing was happening at all.
+  String? _busyAction;
   final _codeController = TextEditingController();
 
   @override
@@ -153,9 +157,15 @@ class _BackupSectionState extends State<BackupSection> {
     }
   }
 
-  Future<void> _run(Future<({String message, bool success})> Function() action) async {
+  Future<void> _run(
+    Future<({String message, bool success})> Function() action, {
+    required String actionKey,
+  }) async {
     if (_busy) return;
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _busyAction = actionKey;
+    });
     try {
       final result = await action();
       if (mounted) {
@@ -176,32 +186,40 @@ class _BackupSectionState extends State<BackupSection> {
       }
     } finally {
       await _loadTimestamps();
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _busyAction = null;
+        });
+      }
     }
   }
 
-  Future<void> _backupLocal() => _run(() async {
+  Future<void> _backupLocal() => _run(actionKey: 'local_backup', () async {
     await _showFolderRestrictionsNotice();
     return backupData(context);
   });
 
-  Future<void> _restoreLocal() => _run(() async {
+  Future<void> _restoreLocal() => _run(actionKey: 'local_restore', () async {
     final result = await restoreData(context);
     if (result.success) await _afterRestore();
     return result;
   });
 
-  Future<void> _backupCloud() => _run(() async {
+  Future<void> _backupCloud() => _run(actionKey: 'cloud_backup', () async {
     final success = await cloudBackupService.uploadBackup();
+    final error = cloudBackupService.lastUploadError;
     return (
       message: success
           ? context.l10n!.backedupSuccess
+          : error != null
+          ? '${context.l10n!.backupError}: $error'
           : context.l10n!.backupError,
       success: success,
     );
   });
 
-  Future<void> _restoreCloud() => _run(() async {
+  Future<void> _restoreCloud() => _run(actionKey: 'cloud_restore', () async {
     final data = (await cloudBackupService.downloadBackup()).data;
     if (data == null) {
       return (message: context.l10n!.restoreError, success: false);
@@ -218,7 +236,7 @@ class _BackupSectionState extends State<BackupSection> {
     if (mounted) showToast(context, 'Código copiado');
   }
 
-  Future<void> _restoreFromCode() => _run(() async {
+  Future<void> _restoreFromCode() => _run(actionKey: 'code_restore', () async {
     final code = _codeController.text.trim();
     if (code.isEmpty) {
       return (message: 'Introduce un código de recuperación', success: false);
@@ -233,6 +251,15 @@ class _BackupSectionState extends State<BackupSection> {
     return (message: context.l10n!.restoredSuccess, success: true);
   });
 
+  Widget? _spinnerFor(String actionKey) {
+    if (_busyAction != actionKey) return null;
+    return const SizedBox(
+      width: 20,
+      height: 20,
+      child: CircularProgressIndicator(strokeWidth: 2.5),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -242,22 +269,26 @@ class _BackupSectionState extends State<BackupSection> {
           FluentIcons.arrow_export_24_regular,
           description: _formatTimestamp(_localBackupAt),
           onTap: _busy ? null : _backupLocal,
+          trailing: _spinnerFor('local_backup'),
         ),
         CustomBar(
           context.l10n!.restoreUserData,
           FluentIcons.arrow_import_24_regular,
           onTap: _busy ? null : _restoreLocal,
+          trailing: _spinnerFor('local_restore'),
         ),
         CustomBar(
           'Respaldo en la nube',
           FluentIcons.cloud_sync_24_regular,
           description: _formatTimestamp(_cloudBackupAt),
           onTap: _busy ? null : _backupCloud,
+          trailing: _spinnerFor('cloud_backup'),
         ),
         CustomBar(
           'Restaurar desde la nube',
           FluentIcons.cloud_add_24_regular,
           onTap: _busy ? null : _restoreCloud,
+          trailing: _spinnerFor('cloud_restore'),
         ),
         CustomBar(
           'Tu código de recuperación',
