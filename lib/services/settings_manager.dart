@@ -56,6 +56,13 @@ final rememberLastPlayback = ValueNotifier<bool>(
   Hive.box('settings').get('rememberLastPlayback', defaultValue: true),
 );
 
+// Minutes paused (with nothing resuming) before the app closes itself
+// outright; 0 means "never". See DskPlayAudioHandler's pause-auto-close
+// timer.
+final autoCloseAfterPauseMinutes = ValueNotifier<int>(
+  Hive.box('settings').get('autoCloseAfterPauseMinutes', defaultValue: 10),
+);
+
 final predictiveBack = ValueNotifier<bool>(
   Hive.box('settings').get('predictiveBack', defaultValue: true),
 );

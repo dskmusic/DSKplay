@@ -78,6 +78,20 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   bool sleepTimerExpired = false;
   bool sleepTimerEndOfSong = false;
 
+  // Armed whenever playback transitions into paused (with something still
+  // loaded), cleared on resume/stop - fires the same backup-then-exit as a
+  // real stop if the user leaves it paused for the configured duration
+  // instead of ever coming back to it.
+  Timer? _pauseAutoCloseTimer;
+
+  // Set around stop() calls that should just halt playback and leave the
+  // app open - the user closing the player from within the app, or giving
+  // up after repeated playback errors - as opposed to every other caller
+  // (sleep timer, queue running out, the notification/lock-screen stop
+  // button), where nothing being left to play means the idle process
+  // should be freed instead of lingering in the background.
+  bool _keepAppOpenOnStop = false;
+
   final List<Map> _queueList = [];
   final List<Map> _originalQueueList = [];
   final List<Map> _historyList = [];
@@ -199,6 +213,9 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         MediaControl.skipToNext
       else
         MediaControl.fastForward,
+      // Renders as the notification/lock-screen "X" close button; wired to
+      // the shared stop() below, which now closes the app outright.
+      MediaControl.stop,
     ];
   }
 
@@ -606,28 +623,11 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         return;
       }
 
-      final song = _latestResumableSong();
-      if (song == null) return;
-
-      final item = _mediaItemForResumption(song);
-      if (item == null) return;
-
-      mediaItem.add(item);
-      queue.add([item]);
-      playbackState.add(
-        PlaybackState(
-          controls: _controls(false),
-          systemActions: const {
-            MediaAction.seek,
-            MediaAction.seekForward,
-            MediaAction.seekBackward,
-          },
-          androidCompactActionIndices: const [0, 1, 2],
-          processingState: AudioProcessingState.ready,
-          queueIndex: 0,
-          updateTime: DateTime.now(),
-        ),
-      );
+      // Deliberately doesn't fall back to _latestResumableSong() here (used
+      // elsewhere for "play something" media-button/assistant intents) -
+      // this is a passive cold-start display, so once both persisted keys
+      // are gone (e.g. the notification/full-player "X" cleared them) there
+      // should be nothing to show, not an arbitrary recently-played song.
     } catch (e, stackTrace) {
       logger.log(
         'Error restoring last played song for display',
@@ -810,6 +810,17 @@ class DskPlayAudioHandler extends BaseAudioHandler {
           AudioProcessingState.idle;
       final bufferedPosition = audioPlayer.bufferedPosition;
 
+      if (isPlaying) {
+        _pauseAutoCloseTimer?.cancel();
+      } else if (currentState?.playing == true &&
+          newProcessingState != AudioProcessingState.idle) {
+        // Just transitioned from playing to paused (not stopped) - arm the
+        // configurable auto-close so leaving it paused and forgotten still
+        // eventually frees the process, same as the notification's own
+        // close button.
+        _schedulePauseAutoClose();
+      }
+
       final shouldEmitProgressTick =
           currentState != null &&
           isPlaying &&
@@ -880,12 +891,11 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         if (sleepTimerEndOfSong) {
           sleepTimerExpired = true;
           sleepTimerEndOfSong = false;
+          // stop() itself now ends the listening session and closes the
+          // app outright, whether it's foregrounded or only alive via the
+          // notification in the background.
           await stop();
           sleepTimerNotifier.value = null;
-          // The sleep timer expiring should end the listening session
-          // outright, not just pause it - whether the app is foregrounded
-          // or only alive via the notification in the background.
-          unawaited(_exitIfIdle());
           return;
         }
 
@@ -953,7 +963,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
 
     if (_consecutiveErrors >= _maxConsecutiveErrors) {
       logger.log('Max consecutive errors reached. Stopping playback.');
-      stop();
+      unawaited(_stopWithoutClosingApp());
       return;
     }
 
@@ -987,12 +997,10 @@ class DskPlayAudioHandler extends BaseAudioHandler {
           // Nothing left in the podcast queue - close the notification
           // outright instead of just pausing, otherwise just_audio leaves
           // `playing` true after it finishes on its own and the
-          // notification would keep showing a pause button forever.
+          // notification would keep showing a pause button forever. stop()
+          // itself now also frees the idle process (unless a download is
+          // in flight).
           await stop();
-          // Kill the process outright (unless a download is in flight)
-          // instead of leaving it idling in the background, same as when
-          // the sleep timer expires.
-          unawaited(_exitIfIdle());
         }
         return;
       }
@@ -1009,9 +1017,9 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         // Last song of a playlist/queue (or a standalone song with nothing
         // queued after it) with no repeat-all and no autoplay - same
         // situation as a podcast finishing with nothing left, so close the
-        // notification and free the process the same way.
+        // notification and free the process the same way (stop() itself
+        // handles both).
         await stop();
-        unawaited(_exitIfIdle());
       } else {
         // For all other cases (next song, repeat all, auto-play), skipToNext handles it
         await skipToNext();
@@ -1315,7 +1323,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         _currentQueueIndex--;
       } else if (index == _currentQueueIndex) {
         if (_queueList.isEmpty) {
-          await stop();
+          await _stopWithoutClosingApp();
         } else {
           if (_currentQueueIndex >= _queueList.length) {
             _currentQueueIndex = _queueList.length - 1;
@@ -2251,6 +2259,17 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     }
   }
 
+  /// Arms (or re-arms) the configurable "close after N minutes paused"
+  /// timer - a value of 0 disables it (user chose "never").
+  void _schedulePauseAutoClose() {
+    _pauseAutoCloseTimer?.cancel();
+    final minutes = autoCloseAfterPauseMinutes.value;
+    if (minutes <= 0) return;
+    _pauseAutoCloseTimer = Timer(Duration(minutes: minutes), () {
+      if (!audioPlayer.playing) unawaited(_exitIfIdle());
+    });
+  }
+
   @override
   Future<void> onNotificationDeleted() async {
     try {
@@ -2343,6 +2362,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   @override
   Future<void> stop() async {
     _debounceTimer?.cancel();
+    _pauseAutoCloseTimer?.cancel();
     _completionEventPending = false;
     _currentLoadingIndex = -1;
     _currentLoadingTransitionId = -1;
@@ -2359,6 +2379,26 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       logger.log('Error in stop()', error: e, stackTrace: stackTrace);
     }
     await super.stop();
+
+    // Nothing left to play - free the idle process instead of leaving it
+    // running in the background, unless this stop was just an in-app
+    // action that should leave the app open (see _keepAppOpenOnStop).
+    if (!_keepAppOpenOnStop) {
+      unawaited(_exitIfIdle());
+    }
+  }
+
+  /// Stops playback without triggering the auto-exit that a plain [stop]
+  /// now does - for in-app callers that just want to halt playback and keep
+  /// the app open (as opposed to the sleep timer, queue running out, or the
+  /// notification/lock-screen stop button, which mean the app should close).
+  Future<void> _stopWithoutClosingApp() async {
+    _keepAppOpenOnStop = true;
+    try {
+      await stop();
+    } finally {
+      _keepAppOpenOnStop = false;
+    }
   }
 
   /// Stops playback and clears the current song/queue entirely, so the mini
@@ -2366,7 +2406,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   /// [stop] alone, which leaves `mediaItem`/`queue` populated with the last
   /// track (by design, so a plain pause/stop can resume where it left off).
   Future<void> stopAndClearNowPlaying() async {
-    await stop();
+    await _stopWithoutClosingApp();
     _queueList.clear();
     _originalQueueList.clear();
     _currentQueueIndex = 0;
@@ -3456,12 +3496,11 @@ class DskPlayAudioHandler extends BaseAudioHandler {
 
       _sleepTimer = Timer(duration, () async {
         sleepTimerExpired = true;
+        // stop() itself now ends the listening session and closes the app
+        // outright, whether it's foregrounded or only alive via the
+        // notification in the background.
         await stop();
         sleepTimerNotifier.value = null;
-        // The sleep timer expiring should end the listening session
-        // outright, not just pause it - whether the app is foregrounded or
-        // only alive via the notification in the background.
-        unawaited(_exitIfIdle());
       });
     } catch (e, stackTrace) {
       logger.log('Error setting sleep timer', error: e, stackTrace: stackTrace);

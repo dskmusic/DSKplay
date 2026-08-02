@@ -213,6 +213,19 @@ class SettingsPage extends StatelessWidget {
             );
           },
         ),
+        ValueListenableBuilder<int>(
+          valueListenable: autoCloseAfterPauseMinutes,
+          builder: (_, value, __) {
+            return CustomBar(
+              'Cierre automático en pausa',
+              FluentIcons.timer_24_regular,
+              description: value <= 0
+                  ? 'Nunca se cierra sola'
+                  : 'Se cierra tras $value min en pausa',
+              onTap: () => _showAutoCloseAfterPausePicker(context),
+            );
+          },
+        ),
         ValueListenableBuilder<bool>(
           valueListenable: offlineMode,
           builder: (_, value, __) {
@@ -919,6 +932,47 @@ class SettingsPage extends StatelessWidget {
             },
             audioQualitySetting.value == quality,
             icon: qualityIcons[index],
+          );
+        },
+      ),
+    );
+  }
+
+  void _showAutoCloseAfterPausePicker(BuildContext context) {
+    const options = [0, 5, 10, 15, 30, 60];
+    const labels = [
+      'Nunca',
+      '5 minutos',
+      '10 minutos',
+      '15 minutos',
+      '30 minutos',
+      '60 minutos',
+    ];
+
+    showCustomBottomSheet(
+      context,
+      ListView.builder(
+        shrinkWrap: true,
+        physics: const BouncingScrollPhysics(),
+        padding: commonListViewBottomPadding,
+        itemCount: options.length,
+        itemBuilder: (context, index) {
+          final minutes = options[index];
+
+          return BottomSheetBar(
+            labels[index],
+            () {
+              addOrUpdateData<int>(
+                'settings',
+                'autoCloseAfterPauseMinutes',
+                minutes,
+              );
+              autoCloseAfterPauseMinutes.value = minutes;
+              showToast(context, context.l10n!.settingChangedMsg);
+              Navigator.pop(context);
+            },
+            autoCloseAfterPauseMinutes.value == minutes,
+            icon: FluentIcons.timer_24_regular,
           );
         },
       ),
