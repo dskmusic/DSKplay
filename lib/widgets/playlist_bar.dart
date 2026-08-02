@@ -57,6 +57,7 @@ class PlaylistBar extends StatelessWidget {
     this.showBuildActions = true,
     this.isAlbum = false,
     this.borderRadius = BorderRadius.zero,
+    this.reorderHandle,
   });
 
   final Map? playlistData;
@@ -69,6 +70,11 @@ class PlaylistBar extends StatelessWidget {
   final bool? isAlbum;
   final bool showBuildActions;
   final BorderRadius borderRadius;
+
+  /// Drag handle shown right before the three-dot menu (e.g. a
+  /// [ReorderableDragStartListener]-wrapped icon), for lists that support
+  /// manual reordering. Null hides it.
+  final Widget? reorderHandle;
 
   static const double artworkSize = 60;
   static const double iconSize = 27;
@@ -158,6 +164,7 @@ class PlaylistBar extends StatelessWidget {
                   ],
                 ),
               ),
+              if (reorderHandle != null) reorderHandle!,
               if (showBuildActions) ...[
                 const SizedBox(width: 4),
                 OverflowMenuButton<String>(

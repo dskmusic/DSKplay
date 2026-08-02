@@ -381,7 +381,11 @@ class _LibraryPageState extends State<LibraryPage> {
           icon: FluentIcons.heart_24_filled,
         ),
       ),
-      _buildSliverPlaylistList(likedPlaylists),
+      _buildSliverPlaylistList(
+        likedPlaylists,
+        onReorder: (ytid, newIndex) =>
+            reorderLikedLibraryItem(ytid, newIndex, isArtist: false),
+      ),
     ];
   }
 
@@ -395,7 +399,11 @@ class _LibraryPageState extends State<LibraryPage> {
           icon: FluentIcons.person_24_filled,
         ),
       ),
-      _buildSliverPlaylistList(likedArtists),
+      _buildSliverPlaylistList(
+        likedArtists,
+        onReorder: (ytid, newIndex) =>
+            reorderLikedLibraryItem(ytid, newIndex, isArtist: true),
+      ),
     ];
   }
 
@@ -404,47 +412,89 @@ class _LibraryPageState extends State<LibraryPage> {
     bool isOfflinePlaylists = false,
     bool hasItemsAfter = false,
     bool hasItemsBefore = false,
+    void Function(String ytid, int newIndex)? onReorder,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    Widget buildTile(int index) {
+      final playlist = playlists[index];
+      final isArtist = playlist['source']?.toString() == 'youtube-artist';
+      final borderRadius = getItemBorderRadius(
+        index,
+        playlists.length,
+        hasItemsBefore: hasItemsBefore,
+        hasItemsAfter: hasItemsAfter,
+      );
+      return PlaylistBar(
+        key: listItemKey('library_playlist', index, playlist),
+        playlist['title'],
+        playlistId: playlist['ytid'],
+        playlistArtwork: playlist['image'],
+        cubeIcon: isArtist
+            ? FluentIcons.person_24_filled
+            : FluentIcons.text_bullet_list_24_filled,
+        isAlbum: isArtist ? false : playlist['isAlbum'],
+        playlistData:
+            isArtist ||
+                playlist['source'] == 'user-created' ||
+                playlist['source'] == 'user-youtube' ||
+                isOfflinePlaylists
+            ? playlist
+            : null,
+        onDelete:
+            playlist['source'] == 'user-created' ||
+                playlist['source'] == 'user-youtube' ||
+                isOfflinePlaylists
+            ? () => isOfflinePlaylists
+                  ? _showRemoveOfflinePlaylistDialog(playlist)
+                  : _showRemovePlaylistDialog(playlist)
+            : null,
+        borderRadius: borderRadius,
+        reorderHandle: onReorder == null
+            ? null
+            : ReorderableDragStartListener(
+                index: index,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Icon(
+                    FluentIcons.re_order_24_regular,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+      );
+    }
+
+    if (onReorder != null) {
+      return SliverPadding(
+        padding: hasItemsAfter ? EdgeInsets.zero : commonListViewBottomPadding,
+        sliver: SliverReorderableList(
+          itemCount: playlists.length,
+          onReorderItem: (oldIndex, newIndex) {
+            final ytid = playlists[oldIndex]['ytid']?.toString();
+            if (ytid == null) return;
+            onReorder(ytid, newIndex);
+          },
+          proxyDecorator: (child, index, animation) => Material(
+            elevation: 8,
+            color: colorScheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(14),
+            shadowColor: colorScheme.shadow.withValues(alpha: 0.35),
+            child: child,
+          ),
+          itemBuilder: (context, index) => KeyedSubtree(
+            key: listItemKey('library_playlist', index, playlists[index]),
+            child: buildTile(index),
+          ),
+        ),
+      );
+    }
+
     return SliverPadding(
       padding: hasItemsAfter ? EdgeInsets.zero : commonListViewBottomPadding,
       sliver: SliverList.builder(
         itemCount: playlists.length,
-        itemBuilder: (BuildContext context, index) {
-          final playlist = playlists[index];
-          final isArtist = playlist['source']?.toString() == 'youtube-artist';
-          final borderRadius = getItemBorderRadius(
-            index,
-            playlists.length,
-            hasItemsBefore: hasItemsBefore,
-            hasItemsAfter: hasItemsAfter,
-          );
-          return PlaylistBar(
-            key: listItemKey('library_playlist', index, playlist),
-            playlist['title'],
-            playlistId: playlist['ytid'],
-            playlistArtwork: playlist['image'],
-            cubeIcon: isArtist
-                ? FluentIcons.person_24_filled
-                : FluentIcons.text_bullet_list_24_filled,
-            isAlbum: isArtist ? false : playlist['isAlbum'],
-            playlistData:
-                isArtist ||
-                    playlist['source'] == 'user-created' ||
-                    playlist['source'] == 'user-youtube' ||
-                    isOfflinePlaylists
-                ? playlist
-                : null,
-            onDelete:
-                playlist['source'] == 'user-created' ||
-                    playlist['source'] == 'user-youtube' ||
-                    isOfflinePlaylists
-                ? () => isOfflinePlaylists
-                      ? _showRemoveOfflinePlaylistDialog(playlist)
-                      : _showRemovePlaylistDialog(playlist)
-                : null,
-            borderRadius: borderRadius,
-          );
-        },
+        itemBuilder: (BuildContext context, index) => buildTile(index),
       ),
     );
   }

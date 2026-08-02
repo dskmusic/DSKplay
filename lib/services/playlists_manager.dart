@@ -258,6 +258,38 @@ List<Map> getLikedArtistItems({bool offlineOnly = false}) {
   return artists;
 }
 
+/// Reorders one entry within the liked-playlists or liked-artists section of
+/// the library (the two views [getLikedPlaylistItems]/[getLikedArtistItems]
+/// filter out of the same underlying [userLikedPlaylists] list). [newIndex]
+/// is the target position within that filtered view, not the full list -
+/// other-type entries keep their existing relative order around it.
+void reorderLikedLibraryItem(
+  String ytid,
+  int newIndex, {
+  required bool isArtist,
+}) {
+  final full = List<Map>.from(userLikedPlaylists.value);
+  final matchingIndices = <int>[
+    for (var i = 0; i < full.length; i++)
+      if (isArtistPlaylist(full[i]) == isArtist) i,
+  ];
+  final subList = [for (final i in matchingIndices) full[i]];
+
+  final oldIndex = subList.indexWhere((p) => p['ytid']?.toString() == ytid);
+  if (oldIndex == -1) return;
+
+  final target = newIndex.clamp(0, subList.length - 1);
+  final item = subList.removeAt(oldIndex);
+  subList.insert(target, item);
+
+  for (var i = 0; i < matchingIndices.length; i++) {
+    full[matchingIndices[i]] = subList[i];
+  }
+
+  userLikedPlaylists.value = full;
+  unawaited(addOrUpdateData<List>('user', 'likedPlaylists', full));
+}
+
 void reloadPlaylistLibraryStateFromStorage() {
   final userBox = Hive.box('user');
   userPlaylists.value = List<String>.from(

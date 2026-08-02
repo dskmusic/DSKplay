@@ -2373,7 +2373,11 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         countCurrentTick: true,
         wasPlaying: audioPlayer.playing,
       );
-      await audioPlayer.stop();
+      // Bounded: just_audio's stop() has been observed to hang instead of
+      // completing when called on an already-paused player, which used to
+      // leave the notification/lock-screen "X" stuck doing nothing - fall
+      // through to closing the app below regardless.
+      await audioPlayer.stop().timeout(const Duration(seconds: 3));
       _resetPreloadingState();
     } catch (e, stackTrace) {
       logger.log('Error in stop()', error: e, stackTrace: stackTrace);
