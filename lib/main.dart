@@ -39,6 +39,7 @@ import 'package:dskplay/services/audio_service.dart';
 import 'package:dskplay/services/cloud_backup_service.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/data_manager.dart';
+import 'package:dskplay/services/download_foreground_service.dart';
 import 'package:dskplay/services/io_service.dart';
 import 'package:dskplay/services/listening_stats_service.dart';
 import 'package:dskplay/services/logger_service.dart';
@@ -352,6 +353,22 @@ class _DskPlayState extends State<DskPlay> with WidgetsBindingObserver {
       );
       unawaited(listeningStatsService.flush());
       unawaited(cloudBackupService.uploadBackup());
+    }
+
+    // Unlike inactive/paused/hidden (which also fire for an ordinary app
+    // switch the user may come right back from), 'detached' means the
+    // engine's platform view was actually destroyed - the task was removed
+    // or the OS is reclaiming it, and it won't resume. audio_service's own
+    // onTaskRemoved/onNotificationDeleted already handle this while a
+    // playback session is still alive; this covers the gap where the user
+    // already stopped/dismissed playback in-app first, which tears down
+    // that service before the task is ever removed, so nothing would
+    // otherwise catch this moment to free the idle process. The backup for
+    // anything that changed already went out above, so this only kills it.
+    if (state == AppLifecycleState.detached &&
+        !audioHandler.audioPlayer.playing &&
+        !DownloadForegroundService.isActive) {
+      exit(0);
     }
   }
 
