@@ -357,22 +357,29 @@ Future<void> _shareSongFlow(
       children: [
         SimpleDialogOption(
           onPressed: () => Navigator.of(context).pop('file'),
-          child: Row(
-            children: [
-              const Icon(FluentIcons.music_note_2_24_regular),
-              const SizedBox(width: 12),
-              Text(context.l10n!.shareSongFile),
-            ],
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                const Icon(FluentIcons.music_note_2_24_regular),
+                const SizedBox(width: 12),
+                Text(context.l10n!.shareSongFile),
+              ],
+            ),
           ),
         ),
+        const Divider(height: 1),
         SimpleDialogOption(
           onPressed: () => Navigator.of(context).pop('link'),
-          child: Row(
-            children: [
-              const Icon(FluentIcons.link_20_regular),
-              const SizedBox(width: 12),
-              Text(context.l10n!.shareSongLink),
-            ],
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                const Icon(FluentIcons.link_20_regular),
+                const SizedBox(width: 12),
+                Text(context.l10n!.shareSongLink),
+              ],
+            ),
           ),
         ),
       ],
@@ -380,6 +387,20 @@ Future<void> _shareSongFlow(
   );
 
   if (choice == null || !context.mounted) return;
+
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => ConfirmationDialog(
+      confirmationMessage: choice == 'link'
+          ? dialogContext.l10n!.shareSongLink
+          : dialogContext.l10n!.shareSongFile,
+      submitMessage: dialogContext.l10n!.share,
+      onCancel: () => Navigator.of(dialogContext).pop(false),
+      onSubmit: () => Navigator.of(dialogContext).pop(true),
+    ),
+  );
+
+  if (confirmed != true || !context.mounted) return;
 
   final title = song is Map ? (song['title']?.toString() ?? '') : '';
 
