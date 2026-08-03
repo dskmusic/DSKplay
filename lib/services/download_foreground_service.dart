@@ -70,6 +70,10 @@ class DownloadForegroundService {
     if (_activeCount == 1) {
       cancelAllRequested = false;
       _channel.setMethodCallHandler(_onNativeCall);
+      // The native idle-auto-close fallback (see audio_service.dart) doesn't
+      // know a download just started, so it would otherwise kill the
+      // process mid-download once its timer elapses.
+      unawaited(_channel.invokeMethod('cancelIdleClose').catchError((_) {}));
       // Without this the download still runs, but its notification (and so
       // its Cancelar button) is silently never shown on Android 13+.
       if (!_permissionRequested) {

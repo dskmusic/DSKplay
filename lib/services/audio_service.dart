@@ -24,6 +24,7 @@ import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
+import 'package:flutter/services.dart' show MethodChannel;
 import 'package:hive/hive.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:dskplay/main.dart';
@@ -97,6 +98,29 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   // real stop if the user leaves it paused for the configured duration
   // instead of ever coming back to it.
   Timer? _idleAutoCloseTimer;
+
+  // Native fallback for the timer above: audio_service tears down the
+  // FlutterEngine (and every Dart Timer with it) almost as soon as the app
+  // is backgrounded with nothing playing, well before this timer would
+  // otherwise fire - leaving the process orphaned with nothing left to
+  // close it. App.kt keeps this armed independently of the Dart engine.
+  static const _idleCloseChannel = MethodChannel('dskplay/download_service');
+
+  void _armNativeIdleClose(int minutes) {
+    if (!Platform.isAndroid) return;
+    unawaited(
+      _idleCloseChannel
+          .invokeMethod('armIdleClose', {'minutes': minutes})
+          .catchError((_) {}),
+    );
+  }
+
+  void _cancelNativeIdleClose() {
+    if (!Platform.isAndroid) return;
+    unawaited(
+      _idleCloseChannel.invokeMethod('cancelIdleClose').catchError((_) {}),
+    );
+  }
 
   // Set around stop() calls that should just halt playback and leave the
   // app open - the user closing the player from within the app, or giving
@@ -840,6 +864,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
 
       if (isPlaying) {
         _idleAutoCloseTimer?.cancel();
+        _cancelNativeIdleClose();
       } else if (currentState == null ||
           (currentState.playing &&
               newProcessingState != AudioProcessingState.idle)) {
@@ -2304,8 +2329,12 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   void _scheduleIdleAutoClose() {
     _idleAutoCloseTimer?.cancel();
     final minutes = autoCloseAfterPauseMinutes.value;
-    if (minutes <= 0) return;
+    if (minutes <= 0) {
+      _cancelNativeIdleClose();
+      return;
+    }
     logger.log('Idle auto-close armed for $minutes min');
+    if (!DownloadForegroundService.isActive) _armNativeIdleClose(minutes);
     _idleAutoCloseTimer = Timer(Duration(minutes: minutes), () {
       logger.log(
         'Idle auto-close timer fired '

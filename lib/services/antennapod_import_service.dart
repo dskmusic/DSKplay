@@ -34,6 +34,7 @@ class AntennaPodImportPreview {
     required this.listenedSecondsByPodcast,
     required this.listenedSecondsByMonth,
     required this.listenedSecondsByDay,
+    required this.playedEpisodesByDay,
     required this.totalListenedSeconds,
   });
 
@@ -46,6 +47,10 @@ class AntennaPodImportPreview {
   final Map<String, int> listenedSecondsByPodcast;
   final Map<String, int> listenedSecondsByMonth;
   final Map<String, int> listenedSecondsByDay;
+  // Same day keys as [listenedSecondsByDay], but with the episode title/
+  // podcast that was played that day - feeds the statistics screen's
+  // history chart "played items" list for a tapped bar.
+  final Map<String, List<Map<String, String>>> playedEpisodesByDay;
   final int totalListenedSeconds;
 
   int get podcastCount => podcasts.length;
@@ -69,6 +74,7 @@ AntennaPodImportPreview analyzeAntennaPodBackup(String dbPath) {
   try {
     final podcasts = <Podcast>[];
     final podcastIdByFeedRowId = <int, String>{};
+    final podcastTitleByFeedRowId = <int, String>{};
 
     final feedRows = db.select(
       'SELECT id, title, author, download_url, image_url FROM Feeds',
@@ -78,6 +84,7 @@ AntennaPodImportPreview analyzeAntennaPodBackup(String dbPath) {
       if (feedUrl == null || feedUrl.isEmpty) continue;
       final podcastId = Podcast.idFromFeedUrl(feedUrl);
       podcastIdByFeedRowId[row['id'] as int] = podcastId;
+      podcastTitleByFeedRowId[row['id'] as int] = row['title'] as String? ?? '';
       podcasts.add(
         Podcast(
           id: podcastId,
@@ -94,10 +101,12 @@ AntennaPodImportPreview analyzeAntennaPodBackup(String dbPath) {
     final listenedSecondsByPodcast = <String, int>{};
     final listenedSecondsByMonth = <String, int>{};
     final listenedSecondsByDay = <String, int>{};
+    final playedEpisodesByDay = <String, List<Map<String, String>>>{};
     var totalListenedSeconds = 0;
 
     final episodeRows = db.select('''
       SELECT fi.item_identifier AS guid, fi.feed AS feedRowId, fi.read AS isRead,
+             fi.title AS title,
              fm.played_duration AS playedDuration, fm.last_played_time AS lastPlayedTime
       FROM FeedItems fi
       LEFT JOIN FeedMedia fm ON fm.feeditem = fi.id
@@ -112,9 +121,10 @@ AntennaPodImportPreview analyzeAntennaPodBackup(String dbPath) {
       final isRead = (row['isRead'] as int?) == 1;
       final playedDurationMs = row['playedDuration'] as int?;
       final hasPlayedTime = playedDurationMs != null && playedDurationMs > 0;
+      final episodeKey =
+          (guid != null && guid.isNotEmpty) ? '${podcastId}_${guid.hashCode}' : null;
 
-      if (guid != null && guid.isNotEmpty && (isRead || hasPlayedTime)) {
-        final episodeKey = '${podcastId}_${guid.hashCode}';
+      if (episodeKey != null && (isRead || hasPlayedTime)) {
         listenedEpisodeKeys.add(episodeKey);
         if (hasPlayedTime) playedEpisodeKeys.add(episodeKey);
       }
@@ -138,6 +148,22 @@ AntennaPodImportPreview analyzeAntennaPodBackup(String dbPath) {
           (listenedSecondsByMonth[monthKey] ?? 0) + seconds;
       listenedSecondsByDay[dayKey] =
           (listenedSecondsByDay[dayKey] ?? 0) + seconds;
+
+      final title = row['title'] as String?;
+      if (episodeKey != null && title != null && title.isNotEmpty) {
+        final dayEntries = playedEpisodesByDay[dayKey] ?? const [];
+        if (!dayEntries.any((e) => e['key'] == episodeKey)) {
+          playedEpisodesByDay[dayKey] = [
+            ...dayEntries,
+            {
+              'key': episodeKey,
+              'title': title,
+              'podcast': podcastTitleByFeedRowId[feedRowId] ?? '',
+              'podcastId': podcastId,
+            },
+          ];
+        }
+      }
     }
 
     return AntennaPodImportPreview(
@@ -147,6 +173,7 @@ AntennaPodImportPreview analyzeAntennaPodBackup(String dbPath) {
       listenedSecondsByPodcast: listenedSecondsByPodcast,
       listenedSecondsByMonth: listenedSecondsByMonth,
       listenedSecondsByDay: listenedSecondsByDay,
+      playedEpisodesByDay: playedEpisodesByDay,
       totalListenedSeconds: totalListenedSeconds,
     );
   } finally {
@@ -164,5 +191,6 @@ Future<int> applyAntennaPodImport(AntennaPodImportPreview preview) {
     listenedSecondsByPodcast: preview.listenedSecondsByPodcast,
     listenedSecondsByMonth: preview.listenedSecondsByMonth,
     listenedSecondsByDay: preview.listenedSecondsByDay,
+    playedEpisodesByDay: preview.playedEpisodesByDay,
   );
 }

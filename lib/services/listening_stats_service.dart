@@ -158,6 +158,8 @@ class ListeningStatsService {
             listenedDuration,
             now,
             episodeKey: song['ytid']?.toString(),
+            episodeTitle: song['title']?.toString(),
+            podcastTitle: song['artist']?.toString(),
           ),
         );
       }

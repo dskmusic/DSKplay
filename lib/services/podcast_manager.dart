@@ -132,6 +132,26 @@ class PodcastManager {
             .map((key, value) => MapEntry(key as String, value as int)),
       );
 
+  // Which episodes were played on each calendar day (key 'yyyy-MM-dd'), so
+  // the statistics screen's history chart can list what was actually played
+  // when a bar is tapped. Deliberately separate from [listenedSecondsByDay]
+  // (added later) - history predating this field just won't have a list to
+  // show, same tradeoff as that field's own day/week-only granularity.
+  final ValueNotifier<Map<String, List<Map<String, String>>>>
+  playedEpisodesByDay =
+      ValueNotifier<Map<String, List<Map<String, String>>>>(
+        (Hive.box('user').get('podcastPlayedEpisodesByDay', defaultValue: {})
+                as Map)
+            .map(
+              (key, value) => MapEntry(
+                key as String,
+                (value as List)
+                    .map((e) => Map<String, String>.from(e as Map))
+                    .toList(),
+              ),
+            ),
+      );
+
   /// Called from [ListeningStatsService.recordListening] whenever a podcast
   /// episode accrues listened time, so podcast statistics stay in sync with
   /// the same tick/session accounting used for song stats, without inheriting
@@ -141,6 +161,8 @@ class PodcastManager {
     Duration listenedDuration,
     DateTime at, {
     String? episodeKey,
+    String? episodeTitle,
+    String? podcastTitle,
   }) async {
     final seconds = listenedDuration.inSeconds;
     if (seconds <= 0) return;
@@ -190,6 +212,32 @@ class PodcastManager {
       'podcastListenedSecondsByDay',
       listenedSecondsByDay.value,
     );
+
+    if (episodeKey != null &&
+        episodeKey.isNotEmpty &&
+        episodeTitle != null &&
+        episodeTitle.isNotEmpty) {
+      final dayEntries = playedEpisodesByDay.value[dayKey] ?? const [];
+      if (!dayEntries.any((e) => e['key'] == episodeKey)) {
+        playedEpisodesByDay.value = {
+          ...playedEpisodesByDay.value,
+          dayKey: [
+            ...dayEntries,
+            {
+              'key': episodeKey,
+              'title': episodeTitle,
+              'podcast': podcastTitle ?? '',
+              'podcastId': podcastId,
+            },
+          ],
+        };
+        await addOrUpdateData<Map>(
+          'user',
+          'podcastPlayedEpisodesByDay',
+          playedEpisodesByDay.value,
+        );
+      }
+    }
   }
 
   // Ordered by the sequence they were pinned in (not alphabetical/date) - the
@@ -503,6 +551,7 @@ class PodcastManager {
     Map<String, int> listenedSecondsByPodcast = const {},
     Map<String, int> listenedSecondsByMonth = const {},
     Map<String, int> listenedSecondsByDay = const {},
+    Map<String, List<Map<String, String>>> playedEpisodesByDay = const {},
   }) async {
     var addedCount = 0;
 
@@ -551,6 +600,28 @@ class PodcastManager {
       this.listenedSecondsByDay,
       listenedSecondsByDay,
     );
+
+    if (playedEpisodesByDay.isNotEmpty) {
+      final merged = Map<String, List<Map<String, String>>>.from(
+        this.playedEpisodesByDay.value,
+      );
+      for (final entry in playedEpisodesByDay.entries) {
+        final dayEntries = merged[entry.key] ?? const [];
+        final existingKeys = dayEntries.map((e) => e['key']).toSet();
+        final newEntries = entry.value.where(
+          (e) => !existingKeys.contains(e['key']),
+        );
+        if (newEntries.isNotEmpty) {
+          merged[entry.key] = [...dayEntries, ...newEntries];
+        }
+      }
+      this.playedEpisodesByDay.value = merged;
+      await addOrUpdateData<Map>(
+        'user',
+        'podcastPlayedEpisodesByDay',
+        merged,
+      );
+    }
 
     return addedCount;
   }

@@ -8,7 +8,10 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.media.MediaScannerConnection
 import android.os.Bundle
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
+import android.os.Process
 import android.provider.Settings
 import android.util.Log
 import androidx.core.content.ContextCompat
@@ -49,6 +52,29 @@ class App : Application() {
      */
     fun requestCancelDownloads() {
       downloadChannel?.invokeMethod("cancelAll", null)
+    }
+
+    // Backs up the Dart-side idle-auto-close timer (audio_service.dart's
+    // _scheduleIdleAutoClose): audio_service destroys the FlutterEngine
+    // (and every Dart Timer with it) almost immediately once the app is
+    // backgrounded with nothing playing, so that timer never survives long
+    // enough to fire and the process is left orphaned - still alive, just
+    // with nothing left running to close it. This Handler lives on the
+    // Application, not the engine, so it outlives that teardown.
+    private val idleCloseHandler = Handler(Looper.getMainLooper())
+    private var idleCloseRunnable: Runnable? = null
+
+    private fun armIdleClose(minutes: Int) {
+      cancelIdleClose()
+      if (minutes <= 0) return
+      val runnable = Runnable { Process.killProcess(Process.myPid()) }
+      idleCloseRunnable = runnable
+      idleCloseHandler.postDelayed(runnable, minutes * 60_000L)
+    }
+
+    private fun cancelIdleClose() {
+      idleCloseRunnable?.let { idleCloseHandler.removeCallbacks(it) }
+      idleCloseRunnable = null
     }
   }
 
@@ -185,6 +211,14 @@ class App : Application() {
             }
             "cancelNotification" -> {
               DownloadForegroundService.cancelNotification(this)
+              result.success(null)
+            }
+            "armIdleClose" -> {
+              armIdleClose(call.argument<Int>("minutes") ?: 0)
+              result.success(null)
+            }
+            "cancelIdleClose" -> {
+              cancelIdleClose()
               result.success(null)
             }
             else -> result.notImplemented()

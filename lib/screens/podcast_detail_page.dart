@@ -44,9 +44,13 @@ import 'package:dskplay/widgets/playback_icon_button.dart';
 import 'package:dskplay/widgets/podcast_episode_bar.dart';
 
 class PodcastDetailPage extends StatefulWidget {
-  const PodcastDetailPage({super.key, required this.podcast});
+  const PodcastDetailPage({super.key, required this.podcast, this.openEpisodeKey});
 
   final Podcast podcast;
+  // When set, the matching episode's detail dialog opens automatically once
+  // the feed finishes loading - used when arriving here from a place that
+  // only knows a specific episode (e.g. the stats screen's history list).
+  final String? openEpisodeKey;
 
   @override
   State<PodcastDetailPage> createState() => _PodcastDetailPageState();
@@ -132,6 +136,23 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
       // Keep the stored subscription metadata (title/image) fresh with what
       // the feed reports now.
       await podcastManager.subscribe(_podcast);
+    }
+
+    final openKey = widget.openEpisodeKey;
+    if (openKey != null) {
+      PodcastEpisode? episode;
+      for (final e in _episodes) {
+        if (e.key == openKey) {
+          episode = e;
+          break;
+        }
+      }
+      if (episode != null && mounted) {
+        final found = episode;
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => mounted ? _showEpisodeOptions(found) : null,
+        );
+      }
     }
   }
 
