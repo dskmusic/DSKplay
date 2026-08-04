@@ -2331,18 +2331,26 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     if ((forceStopped || !audioPlayer.playing) &&
         !DownloadForegroundService.isActive) {
       // audio_service can tear down this background FlutterEngine (killing
-      // this very isolate) while the awaits below are still pending - e.g.
-      // right after super.stop() as part of the service shutting itself
-      // down - which used to silently strand exit(0) below and leave the
-      // process alive indefinitely. This native watchdog survives that
-      // teardown and guarantees the kill happens regardless.
+      // this very isolate) at any point past here - e.g. right after
+      // super.stop() as part of the service shutting itself down - which
+      // used to silently strand exit(0) below and leave the process alive
+      // indefinitely. This native watchdog survives that teardown and
+      // guarantees the kill happens regardless.
       _scheduleNativeHardExit();
-      // Last chance to persist any pending changes before the process dies
-      // outright - a bounded wait so a slow/dead network can't stall the
-      // app's own shutdown indefinitely.
-      await cloudBackupService.uploadBackup().timeout(
-        const Duration(seconds: 8),
-        onTimeout: () => false,
+      // Best-effort only, deliberately NOT awaited: this used to block
+      // exit(0) below behind an 8s network round trip, which was exactly
+      // the window in which the engine teardown above could strand this
+      // whole function before ever reaching exit(0), leaving the process
+      // alive with nothing left to kill it. A slow/dead network should
+      // delay the kill by exactly zero seconds now; if this finishes before
+      // the process actually dies, the backup still goes out, and if not,
+      // main.dart's lifecycle listener already fires the same upload
+      // earlier, as soon as the app leaves the foreground.
+      unawaited(
+        cloudBackupService.uploadBackup().timeout(
+          const Duration(seconds: 8),
+          onTimeout: () => false,
+        ),
       );
       logger.log('exitIfIdle: calling exit(0) now');
       exit(0);
@@ -2469,6 +2477,15 @@ class DskPlayAudioHandler extends BaseAudioHandler {
 
   @override
   Future<void> stop() async {
+    // Snapshotted before any await below: _keepAppOpenOnStop is a single
+    // shared flag set by _stopWithoutClosingApp for the duration of its own
+    // call to this method, but if that call is still in flight (e.g. stuck
+    // on a hung await further down) when a second, unrelated stop() comes in
+    // - the notification/lock-screen "X", the sleep timer, a song finishing
+    // - reading the shared flag fresh at the bottom would let the first
+    // caller's intent leak into this one. Each invocation now acts strictly
+    // on the intent that was current when it started.
+    final keepAppOpen = _keepAppOpenOnStop;
     _debounceTimer?.cancel();
     _idleAutoCloseTimer?.cancel();
     _completionEventPending = false;
@@ -2490,12 +2507,21 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     } catch (e, stackTrace) {
       logger.log('Error in stop()', error: e, stackTrace: stackTrace);
     }
-    await super.stop();
+    try {
+      // Also bounded, for the same reason as audioPlayer.stop() above: if
+      // this hangs instead, _stopWithoutClosingApp's finally block (which
+      // resets _keepAppOpenOnStop back to false) would never run either,
+      // silently disabling the app-closing path below for every stop() call
+      // for the rest of the process's life.
+      await super.stop().timeout(const Duration(seconds: 3));
+    } catch (e, stackTrace) {
+      logger.log('Error in super.stop()', error: e, stackTrace: stackTrace);
+    }
 
     // Nothing left to play - free the idle process instead of leaving it
     // running in the background, unless this stop was just an in-app
     // action that should leave the app open (see _keepAppOpenOnStop).
-    if (!_keepAppOpenOnStop) {
+    if (!keepAppOpen) {
       unawaited(_exitIfIdle(forceStopped: true));
     } else {
       // Staying open on purpose, but still idle now - arm the idle-close
