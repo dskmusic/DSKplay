@@ -165,6 +165,15 @@
             android:stopWithTask="false"
             android:exported="false" />
 
+        <!-- Keeps the process out of Android's cached-app freezer while the
+             idle-close/hard-exit Handler in App.kt is counting down - see
+             IdleCloseService's own doc comment. Same foregroundServiceType
+             reasoning as DownloadForegroundService above. -->
+        <service android:name=".IdleCloseService"
+            android:foregroundServiceType="mediaPlayback"
+            android:stopWithTask="false"
+            android:exported="false" />
+
         <!-- MediaButtonReceiver -->
         <receiver android:name="com.ryanheise.audioservice.MediaButtonReceiver"
             android:exported="true"

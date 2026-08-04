@@ -42,6 +42,26 @@ class App : Application() {
     @Volatile
     private var downloadChannel: MethodChannel? = null
 
+    @Volatile
+    private var appContext: Context? = null
+
+    // A cached process with no foreground service can be frozen (all
+    // threads suspended) regardless of wake locks or pending Handler
+    // callbacks, which would silently stop the countdowns below from ever
+    // firing - see IdleCloseService's own doc comment. Idempotent to start
+    // twice (just redelivers onStartCommand), so no ref-counting needed;
+    // only cancelIdleClose() stops it, since scheduleHardExit's own
+    // runnable kills the process directly and has nothing left to clean up.
+    private fun startIdleKeepAlive() {
+      appContext?.let {
+        ContextCompat.startForegroundService(it, Intent(it, IdleCloseService::class.java))
+      }
+    }
+
+    private fun stopIdleKeepAlive() {
+      appContext?.let { it.stopService(Intent(it, IdleCloseService::class.java)) }
+    }
+
     /**
      * Relays a tap on the notification's "Cancelar" action to Dart, where
      * the download loops actually live. Deliberately uses the channel of
@@ -67,6 +87,7 @@ class App : Application() {
     private fun armIdleClose(minutes: Int) {
       cancelIdleClose()
       if (minutes <= 0) return
+      startIdleKeepAlive()
       val runnable = Runnable { Process.killProcess(Process.myPid()) }
       idleCloseRunnable = runnable
       idleCloseHandler.postDelayed(runnable, minutes * 60_000L)
@@ -75,6 +96,7 @@ class App : Application() {
     private fun cancelIdleClose() {
       idleCloseRunnable?.let { idleCloseHandler.removeCallbacks(it) }
       idleCloseRunnable = null
+      stopIdleKeepAlive()
     }
 
     // Backs up Dart's own exit(0) call in AudioHandler.stop()/_exitIfIdle:
@@ -88,6 +110,7 @@ class App : Application() {
 
     fun scheduleHardExit(delayMs: Long) {
       hardExitRunnable?.let { idleCloseHandler.removeCallbacks(it) }
+      startIdleKeepAlive()
       val runnable = Runnable { Process.killProcess(Process.myPid()) }
       hardExitRunnable = runnable
       idleCloseHandler.postDelayed(runnable, delayMs)
@@ -108,6 +131,7 @@ class App : Application() {
 
   override fun onCreate() {
     super.onCreate()
+    appContext = applicationContext
     registerChannels()
     registerActivityLifecycleCallbacks(
       object : ActivityLifecycleCallbacks {
