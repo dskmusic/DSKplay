@@ -122,6 +122,19 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     );
   }
 
+  // Fire-and-forget: dispatching this platform channel call doesn't depend
+  // on this isolate surviving afterwards, unlike everything after it in
+  // _exitIfIdle. If exit(0) below succeeds first the whole process (this
+  // watchdog included) dies with it anyway, so there's nothing to cancel.
+  void _scheduleNativeHardExit() {
+    if (!Platform.isAndroid) return;
+    unawaited(
+      _idleCloseChannel
+          .invokeMethod('scheduleHardExit', {'delayMs': 15000})
+          .catchError((_) {}),
+    );
+  }
+
   // Set around stop() calls that should just halt playback and leave the
   // app open - the user closing the player from within the app, or giving
   // up after repeated playback errors - as opposed to every other caller
@@ -2302,13 +2315,28 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   // pausing it: the app being swiped away, the notification being
   // dismissed, the sleep timer expiring, or a podcast episode finishing
   // on its own with nothing queued after it.
-  Future<void> _exitIfIdle() async {
+  Future<void> _exitIfIdle({bool forceStopped = false}) async {
     logger.log(
       'exitIfIdle called '
-      '(playing=${audioPlayer.playing}, '
+      '(playing=${audioPlayer.playing}, forceStopped=$forceStopped, '
       'downloadActive=${DownloadForegroundService.isActive})',
     );
-    if (!audioPlayer.playing && !DownloadForegroundService.isActive) {
+    // [forceStopped] skips the (possibly stale) audioPlayer.playing check:
+    // just_audio's stop() has been observed to hang without ever flipping
+    // that flag back to false (see the timeout comment in stop() below),
+    // which used to leave this check reading "still playing" forever and
+    // the process alive in the background after the notification/lock-
+    // screen "X" was pressed - the caller there already knows a stop was
+    // just explicitly requested, so it doesn't need re-confirming here.
+    if ((forceStopped || !audioPlayer.playing) &&
+        !DownloadForegroundService.isActive) {
+      // audio_service can tear down this background FlutterEngine (killing
+      // this very isolate) while the awaits below are still pending - e.g.
+      // right after super.stop() as part of the service shutting itself
+      // down - which used to silently strand exit(0) below and leave the
+      // process alive indefinitely. This native watchdog survives that
+      // teardown and guarantees the kill happens regardless.
+      _scheduleNativeHardExit();
       // Last chance to persist any pending changes before the process dies
       // outright - a bounded wait so a slow/dead network can't stall the
       // app's own shutdown indefinitely.
@@ -2468,7 +2496,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     // running in the background, unless this stop was just an in-app
     // action that should leave the app open (see _keepAppOpenOnStop).
     if (!_keepAppOpenOnStop) {
-      unawaited(_exitIfIdle());
+      unawaited(_exitIfIdle(forceStopped: true));
     } else {
       // Staying open on purpose, but still idle now - arm the idle-close
       // timer so it isn't left running forever with nothing playing.

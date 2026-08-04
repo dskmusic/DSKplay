@@ -76,6 +76,22 @@ class App : Application() {
       idleCloseRunnable?.let { idleCloseHandler.removeCallbacks(it) }
       idleCloseRunnable = null
     }
+
+    // Backs up Dart's own exit(0) call in AudioHandler.stop()/_exitIfIdle:
+    // that whole shutdown path runs on the shared FlutterEngine, which
+    // audio_service can tear down mid-flight (its service stopping itself
+    // as part of the very stop() call that scheduled this), stranding
+    // exit(0) before it ever runs and leaving the process alive. Separate
+    // runnable from the one above so an in-progress idle-close arm/cancel
+    // never interferes with this one, or vice versa.
+    private var hardExitRunnable: Runnable? = null
+
+    fun scheduleHardExit(delayMs: Long) {
+      hardExitRunnable?.let { idleCloseHandler.removeCallbacks(it) }
+      val runnable = Runnable { Process.killProcess(Process.myPid()) }
+      hardExitRunnable = runnable
+      idleCloseHandler.postDelayed(runnable, delayMs)
+    }
   }
 
   private var lastEngine: FlutterEngine? = null
@@ -219,6 +235,10 @@ class App : Application() {
             }
             "cancelIdleClose" -> {
               cancelIdleClose()
+              result.success(null)
+            }
+            "scheduleHardExit" -> {
+              scheduleHardExit((call.argument<Int>("delayMs") ?: 15000).toLong())
               result.success(null)
             }
             else -> result.notImplemented()
