@@ -156,27 +156,41 @@ class NowPlayingArtwork extends StatelessWidget {
   }
 }
 
+// On a cold start the resumed episode is shown before playback actually
+// starts, so currentPlayingPodcast is still null - fall back to the pending
+// resume data, same as openCurrentPodcastEpisodeList.
+({PodcastEpisode episode, String podcastTitle})? currentPodcastEpisodeInfo() {
+  final current = audioHandler.currentPlayingPodcast;
+  if (current != null) {
+    return (episode: current.episode, podcastTitle: current.podcastTitle);
+  }
+  final pending = audioHandler.pendingPodcastResume;
+  if (pending != null) {
+    return (episode: pending.episode, podcastTitle: pending.podcastTitle);
+  }
+  return null;
+}
+
+/// Shares the currently playing podcast episode's info (podcast/episode
+/// title, description, audio link) - used by both the lyrics/description
+/// flip card and the full-screen player's share button.
+Future<void> shareCurrentPodcastEpisode() async {
+  final current = currentPodcastEpisodeInfo();
+  if (current == null) return;
+  await SharePlus.instance.share(
+    ShareParams(
+      text: podcastEpisodeCopyText(current.podcastTitle, current.episode),
+      subject: current.episode.title,
+    ),
+  );
+}
+
 class _PodcastDescriptionBackContent extends StatelessWidget {
   const _PodcastDescriptionBackContent({required this.metadata});
   final MediaItem metadata;
 
-  // On a cold start the resumed episode is shown before playback actually
-  // starts, so currentPlayingPodcast is still null - fall back to the
-  // pending resume data, same as openCurrentPodcastEpisodeList.
-  ({PodcastEpisode episode, String podcastTitle})? _currentEpisodeInfo() {
-    final current = audioHandler.currentPlayingPodcast;
-    if (current != null) {
-      return (episode: current.episode, podcastTitle: current.podcastTitle);
-    }
-    final pending = audioHandler.pendingPodcastResume;
-    if (pending != null) {
-      return (episode: pending.episode, podcastTitle: pending.podcastTitle);
-    }
-    return null;
-  }
-
   Future<void> _copyEpisodeInfo(BuildContext context) async {
-    final current = _currentEpisodeInfo();
+    final current = currentPodcastEpisodeInfo();
     if (current == null) return;
     await Clipboard.setData(
       ClipboardData(
@@ -186,17 +200,6 @@ class _PodcastDescriptionBackContent extends StatelessWidget {
     if (context.mounted) {
       showToast(context, context.l10n!.episodeInfoCopied);
     }
-  }
-
-  Future<void> _shareEpisodeInfo(BuildContext context) async {
-    final current = _currentEpisodeInfo();
-    if (current == null) return;
-    await SharePlus.instance.share(
-      ShareParams(
-        text: podcastEpisodeCopyText(current.podcastTitle, current.episode),
-        subject: current.episode.title,
-      ),
-    );
   }
 
   @override
@@ -260,7 +263,7 @@ class _PodcastDescriptionBackContent extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
             clipBehavior: Clip.antiAlias,
             child: InkWell(
-              onTap: () => _shareEpisodeInfo(context),
+              onTap: shareCurrentPodcastEpisode,
               child: const Padding(
                 padding: EdgeInsets.all(8),
                 child: Icon(

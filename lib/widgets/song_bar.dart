@@ -285,7 +285,7 @@ Future<void> _handleSongMenuAction({
       await _exportSongToDeviceFlow(context, song);
       break;
     case 'share':
-      await _shareSongFlow(context, song, ytid);
+      await shareSongFlow(context, song, ytid);
       break;
   }
 }
@@ -345,7 +345,9 @@ Future<void> _exportSongToDeviceFlow(BuildContext context, dynamic song) async {
   );
 }
 
-Future<void> _shareSongFlow(
+/// The song sharing menu (choose YouTube link or MP3 file) used by the song
+/// bar's overflow menu, also reused by the full-screen player's share button.
+Future<void> shareSongFlow(
   BuildContext context,
   dynamic song,
   String ytid,

@@ -260,7 +260,7 @@
   "removeFromLikedPlaylists": "Eliminar de las listas favoritas",
   "removeFromLikedSongs": "Eliminar de las canciones favoritas",
   "removeFromPlaylist": "Eliminar de la lista de reproducción",
-  "removeFromRecentlyPlayed": "Eliminar de reproducidos recientemente",
+  "removeFromRecentlyPlayed": "Eliminar de la lista",
   "removeFromTimeMachine": "Eliminar de la máquina del tiempo",
   "removeFromTimeMachineQuestion": "¿Eliminar esta canción de la máquina del tiempo? Se borrarán sus estadísticas de escucha de todos los meses y años.",
   "removeOffline": "Eliminar de sin conexión",

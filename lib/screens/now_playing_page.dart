@@ -27,10 +27,12 @@ import 'package:go_router/go_router.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/services/router_service.dart';
+import 'package:dskplay/utilities/mediaitem.dart';
 import 'package:dskplay/widgets/now_playing/bottom_actions_row.dart';
 import 'package:dskplay/widgets/now_playing/now_playing_artwork.dart';
 import 'package:dskplay/widgets/now_playing/now_playing_controls.dart';
 import 'package:dskplay/widgets/queue_list_view.dart';
+import 'package:dskplay/widgets/song_bar.dart';
 
 /// The slide-up-from-bottom transition used to open the full player, shared
 /// by the mini player's own tap/swipe and by external code (e.g. opening a
@@ -98,7 +100,7 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
               final metadata = snapshot.data!;
               return Column(
                 children: [
-                  _buildAppBar(context, colorScheme),
+                  _buildAppBar(context, colorScheme, metadata),
                   Expanded(
                     child: isLargeScreen
                         ? _DesktopLayout(
@@ -126,7 +128,16 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
     );
   }
 
-  Widget _buildAppBar(BuildContext context, ColorScheme colorScheme) {
+  Widget _buildAppBar(
+    BuildContext context,
+    ColorScheme colorScheme,
+    MediaItem metadata,
+  ) {
+    final isLive = metadata.extras?['isLive'] ?? false;
+    final isPodcastEpisode = metadata.extras?['isPodcastEpisode'] == true;
+    final ytid = metadata.extras?['ytid'] as String?;
+    final canShare = !isLive && (isPodcastEpisode || ytid != null);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Row(
@@ -143,6 +154,21 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
             ),
             onPressed: () => Navigator.pop(context),
           ),
+          if (canShare)
+            IconButton(
+              iconSize: 26,
+              icon: const Icon(FluentIcons.share_24_regular),
+              style: IconButton.styleFrom(
+                backgroundColor: colorScheme.surfaceContainerHighest,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onPressed: () => isPodcastEpisode
+                  ? shareCurrentPodcastEpisode()
+                  : shareSongFlow(context, mediaItemToMap(metadata), ytid!),
+              tooltip: context.l10n!.share,
+            ),
           IconButton(
             iconSize: 26,
             icon: const Icon(FluentIcons.dismiss_24_regular),
