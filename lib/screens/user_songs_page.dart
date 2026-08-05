@@ -24,14 +24,16 @@ import 'package:flutter/material.dart';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart' show logger, audioHandler;
+import 'package:dskplay/models/podcast_model.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/data_manager.dart';
+import 'package:dskplay/services/podcast_feed_service.dart';
+import 'package:dskplay/services/podcast_manager.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/utilities/app_utils.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/playlist_utils.dart';
 import 'package:dskplay/utilities/song_filtering.dart';
-import 'package:dskplay/widgets/confirmation_dialog.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:dskplay/widgets/playlist_cube.dart';
 import 'package:dskplay/widgets/playlist_page/empty_playlist_state.dart';
@@ -160,7 +162,6 @@ class _UserSongsPageState extends State<UserSongsPage> {
     bool isOfflineSongs,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isRecentlyPlayed = title == context.l10n!.recentlyPlayed;
 
     return Column(
       children: [
@@ -227,10 +228,6 @@ class _UserSongsPageState extends State<UserSongsPage> {
                     },
                   ),
                 ),
-                if (isRecentlyPlayed) ...[
-                  const SizedBox(width: 12),
-                  _buildClearRecentsButton(colorScheme.primary),
-                ],
               ],
             ),
           ),
@@ -284,32 +281,6 @@ class _UserSongsPageState extends State<UserSongsPage> {
       // normal full-width cube wastes vertical space here.
       size: (isLandscape ? 250 : screenWidth / commonPlaylistArtworkDivision) / 2,
       cubeIcon: icon,
-    );
-  }
-
-  Widget _buildClearRecentsButton(Color primaryColor) {
-    return IconButton.filledTonal(
-      icon: Icon(FluentIcons.delete_24_regular, color: primaryColor),
-      iconSize: 24,
-      onPressed: () {
-        showDialog(
-          context: context,
-          builder: (BuildContext context) {
-            return ConfirmationDialog(
-              confirmationMessage: context.l10n!.clearRecentlyPlayedQuestion,
-              submitMessage: context.l10n!.clear,
-              isDangerous: true,
-              onCancel: () => Navigator.pop(context),
-              onSubmit: () {
-                Navigator.pop(context);
-                userRecentlyPlayed.value = [];
-                addOrUpdateData<List>('user', 'recentlyPlayedSongs', []);
-                showToast(context, context.l10n!.recentlyPlayedMsg);
-              },
-            );
-          },
-        );
-      },
     );
   }
 
@@ -381,6 +352,67 @@ class _UserSongsPageState extends State<UserSongsPage> {
     );
   }
 
+  // A podcast episode's ytid is its internal key, not a real YouTube video
+  // id - playPlaylistSong would try to resolve it as one and fail. Replay it
+  // the same way the podcast player (and Time Machine) does instead.
+  Future<void> _playSong(Map song, Map playlist, int index) async {
+    if (song['isPodcastEpisode'] == true) {
+      final audioUrl = song['audioUrl']?.toString();
+      final guid = song['guid']?.toString();
+      final podcastId = song['podcastId']?.toString();
+      if (audioUrl == null ||
+          audioUrl.isEmpty ||
+          guid == null ||
+          guid.isEmpty ||
+          podcastId == null ||
+          podcastId.isEmpty) {
+        // Recorded before this data was tracked - nothing to replay it with.
+        if (mounted) showToast(context, context.l10n!.error);
+        return;
+      }
+
+      // The audioUrl was recorded the first time this episode was played and
+      // never touched again - some hosts rotate or expire enclosure URLs
+      // after a while, which then fails to play here even though the same
+      // episode still streams fine anywhere that re-reads the live feed.
+      // Refetch it and prefer whatever the feed currently reports, falling
+      // back to the recorded URL only if the podcast/episode can't be found
+      // there anymore.
+      var currentAudioUrl = audioUrl;
+      final subscribedPodcast = podcastManager.subscriptions.value.where(
+        (p) => p.id == podcastId,
+      );
+      if (subscribedPodcast.isNotEmpty) {
+        final feed = await fetchPodcastFeed(subscribedPodcast.first.feedUrl);
+        final matchingEpisodes = feed?.episodes.where((e) => e.guid == guid);
+        if (matchingEpisodes != null && matchingEpisodes.isNotEmpty) {
+          currentAudioUrl = matchingEpisodes.first.audioUrl;
+        }
+      }
+
+      await audioHandler.playPodcastEpisode(
+        PodcastEpisode(
+          guid: guid,
+          podcastId: podcastId,
+          title: song['title']?.toString() ?? '',
+          audioUrl: currentAudioUrl,
+          image: song['highResImage']?.toString() ?? '',
+        ),
+        podcastTitle: song['artist']?.toString() ?? '',
+      );
+      return;
+    }
+
+    final fullIndex = PlaylistUtils.findSongIndexByYtid(playlist, song['ytid']);
+    if (fullIndex == -1) {
+      logger.log('Warning: Song ${song['ytid']} not found in full song list');
+    }
+    await audioHandler.playPlaylistSong(
+      playlist: playlist,
+      songIndex: fullIndex != -1 ? fullIndex : index,
+    );
+  }
+
   Widget _buildSongBar(
     Map song,
     int index,
@@ -395,21 +427,7 @@ class _UserSongsPageState extends State<UserSongsPage> {
       key: listItemKey('user_song', index, song),
       song,
       true,
-      onPlay: () {
-        final fullIndex = PlaylistUtils.findSongIndexByYtid(
-          playlist,
-          song['ytid'],
-        );
-        if (fullIndex == -1) {
-          logger.log(
-            'Warning: Song ${song['ytid']} not found in full song list',
-          );
-        }
-        audioHandler.playPlaylistSong(
-          playlist: playlist,
-          songIndex: fullIndex != -1 ? fullIndex : index,
-        );
-      },
+      onPlay: () => _playSong(song, playlist, index),
       borderRadius: borderRadius,
       isRecentSong: isRecentSong,
       isFromLikedSongs: isLikedSongs,

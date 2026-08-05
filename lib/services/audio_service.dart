@@ -2038,8 +2038,48 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     }
   }
 
+  /// Returns [_pendingPodcastResume], falling back to a fresh read of the
+  /// persisted podcast state - a plain `??` between the two doesn't type
+  /// check, since _loadPersistedPodcastState()'s record also carries a
+  /// `savedAt` field _pendingPodcastResume doesn't.
+  ({PodcastEpisode episode, String podcastTitle, String? localPath, Duration position})?
+  _resolvePendingPodcast() {
+    final pending = _pendingPodcastResume;
+    if (pending != null) return pending;
+    final persisted = _loadPersistedPodcastState();
+    if (persisted == null) return null;
+    return (
+      episode: persisted.episode,
+      podcastTitle: persisted.podcastTitle,
+      localPath: persisted.localPath,
+      position: persisted.position,
+    );
+  }
+
   Map? _latestResumableSong() {
     if (!rememberLastPlayback.value) return null;
+
+    // Checked before anything else, mirroring play()'s priority: a podcast
+    // episode never lives in _queueList/mediaItem on a cold start until
+    // _restoreLastPlayedForDisplay() has run, so without this a caller that
+    // races that (e.g. the system media-resumption query that fires right
+    // after a Bluetooth play press restarts the process) falls through to
+    // the last regular song instead - resuming the wrong thing entirely.
+    final pendingPodcast = _resolvePendingPodcast();
+    if (pendingPodcast != null) {
+      final durationSeconds = pendingPodcast.episode.durationSeconds;
+      final isNearEnd =
+          durationSeconds != null &&
+          Duration(seconds: durationSeconds) - pendingPodcast.position <=
+              _podcastNearEndThreshold;
+      if (!isNearEnd) {
+        return _buildEpisodeSong(
+          pendingPodcast.episode,
+          pendingPodcast.podcastTitle,
+          pendingPodcast.localPath,
+        );
+      }
+    }
 
     final activeSong = currentSong;
     if (activeSong != null && _songYtid(activeSong) != null) {
@@ -2092,6 +2132,15 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   }
 
   Future<void> _playResumableSong(Map song) async {
+    // A podcast episode Map from _latestResumableSong() - route it through
+    // the podcast resume path instead of playPlaylistSong, which would treat
+    // its ytid as a YouTube video id and fail to play it.
+    if (song['isPodcastEpisode'] == true) {
+      _pendingPodcastResume ??= _resolvePendingPodcast();
+      await resumePendingPodcast();
+      return;
+    }
+
     final normalisedSong = _normaliseResumableSong(song);
     if (normalisedSong == null) return;
 
@@ -3317,6 +3366,9 @@ class DskPlayAudioHandler extends BaseAudioHandler {
           initialPosition ?? Duration.zero,
         );
       }
+      unawaited(
+        updateRecentlyPlayed(episodeSong['ytid'], songFallback: episodeSong),
+      );
       return true;
     } catch (e, stackTrace) {
       logger.log(
