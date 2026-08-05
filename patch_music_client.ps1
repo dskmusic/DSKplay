@@ -12,21 +12,29 @@ if ($content.Contains('_findContinuationToken')) {
     exit 0
 }
 
-$startAnchor = '  Future<List<MusicAlbum>> getArtistReleases(dynamic channelId) async {'
-$endAnchor = '  /// Returns the top tracks shown on the YouTube Music artist page.'
-$helperAnchor = '  void _collectReleases(_JsonMap root, Map<String, MusicAlbum> into) {'
+# Upstream (gokadzev/Musify) folded the old standalone getArtistReleases/
+# getAlbumTracks methods into a combined getArtistProfile/getAlbum API at some
+# point. This fork still calls the old, simpler methods directly (see
+# artist_service.dart), so instead of adopting the new shape they're
+# reinserted here as-is, rebuilt on whichever low-level helpers
+# (_browse/_findRenderers/_collectReleases/_collectMoreReleaseBrowses/etc.)
+# upstream still exposes. If those helpers themselves get renamed upstream,
+# this insertion will still succeed (it doesn't touch them) but the build
+# will fail loudly instead - that's still a "needs manual review" case, just
+# caught one step later.
+$insertAnchor = '  List<MusicTopSong> _parseTopSongs('
 
-$startIdx = $content.IndexOf($startAnchor)
-$endIdx = $content.IndexOf($endAnchor)
-$helperIdx = $content.IndexOf($helperAnchor)
+$insertIdx = $content.IndexOf($insertAnchor)
 
-if ($startIdx -lt 0 -or $endIdx -lt 0 -or $helperIdx -lt 0 -or $endIdx -le $startIdx) {
-    Write-Host "  [AVISO] No se encontraron los puntos de referencia esperados; no se pudo parchear automaticamente."
-    Write-Host "  Aplica el fix a mano: bucle de paginacion en getArtistReleases + metodos _continueBrowse/_findContinuationToken (compara con music_client.dart.tu_version_actual)."
+if ($insertIdx -lt 0) {
+    Write-Host "  [AVISO] No se encontro el punto de referencia esperado; no se pudo parchear automaticamente."
+    Write-Host "  Aplica el fix a mano: metodos getArtistReleases/getAlbumTracks (con paginacion) + _continueBrowse/_findContinuationToken (compara con music_client.dart.tu_version_actual)."
     exit 1
 }
 
-$newMethod = @'
+$newCode = @'
+  /// Returns the full discography (albums, singles and EPs) of a YouTube Music
+  /// artist.
   Future<List<MusicAlbum>> getArtistReleases(dynamic channelId) async {
     final id = ChannelId.fromString(channelId).value;
     final root = await _browse(id);
@@ -57,9 +65,51 @@ $newMethod = @'
     return releases.values.toList();
   }
 
-'@
+  /// Returns the tracks of a release as [Video]s.
+  Future<List<Video>> getAlbumTracks(
+    String albumBrowseId, {
+    required String author,
+    String? channelId,
+  }) async {
+    final root = await _browse(albumBrowseId);
+    final resolvedChannelId = (channelId != null && channelId.isNotEmpty)
+        ? ChannelId.fromString(channelId)
+        : ChannelId('UC0000000000000000000000');
 
-$helperMethods = @'
+    final videos = <Video>[];
+    final seen = <String>{};
+    for (final item in _findRenderers(
+      root,
+      'musicResponsiveListItemRenderer',
+    )) {
+      final videoId = _trackVideoId(item);
+      if (videoId == null || !seen.add(videoId)) continue;
+
+      final title = _flexColumnText(item, 0);
+      if (title == null || title.isEmpty) continue;
+
+      videos.add(
+        Video(
+          VideoId(videoId),
+          title,
+          author,
+          resolvedChannelId,
+          null,
+          null,
+          null,
+          '',
+          _parseDuration(_fixedColumnText(item)),
+          ThumbnailSet(videoId),
+          null,
+          const Engagement(0, null, null),
+          false,
+        ),
+      );
+    }
+
+    return videos;
+  }
+
   Future<_JsonMap> _continueBrowse(String token) {
     return _httpClient.sendPost('browse', {
       'context': _remixContext,
@@ -83,19 +133,10 @@ $helperMethods = @'
 # Match the target file's line endings (this project's .dart files use CRLF).
 # PowerShell here-strings swallow a trailing blank line before the closing
 # '@, so the extra blank-line separator is added back explicitly here.
-$newMethod = (($newMethod -replace "`r`n", "`n") -replace "`n", "`r`n") + "`r`n"
-$helperMethods = (($helperMethods -replace "`r`n", "`n") -replace "`n", "`r`n") + "`r`n"
+$newCode = (($newCode -replace "`r`n", "`n") -replace "`n", "`r`n") + "`r`n"
 
-$patched = $content.Substring(0, $startIdx) + $newMethod + $content.Substring($endIdx)
-
-$helperIdx2 = $patched.IndexOf($helperAnchor)
-if ($helperIdx2 -lt 0) {
-    Write-Host "  [AVISO] No se pudo insertar _continueBrowse/_findContinuationToken automaticamente."
-    Set-Content -LiteralPath $FilePath -Value $patched -NoNewline
-    exit 1
-}
-$patched = $patched.Substring(0, $helperIdx2) + $helperMethods + $patched.Substring($helperIdx2)
+$patched = $content.Substring(0, $insertIdx) + $newCode + $content.Substring($insertIdx)
 
 Set-Content -LiteralPath $FilePath -Value $patched -NoNewline
-Write-Host "  Parche de paginacion de discografia aplicado automaticamente a music_client.dart."
+Write-Host "  Parche de getArtistReleases/getAlbumTracks (con paginacion) aplicado automaticamente a music_client.dart."
 exit 0
