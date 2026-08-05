@@ -2401,6 +2401,15 @@ class DskPlayAudioHandler extends BaseAudioHandler {
           onTimeout: () => false,
         ),
       );
+      // Recently-played/podcast-state writes just above (and elsewhere) are
+      // fired off with unawaited() and normally finish within milliseconds -
+      // but exit(0) can land before that write ever reaches disk if it's
+      // called this soon after (e.g. pause immediately followed by swiping
+      // the task away), silently dropping it. flush() waits for every
+      // pending write on the box to actually commit.
+      try {
+        await Hive.box('user').flush();
+      } catch (_) {}
       logger.log('exitIfIdle: calling exit(0) now');
       exit(0);
     }
