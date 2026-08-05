@@ -11,13 +11,25 @@ name: YouTube sync & release
 #   - the release build failed after updating the files.
 # It is never based on how large the upstream diff is.
 #
-# workflow_dispatch always forces a release build even if nothing changed
-# upstream, for cutting a release on demand.
+# workflow_dispatch offers two release modes (see the "release_mode" input):
+#   - check_upstream: same as the scheduled run, but always cuts a release
+#     even if upstream didn't change anything.
+#   - direct: skips the upstream download/patch entirely and just builds +
+#     releases the repository as it is right now.
 
 on:
   schedule:
     - cron: '0 6 * * *'
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      release_mode:
+        description: 'How to create the release'
+        required: true
+        type: choice
+        default: check_upstream
+        options:
+          - check_upstream
+          - direct
 
 concurrency:
   group: youtube-sync
@@ -47,8 +59,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Determine release mode
+        id: mode
+        shell: pwsh
+        run: |
+          $mode = "check_upstream"
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $mode = "${{ inputs.release_mode }}"
+          }
+          Write-Host "Release mode: $mode"
+          "mode=$mode" >> $env:GITHUB_OUTPUT
+
       - name: Download current upstream files
         id: download
+        if: steps.mode.outputs.mode == 'check_upstream'
         shell: pwsh
         run: |
           $branch = try {
@@ -95,9 +119,19 @@ jobs:
           "changed=$changed" >> $env:GITHUB_OUTPUT
           "branch=$branch" >> $env:GITHUB_OUTPUT
 
+      - name: Determine whether to build & release
+        id: gate
+        shell: pwsh
+        run: |
+          $mode = "${{ steps.mode.outputs.mode }}"
+          $changed = "${{ steps.download.outputs.changed }}"
+          $should = ($mode -eq 'direct') -or ($changed -eq 'true')
+          Write-Host "Should build & release: $should"
+          "should_release=$should" >> $env:GITHUB_OUTPUT
+
       - name: Reapply artist-catalog pagination patch
         id: patch
-        if: steps.download.outputs.changed == 'true'
+        if: steps.mode.outputs.mode == 'check_upstream' && steps.download.outputs.changed == 'true'
         shell: pwsh
         run: |
           .\patch_music_client.ps1 -FilePath "$env:MUSIC_CLIENT_PATH"
@@ -107,21 +141,21 @@ jobs:
           }
 
       - name: Set up Java
-        if: steps.download.outputs.changed == 'true'
+        if: steps.gate.outputs.should_release == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Set up Flutter
-        if: steps.download.outputs.changed == 'true'
+        if: steps.gate.outputs.should_release == 'true'
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.44.6'
           channel: stable
 
       - name: Configure release signing
-        if: steps.download.outputs.changed == 'true'
+        if: steps.gate.outputs.should_release == 'true'
         shell: pwsh
         run: |
           @"
@@ -139,20 +173,21 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
       - name: flutter pub get
-        if: steps.download.outputs.changed == 'true'
+        if: steps.gate.outputs.should_release == 'true'
         run: flutter pub get
 
       - name: Compute release tag
         id: tag
-        if: steps.download.outputs.changed == 'true'
+        if: steps.gate.outputs.should_release == 'true'
         shell: pwsh
         run: |
           $date = Get-Date -Format "yyyy.MM.dd"
-          "tag=auto-sync-$date-${{ github.run_number }}" >> $env:GITHUB_OUTPUT
+          $prefix = if ("${{ steps.mode.outputs.mode }}" -eq 'direct') { 'release' } else { 'auto-sync' }
+          "tag=$prefix-$date-${{ github.run_number }}" >> $env:GITHUB_OUTPUT
 
       - name: Bump build number
         id: bump
-        if: steps.download.outputs.changed == 'true'
+        if: steps.gate.outputs.should_release == 'true'
         shell: pwsh
         run: |
           $pubspec = Get-Content pubspec.yaml -Raw
@@ -168,7 +203,7 @@ jobs:
 
       - name: Build signed release APK
         id: build
-        if: steps.download.outputs.changed == 'true'
+        if: steps.gate.outputs.should_release == 'true'
         shell: pwsh
         run: |
           flutter build apk --release
@@ -178,7 +213,7 @@ jobs:
           }
 
       - name: Commit synced files
-        if: steps.download.outputs.changed == 'true' && steps.build.outcome == 'success'
+        if: steps.gate.outputs.should_release == 'true' && steps.build.outcome == 'success'
         shell: pwsh
         run: |
           git config user.name "github-actions[bot]"
@@ -186,24 +221,45 @@ jobs:
           git add packages/youtube_explode_dart packages/youtube_music_explode_dart pubspec.yaml lib/constants/version.dart
           git diff --staged --quiet
           if ($LASTEXITCODE -ne 0) {
-            git commit -m "chore: sync YouTube extraction fixes from upstream Musify (auto)"
+            if ("${{ steps.mode.outputs.mode }}" -eq 'check_upstream' -and "${{ steps.download.outputs.changed }}" -eq 'true') {
+              git commit -m "chore: sync YouTube extraction fixes from upstream Musify (auto)"
+            } else {
+              git commit -m "chore: bump build number to ${{ steps.bump.outputs.build }} (manual release)"
+            }
             git push
           } else {
-            Write-Host "Nothing to commit (manual trigger with no upstream changes)."
+            Write-Host "Nothing to commit."
           }
 
       - name: Publish release
-        if: steps.download.outputs.changed == 'true' && steps.build.outcome == 'success'
+        if: steps.gate.outputs.should_release == 'true' && steps.build.outcome == 'success'
         shell: pwsh
         run: |
           $tag = "${{ steps.tag.outputs.tag }}"
           $verNum = "${{ steps.bump.outputs.verNum }}"
           $build = "${{ steps.bump.outputs.build }}"
-          $notes = @"
+          $mode = "${{ steps.mode.outputs.mode }}"
+          $upstreamChanged = "${{ steps.download.outputs.changed }}" -eq 'true'
+
+          if ($mode -eq 'check_upstream' -and $upstreamChanged) {
+            $notes = @"
           Automatic sync of YouTube extraction files from upstream Musify (branch: ${{ steps.download.outputs.branch }}), pagination patch reapplied and rebuilt successfully.
 
           BuildNumber: $build
           "@
+          } elseif ($mode -eq 'check_upstream') {
+            $notes = @"
+          Manual release cut on demand. Upstream Musify was checked (branch: ${{ steps.download.outputs.branch }}) but had no relevant changes, so this build is the current repository as-is.
+
+          BuildNumber: $build
+          "@
+          } else {
+            $notes = @"
+          Manual release built directly from the current repository state, without checking upstream Musify.
+
+          BuildNumber: $build
+          "@
+          }
           gh release create $tag `
             "build/app/outputs/flutter-apk/app-release.apk" `
             --title "DSK Play v$verNum (build $build)" `
