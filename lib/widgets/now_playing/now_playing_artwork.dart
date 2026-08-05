@@ -255,26 +255,6 @@ class _PodcastDescriptionBackContent extends StatelessWidget {
             ),
           ),
         ),
-        Positioned(
-          right: 8,
-          bottom: 8,
-          child: Material(
-            color: Colors.black.withValues(alpha: 0.35),
-            borderRadius: BorderRadius.circular(8),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: shareCurrentPodcastEpisode,
-              child: const Padding(
-                padding: EdgeInsets.all(8),
-                child: Icon(
-                  FluentIcons.share_24_regular,
-                  color: Colors.white,
-                  size: 18,
-                ),
-              ),
-            ),
-          ),
-        ),
       ],
     );
   }

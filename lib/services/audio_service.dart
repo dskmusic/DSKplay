@@ -352,7 +352,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     audioPlayer.positionStream
         .throttleTime(const Duration(seconds: 5))
         .listen(
-          (position) => _persistPodcastPositionIfNeeded(position),
+          (position) => unawaited(_persistPodcastPositionIfNeeded(position)),
           onError: (error, stackTrace) {
             _logStreamError('Position stream error', error, stackTrace);
           },
@@ -1955,27 +1955,30 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   /// Saves which podcast episode was last playing and at what position, so a
   /// cold start can offer to resume it - mirrors [_persistQueueState] for
   /// podcasts, which bypass _queueList entirely (see [playPodcastEpisode]).
-  void _persistPodcastState(
+  // Returns a Future (rather than firing the write off unawaited) so that
+  // callers racing against a possible process exit - pause(), onTaskRemoved,
+  // onNotificationDeleted - can await it and know the position actually
+  // reached disk before anything downstream decides to kill the process.
+  // The throttled positionStream autosave is the one caller that doesn't
+  // need this and stays fire-and-forget.
+  Future<void> _persistPodcastState(
     PodcastEpisode episode,
     String podcastTitle,
     String? localPath,
     Duration position,
-  ) {
+  ) async {
     if (!rememberLastPlayback.value) return;
     try {
       final userBox = Hive.box('user');
       unawaited(userBox.delete(_lastQueueStateKey));
-      unawaited(
-        userBox
-            .put(_lastPodcastStateKey, {
-              'episode': episode.toMap(),
-              'podcastTitle': podcastTitle,
-              'localPath': localPath,
-              'positionMs': position.inMilliseconds,
-              'savedAt': DateTime.now().millisecondsSinceEpoch,
-            })
-            .then((_) => userBox.flush()),
-      );
+      await userBox.put(_lastPodcastStateKey, {
+        'episode': episode.toMap(),
+        'podcastTitle': podcastTitle,
+        'localPath': localPath,
+        'positionMs': position.inMilliseconds,
+        'savedAt': DateTime.now().millisecondsSinceEpoch,
+      });
+      await userBox.flush();
     } catch (e, stackTrace) {
       logger.log(
         'Error persisting podcast state',
@@ -1985,10 +1988,10 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     }
   }
 
-  void _persistPodcastPositionIfNeeded(Duration position) {
+  Future<void> _persistPodcastPositionIfNeeded(Duration position) {
     final current = _currentPlayingPodcast;
-    if (current == null) return;
-    _persistPodcastState(
+    if (current == null) return Future.value();
+    return _persistPodcastState(
       current.episode,
       current.podcastTitle,
       current.localPath,
@@ -2339,8 +2342,9 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         // kills the backgrounded task), leaving the podcast resume position
         // stuck at whatever the throttled positionStream last saved (up to
         // 5s stale) - persist the exact position now, at the last reliable
-        // checkpoint before that can happen.
-        _persistPodcastPositionIfNeeded(audioPlayer.position);
+        // checkpoint before that can happen. Awaited so the process can't
+        // be killed (see _exitIfIdle below) before it lands.
+        await _persistPodcastPositionIfNeeded(audioPlayer.position);
         return;
       }
       await stop();
@@ -2448,7 +2452,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   Future<void> onNotificationDeleted() async {
     try {
       if (audioPlayer.playing) {
-        _persistPodcastPositionIfNeeded(audioPlayer.position);
+        await _persistPodcastPositionIfNeeded(audioPlayer.position);
         return;
       }
       await stop();
@@ -2527,7 +2531,10 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       );
       unawaited(listeningStatsService.flush());
       await audioPlayer.pause();
-      _persistPodcastPositionIfNeeded(audioPlayer.position);
+      // Awaited: a Bluetooth/notification pause can be followed almost
+      // immediately by the app being swiped away and the process exiting -
+      // this must land on disk before that can happen.
+      await _persistPodcastPositionIfNeeded(audioPlayer.position);
     } catch (e, stackTrace) {
       logger.log('Error in pause()', error: e, stackTrace: stackTrace);
     }
@@ -3368,11 +3375,13 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       _updatePlaybackState();
       final playingPodcast = _currentPlayingPodcast;
       if (playingPodcast != null) {
-        _persistPodcastState(
-          playingPodcast.episode,
-          playingPodcast.podcastTitle,
-          playingPodcast.localPath,
-          initialPosition ?? Duration.zero,
+        unawaited(
+          _persistPodcastState(
+            playingPodcast.episode,
+            playingPodcast.podcastTitle,
+            playingPodcast.localPath,
+            initialPosition ?? Duration.zero,
+          ),
         );
       }
       unawaited(
