@@ -175,13 +175,21 @@ class PlaylistBar extends StatelessWidget {
                           final isLiked = isPlaylistAlreadyLiked(
                             _resolvedPlaylistId,
                           );
-                          unawaited(
+                          void applyLikeStatus() => unawaited(
                             updatePlaylistLikeStatus(
                               _resolvedPlaylistId!,
                               !isLiked,
                               playlistData: playlistData,
                             ),
                           );
+                          if (isLiked) {
+                            showRemoveFromLikedPlaylistsDialog(
+                              context,
+                              applyLikeStatus,
+                            );
+                          } else {
+                            applyLikeStatus();
+                          }
                         }
                         break;
                       case 'pin':

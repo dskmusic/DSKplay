@@ -530,6 +530,7 @@ class SongBar extends StatefulWidget {
     this.onRenamed,
     this.rank,
     this.barPadding,
+    this.playCountLabel,
     super.key,
   });
 
@@ -554,6 +555,9 @@ class SongBar extends StatefulWidget {
   final VoidCallback? onRenamed;
   final EdgeInsetsGeometry? barPadding;
   final int? rank;
+  // YouTube Music's own shortened counter (e.g. `331M`) for the artist page's
+  // "top songs" shelf, shown instead of [showPlayTime]'s local play count.
+  final String? playCountLabel;
   @override
   State<SongBar> createState() => _SongBarState();
 }
@@ -681,6 +685,7 @@ class _SongBarState extends State<SongBar> {
                   title: _songTitle,
                   artist: _songArtist,
                   plays: _plays,
+                  playCountLabel: widget.playCountLabel,
                   colorScheme: colorScheme,
                 ),
               ),
@@ -966,12 +971,14 @@ class _SongInfo extends StatelessWidget {
     required this.title,
     required this.artist,
     this.plays,
+    this.playCountLabel,
     required this.colorScheme,
   });
 
   final String title;
   final String artist;
   final int? plays;
+  final String? playCountLabel;
   final ColorScheme colorScheme;
 
   @override
@@ -1002,7 +1009,8 @@ class _SongInfo extends StatelessWidget {
                 ),
               ),
             ),
-            if (plays != null && plays! > 0) ...[
+            if (playCountLabel != null ||
+                (plays != null && plays! > 0)) ...[
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Text(
@@ -1020,7 +1028,7 @@ class _SongInfo extends StatelessWidget {
               ),
               const SizedBox(width: 3),
               Text(
-                '$plays',
+                playCountLabel ?? '$plays',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,

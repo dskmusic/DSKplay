@@ -30,7 +30,10 @@ import 'package:youtube_music_explode_dart/youtube_music_explode_dart.dart';
 
 const artistCatalogCacheVersion = 15;
 const artistSearchCacheVersion = 10;
+const artistProfileCacheVersion = 1;
+const artistAlbumCacheVersion = 1;
 const _artistRequestTimeout = Duration(seconds: 12);
+const _artistProfileTimeout = Duration(seconds: 15);
 const _musicDiscographyTimeout = Duration(seconds: 25);
 const _musicAlbumTimeout = Duration(seconds: 12);
 const _musicAlbumBatchSize = 6;
@@ -257,6 +260,175 @@ Future<Map<String, dynamic>?> getArtistCatalog(
     );
     return null;
   }
+}
+
+/// Rich artist page: bio, monthly listeners, top songs, discography and
+/// related artists. Independent from [getArtistCatalog]'s flat song list.
+Future<Map<String, dynamic>?> getArtistProfile(
+  String artistId, {
+  bool forceRefresh = false,
+  String? sourceSongId,
+  String? sourceVideoAuthor,
+  String? preferredName,
+  String? preferredImage,
+  bool preferredVerified = false,
+}) async {
+  try {
+    final artist = await resolveArtist(
+      artistId,
+      preferredName: preferredName,
+      preferredImage: preferredImage,
+      sourceSongId: sourceSongId,
+      sourceVideoAuthor: sourceVideoAuthor,
+      preferredVerified: preferredVerified,
+    );
+    if (artist == null) return null;
+
+    final resolvedArtistId = artist['ytid']?.toString() ?? artistId;
+    if (!_isChannelId(resolvedArtistId)) return null;
+
+    final cacheKey = 'artist_profile_v${artistProfileCacheVersion}_$resolvedArtistId';
+    if (!forceRefresh) {
+      final cachedProfile = await getData('cache', cacheKey);
+      if (cachedProfile is Map) {
+        return Map<String, dynamic>.from(cachedProfile);
+      }
+    } else {
+      await deleteData('cache', cacheKey);
+      await deleteData('cache', '${cacheKey}_date');
+    }
+
+    final profile = await ytMusicClient.music
+        .getArtistProfile(resolvedArtistId)
+        .timeout(_artistProfileTimeout);
+
+    final artistProfile = {
+      ...artist,
+      'description': profile.description,
+      'monthlyListeners': _extractCountToken(profile.monthlyListeners),
+      // Play counts travel next to the top-songs shelf only: song maps are
+      // reused in the queue and library, where that counter has no meaning.
+      'topSongs': [
+        for (final (index, song) in profile.topSongs.indexed)
+          {
+            'song': returnSongLayout(index, song.video),
+            'playCount': _extractCountToken(song.playCount),
+          },
+      ],
+      'releases': [
+        for (final release in profile.releases)
+          _releaseMapFromMusicAlbum(release, artist),
+      ]..sort(_compareReleasesByYearDesc),
+      'relatedArtists': [
+        for (final related in profile.relatedArtists)
+          _artistMapFromMusicArtist(related),
+      ],
+    };
+
+    unawaited(addOrUpdateData<Map>('cache', cacheKey, artistProfile));
+    return artistProfile;
+  } catch (e, stackTrace) {
+    logger.log(
+      'Error fetching artist profile for $artistId',
+      error: e,
+      stackTrace: stackTrace,
+    );
+    return null;
+  }
+}
+
+/// Loads a single release (album/single/EP) as a standalone playlist, for
+/// opening it via the existing [PlaylistPage].
+Future<Map<String, dynamic>?> getArtistAlbum(
+  String albumId, {
+  bool forceRefresh = false,
+}) async {
+  final normalizedAlbumId = albumId.trim();
+  if (normalizedAlbumId.isEmpty) return null;
+
+  final cacheKey = 'artist_album_v${artistAlbumCacheVersion}_$normalizedAlbumId';
+  if (!forceRefresh) {
+    final cachedAlbum = await getData('cache', cacheKey);
+    if (cachedAlbum is Map &&
+        cachedAlbum['list'] is List &&
+        (cachedAlbum['list'] as List).isNotEmpty) {
+      return Map<String, dynamic>.from(cachedAlbum);
+    }
+  } else {
+    await deleteData('cache', cacheKey);
+    await deleteData('cache', '${cacheKey}_date');
+  }
+
+  try {
+    final release = await ytMusicClient.music
+        .getAlbum(normalizedAlbumId)
+        .timeout(_musicAlbumTimeout);
+
+    final album = {
+      'ytid': normalizedAlbumId,
+      'title': release.title,
+      'image': normalizeArtistThumbnailUrl(release.thumbnailUrl),
+      'artist': release.artist,
+      'artistId': release.artistId,
+      'year': release.year,
+      'source': 'youtube-album',
+      'isAlbum': true,
+      'list': [
+        for (final (index, track) in release.tracks.indexed)
+          returnSongLayout(index, track),
+      ],
+    };
+
+    if (release.tracks.isNotEmpty) {
+      unawaited(addOrUpdateData<Map>('cache', cacheKey, album));
+    }
+    return album;
+  } catch (e, stackTrace) {
+    logger.log(
+      'Could not load YouTube Music album $normalizedAlbumId',
+      error: e,
+      stackTrace: stackTrace,
+    );
+    return null;
+  }
+}
+
+/// Whether YouTube Music explicitly labels this release as a single or EP
+/// (album shelves only label their entries in the full discography grid).
+bool isSingleOrEpRelease(Map release) {
+  final type = release['releaseType']?.toString();
+  return type == 'single' || type == 'ep';
+}
+
+Map<String, dynamic> _releaseMapFromMusicAlbum(MusicAlbum album, Map artist) {
+  return {
+    'ytid': album.id,
+    'title': album.title,
+    'image': normalizeArtistThumbnailUrl(album.thumbnailUrl),
+    'year': album.year,
+    'releaseType': album.type.name,
+    'artist': artist['title']?.toString(),
+    'artistId': artist['ytid']?.toString(),
+    'source': 'youtube-album',
+    'isAlbum': true,
+  };
+}
+
+int _compareReleasesByYearDesc(Map<String, dynamic> a, Map<String, dynamic> b) {
+  final yearA = int.tryParse(a['year']?.toString() ?? '') ?? 0;
+  final yearB = int.tryParse(b['year']?.toString() ?? '') ?? 0;
+  if (yearA != yearB) return yearB.compareTo(yearA);
+  return (a['title']?.toString() ?? '').compareTo(b['title']?.toString() ?? '');
+}
+
+/// Reduces YouTube Music counters like `331M monthly listeners` to `331M`.
+String? _extractCountToken(String? value) {
+  final text = value?.trim();
+  if (text == null || text.isEmpty) return null;
+
+  final match = RegExp(r'[\d.,]+\s*[KMB]?').firstMatch(text);
+  final token = match?.group(0)?.trim();
+  return (token == null || token.isEmpty) ? text : token;
 }
 
 String? normalizeArtistThumbnailUrl(String? value) {

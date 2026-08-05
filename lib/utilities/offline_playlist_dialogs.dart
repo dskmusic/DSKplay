@@ -43,3 +43,26 @@ void showRemoveOfflinePlaylistDialog(BuildContext context, String playlistId) {
     },
   );
 }
+
+/// Confirms before unliking a playlist, album or artist, so a stray tap on
+/// the heart icon doesn't silently wipe it from favorites.
+void showRemoveFromLikedPlaylistsDialog(
+  BuildContext context,
+  VoidCallback onConfirm,
+) {
+  showDialog<void>(
+    context: context,
+    builder: (BuildContext context) {
+      return ConfirmationDialog(
+        confirmationMessage: context.l10n!.removeFromLikedPlaylistsConfirm,
+        submitMessage: context.l10n!.remove,
+        isDangerous: true,
+        onCancel: () => Navigator.pop(context),
+        onSubmit: () {
+          Navigator.pop(context);
+          onConfirm();
+        },
+      );
+    },
+  );
+}

@@ -305,7 +305,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
         PlaylistHeader(
           _buildPlaylistImage(),
           playlistTitle,
-          songsLength,
+          songsLength: songsLength,
           isAlbum: _playlist['isAlbum'] == true,
           isArtist: widget.isArtist,
         ),
@@ -455,16 +455,19 @@ class _PlaylistPageState extends State<PlaylistPage> {
             ? IconButton.filled(
                 icon: Icon(icon),
                 iconSize: 24,
-                onPressed: () {
-                  playlistLikeStatus.value = !playlistLikeStatus.value;
-                  unawaited(
-                    updatePlaylistLikeStatus(
-                      _playlist['ytid'],
-                      playlistLikeStatus.value,
-                      playlistData: _playlist,
-                    ),
-                  );
-                },
+                onPressed: () => showRemoveFromLikedPlaylistsDialog(
+                  context,
+                  () {
+                    playlistLikeStatus.value = !playlistLikeStatus.value;
+                    unawaited(
+                      updatePlaylistLikeStatus(
+                        _playlist['ytid'],
+                        playlistLikeStatus.value,
+                        playlistData: _playlist,
+                      ),
+                    );
+                  },
+                ),
                 tooltip: context.l10n!.removeFromLikedSongs,
               )
             : IconButton.filledTonal(

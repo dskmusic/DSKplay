@@ -1253,6 +1253,10 @@ Future<Map?> getPlaylistInfoForWidget(
   final offlinePlaylist = _findOfflinePlaylist(normalizedId);
   if (offlinePlaylist != null) return offlinePlaylist;
 
+  if (normalizedId.startsWith('MPRE')) {
+    return getArtistAlbum(normalizedId, forceRefresh: forceRefresh);
+  }
+
   return _fetchYouTubePlaylist(normalizedId);
 }
 
