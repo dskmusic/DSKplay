@@ -27,6 +27,7 @@ import 'package:go_router/go_router.dart';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/models/podcast_model.dart';
+import 'package:dskplay/screens/all_podcast_episodes_page.dart';
 import 'package:dskplay/screens/podcast_stats_page.dart';
 import 'package:dskplay/services/podcast_feed_service.dart';
 import 'package:dskplay/services/podcast_manager.dart';
@@ -143,7 +144,16 @@ class _PodcastsPageState extends State<PodcastsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(context.l10n!.podcasts)),
+      appBar: AppBar(
+        title: Text(context.l10n!.podcasts),
+        actions: [
+          IconButton(
+            tooltip: context.l10n!.search,
+            onPressed: () => _openDiscover(autoFocusSearch: true),
+            icon: const Icon(FluentIcons.search_24_regular),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Padding(
@@ -151,6 +161,15 @@ class _PodcastsPageState extends State<PodcastsPage> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
+                IconButton(
+                  tooltip: 'Novedades de todos los podcasts',
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (context) => const AllPodcastEpisodesPage(),
+                    ),
+                  ),
+                  icon: const Icon(FluentIcons.apps_list_24_regular),
+                ),
                 ValueListenableBuilder<bool>(
                   valueListenable: podcastManager.subscriptionsGridView,
                   builder: (context, gridView, _) => IconButton(
@@ -201,11 +220,6 @@ class _PodcastsPageState extends State<PodcastsPage> {
                   tooltip: 'Añadir podcast por URL',
                   onPressed: _addPodcastByUrl,
                   icon: const Icon(FluentIcons.add_24_regular),
-                ),
-                IconButton(
-                  tooltip: context.l10n!.search,
-                  onPressed: () => _openDiscover(autoFocusSearch: true),
-                  icon: const Icon(FluentIcons.search_24_regular),
                 ),
               ],
             ),

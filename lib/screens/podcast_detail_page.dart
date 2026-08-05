@@ -24,9 +24,6 @@ import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
@@ -36,12 +33,11 @@ import 'package:dskplay/services/podcast_feed_service.dart';
 import 'package:dskplay/services/podcast_manager.dart';
 import 'package:dskplay/utilities/artwork_provider.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
-import 'package:dskplay/utilities/formatter.dart';
 import 'package:dskplay/widgets/confirmation_dialog.dart';
 import 'package:dskplay/widgets/fullscreen_artwork_viewer.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
-import 'package:dskplay/widgets/playback_icon_button.dart';
 import 'package:dskplay/widgets/podcast_episode_bar.dart';
+import 'package:dskplay/widgets/podcast_episode_options.dart';
 
 class PodcastDetailPage extends StatefulWidget {
   const PodcastDetailPage({super.key, required this.podcast, this.openEpisodeKey});
@@ -272,48 +268,15 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
     );
   }
 
-  Future<void> _playEpisode(PodcastEpisode episode) async {
-    final pending = audioHandler.pendingPodcastResume;
-    if (pending != null &&
-        pending.episode.key == episode.key &&
-        pending.position > Duration.zero) {
-      await confirmResumePodcast(context);
-      return;
-    }
+  Future<void> _playEpisode(PodcastEpisode episode) =>
+      playPodcastEpisode(context, _podcast, episode);
 
-    final downloaded = podcastManager.getDownloadedEpisode(episode.key);
-    final localPath = downloaded?['audioPath'] as String?;
+  Future<void> _showEpisodeOptions(PodcastEpisode episode) =>
+      showPodcastEpisodeOptions(context, _podcast, episode);
 
-    final somethingIsPlaying =
-        audioHandler.mediaItem.valueOrNull?.extras?['isPodcastEpisode'] ==
-            true &&
-        audioHandler.audioPlayer.playing;
-    if (somethingIsPlaying) {
-      final addToQueue = await _confirmAddToQueueOrPlayNow();
-      if (addToQueue == null || !mounted) return;
-      if (addToQueue) {
-        await audioHandler.addPodcastEpisodeToQueue(
-          episode,
-          podcastTitle: _podcast.title,
-          localPath: localPath,
-        );
-        if (mounted) showToast(context, context.l10n!.addToQueue);
-        return;
-      }
-    }
-
-    final success = await audioHandler.playPodcastEpisode(
-      episode,
-      podcastTitle: _podcast.title,
-      localPath: localPath,
-    );
-    if (!success && mounted) {
-      showToast(context, context.l10n!.playbackFailed);
-    }
-  }
-
-  // Mirrors confirmResumePodcast's dialog style; kept local since it's only
-  // relevant to this page's episode-tap flow.
+  // Mirrors the dialog in podcast_episode_options.dart; kept local since
+  // that one only handles a single episode, while this covers the bulk
+  // "play selected" action.
   Future<bool?> _confirmAddToQueueOrPlayNow() {
     return showDialog<bool>(
       context: context,
@@ -332,117 +295,6 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
         ],
       ),
     );
-  }
-
-  Future<void> _copyEpisodeInfo(PodcastEpisode episode) async {
-    await Clipboard.setData(
-      ClipboardData(text: podcastEpisodeCopyText(_podcast.title, episode)),
-    );
-    if (mounted) {
-      showToast(context, context.l10n!.episodeInfoCopied, aboveDialogs: true);
-    }
-  }
-
-  Future<void> _shareEpisodeInfo(PodcastEpisode episode) async {
-    await SharePlus.instance.share(
-      ShareParams(
-        text: podcastEpisodeCopyText(_podcast.title, episode),
-        subject: episode.title,
-      ),
-    );
-  }
-
-  Future<void> _showEpisodeOptions(PodcastEpisode episode) async {
-    final action = await showDialog<_EpisodeAction>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(episode.title),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image(
-                    image: ArtworkProvider.get(episode.image),
-                    width: 120,
-                    height: 120,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-              if (episode.pubDate != null || episode.durationSeconds != null) ...[
-                const SizedBox(height: 12),
-                Center(
-                  child: Text(
-                    [
-                      if (episode.pubDate != null)
-                        DateFormat.yMMMd().format(episode.pubDate!),
-                      if (episode.durationSeconds != null)
-                        formatDuration(episode.durationSeconds!),
-                    ].join(' • '),
-                    style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              ],
-              if (episode.description.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Text(episode.description),
-              ],
-            ],
-          ),
-        ),
-        actionsAlignment: MainAxisAlignment.spaceBetween,
-        actions: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                tooltip: context.l10n!.copyEpisodeInfo,
-                onPressed: () => _copyEpisodeInfo(episode),
-                icon: const Icon(FluentIcons.copy_24_regular),
-              ),
-              IconButton(
-                tooltip: context.l10n!.share,
-                onPressed: () => _shareEpisodeInfo(episode),
-                icon: const Icon(FluentIcons.share_24_regular),
-              ),
-            ],
-          ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextButton.icon(
-                onPressed: () =>
-                    Navigator.of(dialogContext).pop(_EpisodeAction.download),
-                icon: const Icon(FluentIcons.arrow_download_24_regular),
-                label: Text(context.l10n!.download),
-              ),
-              const SizedBox(width: 8),
-              FilledButton.icon(
-                onPressed: () =>
-                    Navigator.of(dialogContext).pop(_EpisodeAction.play),
-                icon: const Icon(FluentIcons.play_24_filled),
-                label: Text(context.l10n!.play),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-
-    switch (action) {
-      case _EpisodeAction.play:
-        await _playEpisode(episode);
-      case _EpisodeAction.download:
-        unawaited(downloadPodcastEpisode(_podcast, episode));
-      case null:
-        break;
-    }
   }
 
   Future<void> _markSelected({required bool listened}) async {
@@ -893,5 +745,3 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
     );
   }
 }
-
-enum _EpisodeAction { play, download }

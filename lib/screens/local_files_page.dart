@@ -523,16 +523,15 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
           ? null
           : [
               IconButton(
-                icon: const Icon(FluentIcons.search_24_regular),
-                tooltip: 'Buscar',
-                onPressed: _startSearch,
-              ),
-              IconButton(
                 icon: const Icon(FluentIcons.heart_24_regular),
                 tooltip: 'Favoritos',
                 onPressed: _toggleFavoritesView,
               ),
-              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(FluentIcons.search_24_regular),
+                tooltip: 'Buscar',
+                onPressed: _startSearch,
+              ),
             ],
     );
   }
