@@ -70,7 +70,7 @@ class NavigationManager {
 
     router = GoRouter(
       navigatorKey: parentNavigatorKey,
-      initialLocation: homePath,
+      initialLocation: _initialLocation,
       routes: routes,
       restorationScopeId: 'router',
       debugLogDiagnostics: kDebugMode,
@@ -143,6 +143,22 @@ class NavigationManager {
   static const String libraryPath = '/library';
   static const String podcastsPath = '/podcasts';
   static const String localFilesPath = '/localFiles';
+
+  /// Startup tabs a user can pick as their preferred start screen (see
+  /// [startScreenSetting]) - excludes Search, since it's hidden entirely in
+  /// offline mode.
+  static const List<String> startScreenOptions = [
+    homePath,
+    podcastsPath,
+    libraryPath,
+    localFilesPath,
+    settingsPath,
+  ];
+
+  static String get _initialLocation {
+    final preferred = startScreenSetting.value;
+    return startScreenOptions.contains(preferred) ? preferred : homePath;
+  }
 
   /// Refresh the router configuration when offline mode changes
   static void refreshRouter() {

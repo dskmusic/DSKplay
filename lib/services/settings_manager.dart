@@ -56,11 +56,26 @@ final rememberLastPlayback = ValueNotifier<bool>(
   Hive.box('settings').get('rememberLastPlayback', defaultValue: true),
 );
 
+/// Which bottom-nav tab the app opens on at cold start (route path, e.g.
+/// '/home', '/podcasts'). Read once by NavigationManager's initialLocation -
+/// stored in the same 'settings' box as everything else, so it's carried
+/// along by export/import and cloud backup for free.
+final startScreenSetting = ValueNotifier<String>(
+  Hive.box('settings').get('startScreen', defaultValue: '/home'),
+);
+
 // Minutes paused (with nothing resuming) before the app closes itself
 // outright; 0 means "never". See DskPlayAudioHandler's pause-auto-close
 // timer.
 final autoCloseAfterPauseMinutes = ValueNotifier<int>(
   Hive.box('settings').get('autoCloseAfterPauseMinutes', defaultValue: 10),
+);
+
+// Debug: lets you test whether the Dart-only timer above closes the app by
+// itself, without the native foreground-service backup (and its notification)
+// covering for it if the Flutter engine gets torn down while backgrounded.
+final nativeIdleCloseBackupEnabled = ValueNotifier<bool>(
+  Hive.box('settings').get('nativeIdleCloseBackupEnabled', defaultValue: true),
 );
 
 final predictiveBack = ValueNotifier<bool>(

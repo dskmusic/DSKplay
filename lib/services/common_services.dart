@@ -96,6 +96,50 @@ Future<void> removeCustomRadioStation(String stationId) async {
   );
 }
 
+// User-defined drag order for the radio stations list (custom + built-in
+// combined). Ids missing from here (new/never-reordered stations) fall back
+// to their natural position - see [applyRadioStationOrder].
+ValueNotifier<List<String>> userRadioStationOrder = ValueNotifier<List<String>>(
+  List<String>.from(
+    Hive.box('user').get('radioStationOrder', defaultValue: []),
+  ),
+);
+
+/// Applies the user's stored drag order on top of [naturalIds] (the
+/// custom+built-in stations in their default order): known ids keep the
+/// relative order the user dragged them into, anything not yet ordered is
+/// appended afterwards in its natural order.
+List<String> applyRadioStationOrder(List<String> naturalIds) {
+  final naturalSet = naturalIds.toSet();
+  final ordered = [
+    for (final id in userRadioStationOrder.value)
+      if (naturalSet.contains(id)) id,
+  ];
+  final orderedSet = ordered.toSet();
+  final remaining = [
+    for (final id in naturalIds)
+      if (!orderedSet.contains(id)) id,
+  ];
+  return [...ordered, ...remaining];
+}
+
+/// Reorders one entry within the currently displayed radio stations order
+/// (mirrors [reorderLikedLibraryItem]). [displayedOrderIds] is the id order
+/// the list is showing right now (liked stations bubbled to the top); since
+/// that partition is reapplied on every rebuild, dropping an item across the
+/// liked/unliked boundary just settles back into the correct group.
+void reorderRadioStation(String stationId, int newIndex, List<String> displayedOrderIds) {
+  final list = List<String>.from(displayedOrderIds);
+  final oldIndex = list.indexOf(stationId);
+  if (oldIndex == -1) return;
+
+  final target = newIndex.clamp(0, list.length - 1);
+  list.insert(target, list.removeAt(oldIndex));
+
+  userRadioStationOrder.value = list;
+  unawaited(addOrUpdateData<List>('user', 'radioStationOrder', list));
+}
+
 // Built-in stations live in a compiled-in list (radioStationsDB), so
 // "removing" one just remembers its id and hides it from view, instead of
 // mutating that list.
@@ -126,6 +170,9 @@ void reloadRadioStationsStateFromStorage() {
   userHiddenRadioStationIds.value = List<String>.from(
     userBox.get('hiddenRadioStationIds', defaultValue: []),
   );
+  userRadioStationOrder.value = List<String>.from(
+    userBox.get('radioStationOrder', defaultValue: []),
+  );
 }
 
 // Songs the user dismissed from "Recommended for you"; recommendations are
@@ -152,6 +199,65 @@ ValueNotifier<List> userRecentlyPlayed = ValueNotifier<List>(
 ValueNotifier<List> userOfflineSongs = ValueNotifier<List>(
   Hive.box('userNoBackup').get('offlineSongs', defaultValue: []),
 );
+
+/// Reorders one entry within [userLikedSongsList] (drag-to-reorder in the
+/// "liked songs" library tab, mirroring [reorderLikedLibraryItem]).
+void reorderLikedSong(String ytid, int newIndex) {
+  final list = List<Map>.from(userLikedSongsList.value.whereType<Map>());
+  final oldIndex = list.indexWhere((s) => s['ytid']?.toString() == ytid);
+  if (oldIndex == -1) return;
+
+  final target = newIndex.clamp(0, list.length - 1);
+  list.insert(target, list.removeAt(oldIndex));
+
+  userLikedSongsList.value = list;
+  unawaited(addOrUpdateData<List>('user', 'likedSongs', list));
+}
+
+/// Reorders one entry among the podcast-episode entries of
+/// [userLikedSongsList], leaving every liked song's own slot untouched -
+/// songs and liked podcast episodes share the same list, so this only
+/// permutes the subsequence of entries with `isPodcastEpisode: true` instead
+/// of reindexing the whole list like [reorderLikedSong] does.
+void reorderLikedPodcastEpisode(String ytid, int newIndex) {
+  final full = List<Map>.from(userLikedSongsList.value.whereType<Map>());
+  final episodeSlots = <int>[];
+  final episodes = <Map>[];
+  for (var i = 0; i < full.length; i++) {
+    if (full[i]['isPodcastEpisode'] == true) {
+      episodeSlots.add(i);
+      episodes.add(full[i]);
+    }
+  }
+
+  final oldIndex = episodes.indexWhere((e) => e['ytid']?.toString() == ytid);
+  if (oldIndex == -1) return;
+
+  final target = newIndex.clamp(0, episodes.length - 1);
+  episodes.insert(target, episodes.removeAt(oldIndex));
+
+  for (var i = 0; i < episodeSlots.length; i++) {
+    full[episodeSlots[i]] = episodes[i];
+  }
+
+  userLikedSongsList.value = full;
+  unawaited(addOrUpdateData<List>('user', 'likedSongs', full));
+}
+
+/// Reorders one entry within [userOfflineSongs] (drag-to-reorder in the
+/// "offline songs" library tab, only meaningful while sorted by
+/// [OfflineSortType.default_]).
+void reorderOfflineSong(String ytid, int newIndex) {
+  final list = List<Map>.from(userOfflineSongs.value.whereType<Map>());
+  final oldIndex = list.indexWhere((s) => s['ytid']?.toString() == ytid);
+  if (oldIndex == -1) return;
+
+  final target = newIndex.clamp(0, list.length - 1);
+  list.insert(target, list.removeAt(oldIndex));
+
+  userOfflineSongs.value = list;
+  unawaited(addOrUpdateData<List>('userNoBackup', 'offlineSongs', list));
+}
 
 dynamic nextRecommendedSong;
 

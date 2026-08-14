@@ -26,16 +26,18 @@ class IdleCloseService : Service() {
   companion object {
     private const val NOTIFICATION_ID = 900002
     private const val CHANNEL_ID = "idle_close"
+    const val EXTRA_END_TIME_MILLIS = "endTimeMillis"
   }
 
   override fun onBind(intent: Intent?): IBinder? = null
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-    startForeground(NOTIFICATION_ID, build())
+    val endTimeMillis = intent?.getLongExtra(EXTRA_END_TIME_MILLIS, 0L) ?: 0L
+    startForeground(NOTIFICATION_ID, build(endTimeMillis))
     return START_NOT_STICKY
   }
 
-  private fun build(): Notification {
+  private fun build(endTimeMillis: Long): Notification {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
       if (manager.getNotificationChannel(CHANNEL_ID) == null) {
@@ -44,12 +46,23 @@ class IdleCloseService : Service() {
         )
       }
     }
-    return NotificationCompat.Builder(this, CHANNEL_ID)
+    val builder = NotificationCompat.Builder(this, CHANNEL_ID)
       .setContentTitle("DSK Play")
       .setSmallIcon(R.mipmap.ic_launcher)
       .setPriority(NotificationCompat.PRIORITY_MIN)
       .setOngoing(true)
-      .build()
+    // setChronometerCountDown draws a live "-mm:ss" counter that the OS
+    // itself ticks down against setWhen, no per-second updates needed here.
+    if (endTimeMillis > 0) {
+      builder
+        .setContentText("Se cerrará al llegar a cero")
+        .setWhen(endTimeMillis)
+        .setUsesChronometer(true)
+        .setChronometerCountDown(true)
+    } else {
+      builder.setContentText("Se cerrará sola tras un tiempo en pausa")
+    }
+    return builder.build()
   }
 
   // Deliberately does nothing: staying alive after the app's task is

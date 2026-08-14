@@ -56,115 +56,160 @@ class RadioStationsPage extends StatelessWidget {
               return ValueListenableBuilder(
                 valueListenable: userLikedRadioStations,
                 builder: (context, likedStations, _) {
-                  final visibleBuiltIn = radioStationsDB
-                      .where((s) => !hiddenIds.contains(s.id))
-                      .toList();
-                  final allStations = _sortWithLikedFirst(
-                    [...customStations, ...visibleBuiltIn],
-                    likedStations.toSet(),
-                  );
+                  return ValueListenableBuilder<List<String>>(
+                    valueListenable: userRadioStationOrder,
+                    builder: (context, _, _) {
+                      final visibleBuiltIn = radioStationsDB
+                          .where((s) => !hiddenIds.contains(s.id))
+                          .toList();
+                      final naturalStations = [
+                        ...customStations,
+                        ...visibleBuiltIn,
+                      ];
+                      final stationsById = {
+                        for (final s in naturalStations) s.id: s,
+                      };
+                      final orderedIds = applyRadioStationOrder(
+                        stationsById.keys.toList(),
+                      );
+                      final allStations = _sortWithLikedFirst(
+                        [for (final id in orderedIds) stationsById[id]!],
+                        likedStations.toSet(),
+                      );
 
-                  return SingleChildScrollView(
-                    padding: commonSingleChildScrollViewPadding,
-                    child: Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: CustomBar(
-                            context.l10n!.addRadioStation,
-                            FluentIcons.add_circle_24_regular,
-                            borderRadius: BorderRadius.circular(16),
-                            onTap: () => _showAddStationChoice(context),
-                          ),
-                        ),
-                        if (allStations.isEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 40),
-                            child: Center(
-                              child: Text(context.l10n!.noRadioStations),
-                            ),
-                          )
-                        else
-                          ...List.generate(allStations.length, (index) {
-                            final station = allStations[index];
-                            final isCustom = !radioStationsDB.contains(
-                              station,
-                            );
-
-                            final removeDismissible = DismissiblePane(
-                              dismissThreshold: 0.28,
-                              closeOnCancel: true,
-                              confirmDismiss: () =>
-                                  _askRemoveConfirmation(context, station),
-                              onDismissed: () =>
-                                  _removeStation(station, isCustom: isCustom),
-                            );
-                            final removeAction = SlidableAction(
-                              onPressed: (_) =>
-                                  _confirmRemoveStation(
-                                    context,
-                                    station,
-                                    isCustom: isCustom,
-                                  ),
-                              backgroundColor: Theme.of(
-                                context,
-                              ).colorScheme.errorContainer,
-                              foregroundColor: Theme.of(
-                                context,
-                              ).colorScheme.onErrorContainer,
-                              icon: FluentIcons.delete_24_regular,
-                              label: 'Eliminar',
-                            );
-
-                            return Padding(
-                              key: ValueKey(station.id),
+                      return SingleChildScrollView(
+                        padding: commonSingleChildScrollViewPadding,
+                        child: Column(
+                          children: [
+                            Padding(
                               padding: const EdgeInsets.only(bottom: 8),
-                              child: Slidable(
-                                key: ValueKey('radio_${station.id}'),
-                                startActionPane: ActionPane(
-                                  motion: const DrawerMotion(),
-                                  extentRatio: 0.28,
-                                  dismissible: removeDismissible,
-                                  children: [removeAction],
-                                ),
-                                endActionPane: ActionPane(
-                                  motion: const DrawerMotion(),
-                                  extentRatio: 0.28,
-                                  dismissible: removeDismissible,
-                                  children: [removeAction],
-                                ),
-                                child: GestureDetector(
-                                  onLongPress: () => _confirmRemoveStation(
-                                    context,
-                                    station,
-                                    isCustom: isCustom,
-                                  ),
-                                  child: RadioStationCard(
-                                    station: station,
-                                    onPressed: () async {
-                                      final success = await audioHandler
-                                          .playRadioStream(
-                                            id: station.id,
-                                            name: station.name,
-                                            streamUrl: station.streamUrl,
-                                            image: station.image,
-                                            genre: station.genre,
-                                          );
-
-                                      if (!success && context.mounted) {
-                                        showToast(
-                                          context,
-                                          'Failed to play radio station',
-                                        );
-                                      }
-                                    },
-                                  ),
-                                ),
+                              child: CustomBar(
+                                context.l10n!.addRadioStation,
+                                FluentIcons.add_circle_24_regular,
+                                borderRadius: BorderRadius.circular(16),
+                                onTap: () => _showAddStationChoice(context),
                               ),
-                            );
-                          }),
-                      ],
-                    ),
+                            ),
+                            if (allStations.isEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 40),
+                                child: Center(
+                                  child: Text(context.l10n!.noRadioStations),
+                                ),
+                              )
+                            else
+                              ReorderableListView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                buildDefaultDragHandles: false,
+                                itemCount: allStations.length,
+                                onReorderItem: (oldIndex, newIndex) {
+                                  final stationId = allStations[oldIndex].id;
+                                  reorderRadioStation(
+                                    stationId,
+                                    newIndex,
+                                    allStations.map((s) => s.id).toList(),
+                                  );
+                                },
+                                itemBuilder: (context, index) {
+                                  final station = allStations[index];
+                                  final isCustom = !radioStationsDB.contains(
+                                    station,
+                                  );
+
+                                  final removeDismissible = DismissiblePane(
+                                    dismissThreshold: 0.28,
+                                    closeOnCancel: true,
+                                    confirmDismiss: () =>
+                                        _askRemoveConfirmation(
+                                          context,
+                                          station,
+                                        ),
+                                    onDismissed: () => _removeStation(
+                                      station,
+                                      isCustom: isCustom,
+                                    ),
+                                  );
+                                  final removeAction = SlidableAction(
+                                    onPressed: (_) => _confirmRemoveStation(
+                                      context,
+                                      station,
+                                      isCustom: isCustom,
+                                    ),
+                                    backgroundColor: Theme.of(
+                                      context,
+                                    ).colorScheme.errorContainer,
+                                    foregroundColor: Theme.of(
+                                      context,
+                                    ).colorScheme.onErrorContainer,
+                                    icon: FluentIcons.delete_24_regular,
+                                    label: 'Eliminar',
+                                  );
+
+                                  return Padding(
+                                    key: ValueKey(station.id),
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: Slidable(
+                                      key: ValueKey('radio_${station.id}'),
+                                      startActionPane: ActionPane(
+                                        motion: const DrawerMotion(),
+                                        extentRatio: 0.28,
+                                        dismissible: removeDismissible,
+                                        children: [removeAction],
+                                      ),
+                                      endActionPane: ActionPane(
+                                        motion: const DrawerMotion(),
+                                        extentRatio: 0.28,
+                                        dismissible: removeDismissible,
+                                        children: [removeAction],
+                                      ),
+                                      child: GestureDetector(
+                                        onLongPress: () =>
+                                            _confirmRemoveStation(
+                                              context,
+                                              station,
+                                              isCustom: isCustom,
+                                            ),
+                                        child: RadioStationCard(
+                                          station: station,
+                                          onPressed: () async {
+                                            final success = await audioHandler
+                                                .playRadioStream(
+                                                  id: station.id,
+                                                  name: station.name,
+                                                  streamUrl: station.streamUrl,
+                                                  image: station.image,
+                                                  genre: station.genre,
+                                                );
+
+                                            if (!success && context.mounted) {
+                                              showToast(
+                                                context,
+                                                'Failed to play radio station',
+                                              );
+                                            }
+                                          },
+                                          reorderHandle:
+                                              ReorderableDragStartListener(
+                                                index: index,
+                                                child: Icon(
+                                                  FluentIcons
+                                                      .re_order_24_regular,
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
+                                                ),
+                                              ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                          ],
+                        ),
+                      );
+                    },
                   );
                 },
               );

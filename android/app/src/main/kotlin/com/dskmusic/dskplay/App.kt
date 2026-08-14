@@ -52,9 +52,11 @@ class App : Application() {
     // twice (just redelivers onStartCommand), so no ref-counting needed;
     // only cancelIdleClose() stops it, since scheduleHardExit's own
     // runnable kills the process directly and has nothing left to clean up.
-    private fun startIdleKeepAlive() {
+    private fun startIdleKeepAlive(endTimeMillis: Long) {
       appContext?.let {
-        ContextCompat.startForegroundService(it, Intent(it, IdleCloseService::class.java))
+        val intent = Intent(it, IdleCloseService::class.java)
+          .putExtra(IdleCloseService.EXTRA_END_TIME_MILLIS, endTimeMillis)
+        ContextCompat.startForegroundService(it, intent)
       }
     }
 
@@ -87,10 +89,11 @@ class App : Application() {
     private fun armIdleClose(minutes: Int) {
       cancelIdleClose()
       if (minutes <= 0) return
-      startIdleKeepAlive()
+      val delayMs = minutes * 60_000L
+      startIdleKeepAlive(System.currentTimeMillis() + delayMs)
       val runnable = Runnable { Process.killProcess(Process.myPid()) }
       idleCloseRunnable = runnable
-      idleCloseHandler.postDelayed(runnable, minutes * 60_000L)
+      idleCloseHandler.postDelayed(runnable, delayMs)
     }
 
     private fun cancelIdleClose() {
@@ -110,7 +113,7 @@ class App : Application() {
 
     fun scheduleHardExit(delayMs: Long) {
       hardExitRunnable?.let { idleCloseHandler.removeCallbacks(it) }
-      startIdleKeepAlive()
+      startIdleKeepAlive(System.currentTimeMillis() + delayMs)
       val runnable = Runnable { Process.killProcess(Process.myPid()) }
       hardExitRunnable = runnable
       idleCloseHandler.postDelayed(runnable, delayMs)

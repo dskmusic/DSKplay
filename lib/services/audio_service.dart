@@ -35,6 +35,7 @@ import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/data_manager.dart';
 import 'package:dskplay/services/download_foreground_service.dart';
 import 'package:dskplay/services/listening_stats_service.dart';
+import 'package:dskplay/services/podcast_manager.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/utilities/map_utils.dart';
 import 'package:dskplay/utilities/mediaitem.dart';
@@ -99,6 +100,14 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   // instead of ever coming back to it.
   Timer? _idleAutoCloseTimer;
 
+  // Only a backgrounded process can actually be frozen (see
+  // _armNativeIdleClose's doc comment below), so the native keep-alive
+  // service - and the notification Android requires for it - has no reason
+  // to exist while the app is still in the foreground. Without this, simply
+  // pausing a song while looking at the app shows that notification
+  // immediately even though nothing is at risk of being frozen yet.
+  bool _isAppInForeground = true;
+
   // Native fallback for the timer above: audio_service tears down the
   // FlutterEngine (and every Dart Timer with it) almost as soon as the app
   // is backgrounded with nothing playing, well before this timer would
@@ -107,7 +116,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   static const _idleCloseChannel = MethodChannel('dskplay/download_service');
 
   void _armNativeIdleClose(int minutes) {
-    if (!Platform.isAndroid) return;
+    if (!Platform.isAndroid || !nativeIdleCloseBackupEnabled.value) return;
     unawaited(
       _idleCloseChannel
           .invokeMethod('armIdleClose', {'minutes': minutes})
@@ -122,12 +131,27 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     );
   }
 
+  /// Called by main.dart's [WidgetsBindingObserver] when the app leaves/
+  /// re-enters the foreground, so the native keep-alive - and its visible
+  /// notification - only ever runs while it's actually needed.
+  void handleAppBackgrounded() {
+    _isAppInForeground = false;
+    if (_idleAutoCloseTimer != null && !DownloadForegroundService.isActive) {
+      _armNativeIdleClose(autoCloseAfterPauseMinutes.value);
+    }
+  }
+
+  void handleAppForegrounded() {
+    _isAppInForeground = true;
+    if (_idleAutoCloseTimer != null) _cancelNativeIdleClose();
+  }
+
   // Fire-and-forget: dispatching this platform channel call doesn't depend
   // on this isolate surviving afterwards, unlike everything after it in
   // _exitIfIdle. If exit(0) below succeeds first the whole process (this
   // watchdog included) dies with it anyway, so there's nothing to cancel.
   void _scheduleNativeHardExit() {
-    if (!Platform.isAndroid) return;
+    if (!Platform.isAndroid || !nativeIdleCloseBackupEnabled.value) return;
     unawaited(
       _idleCloseChannel
           .invokeMethod('scheduleHardExit', {'delayMs': 15000})
@@ -1051,6 +1075,16 @@ class DskPlayAudioHandler extends BaseAudioHandler {
           _queueList[_currentQueueIndex]['isPodcastEpisode'] == true;
 
       if (isPodcastEpisode) {
+        // Reaching `completed` means the episode played through in full -
+        // mark it listened here (awaited) instead of solely relying on the
+        // position-stream 90% heuristic (podcast_manager.dart's
+        // attachAutoMarkListened), which can lose its race against the app
+        // closing itself right below when nothing is queued after it.
+        final episodeKey = _queueList[_currentQueueIndex]['ytid']?.toString();
+        if (episodeKey != null && episodeKey.isNotEmpty) {
+          await podcastManager.setListened(episodeKey, listened: true);
+        }
+
         // Podcast episodes now live in the real _queueList too, so advance
         // through it exactly like a song queue - but skip the
         // autoplay/recommendation fallback _canRetryPlayback offers songs,
@@ -1063,13 +1097,12 @@ class DskPlayAudioHandler extends BaseAudioHandler {
                 _queueList.isNotEmpty)) {
           await skipToNext();
         } else {
-          // Nothing left in the podcast queue - close the notification
-          // outright instead of just pausing, otherwise just_audio leaves
-          // `playing` true after it finishes on its own and the
-          // notification would keep showing a pause button forever. stop()
-          // itself now also frees the idle process (unless a download is
-          // in flight).
-          await stop();
+          // Nothing left in the podcast queue: stop playback and dismiss
+          // the notification, but keep the app itself open rather than
+          // closing it outright - the user's configured "close after N
+          // minutes idle" timer (see _scheduleIdleAutoClose) takes over
+          // from here, same as any other in-app stop.
+          await _stopWithoutClosingApp();
         }
         return;
       }
@@ -2432,7 +2465,9 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       return;
     }
     logger.log('Idle auto-close armed for $minutes min');
-    if (!DownloadForegroundService.isActive) _armNativeIdleClose(minutes);
+    if (!_isAppInForeground && !DownloadForegroundService.isActive) {
+      _armNativeIdleClose(minutes);
+    }
     _idleAutoCloseTimer = Timer(Duration(minutes: minutes), () {
       logger.log(
         'Idle auto-close timer fired '

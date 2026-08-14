@@ -29,10 +29,16 @@ class RadioStationCard extends StatelessWidget {
     super.key,
     required this.station,
     required this.onPressed,
+    this.reorderHandle,
   });
 
   final RadioStation station;
   final VoidCallback onPressed;
+
+  /// Drag handle shown right before the play button (e.g. a
+  /// [ReorderableDragStartListener]-wrapped icon), for lists that support
+  /// manual reordering. Null hides it.
+  final Widget? reorderHandle;
 
   @override
   Widget build(BuildContext context) {
@@ -98,6 +104,10 @@ class RadioStationCard extends StatelessWidget {
                   ],
                 ),
               ),
+              if (reorderHandle != null) ...[
+                const SizedBox(width: 4),
+                reorderHandle!,
+              ],
               const SizedBox(width: 5),
               IconButton.filled(
                 onPressed: onPressed,

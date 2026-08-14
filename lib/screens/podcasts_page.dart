@@ -28,6 +28,7 @@ import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/models/podcast_model.dart';
 import 'package:dskplay/screens/all_podcast_episodes_page.dart';
+import 'package:dskplay/screens/favorite_podcast_episodes_page.dart';
 import 'package:dskplay/screens/podcast_stats_page.dart';
 import 'package:dskplay/services/podcast_feed_service.dart';
 import 'package:dskplay/services/podcast_manager.dart';
@@ -147,6 +148,15 @@ class _PodcastsPageState extends State<PodcastsPage> {
       appBar: AppBar(
         title: Text(context.l10n!.podcasts),
         actions: [
+          IconButton(
+            tooltip: 'Podcasts favoritos',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (context) => const FavoritePodcastEpisodesPage(),
+              ),
+            ),
+            icon: const Icon(FluentIcons.heart_24_regular),
+          ),
           IconButton(
             tooltip: context.l10n!.search,
             onPressed: () => _openDiscover(autoFocusSearch: true),

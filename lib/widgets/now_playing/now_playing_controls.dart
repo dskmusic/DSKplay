@@ -89,32 +89,38 @@ class NowPlayingControls extends StatelessWidget {
                 horizontal: isDesktop ? 16 : 24,
                 vertical: spacing,
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  MarqueeTextWidget(
-                    text: metadata.title,
-                    fontColor: colorScheme.secondary,
-                    fontSize: titleFontSize * fontScale,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  SizedBox(height: spacing),
-                  if (metadata.artist != null)
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: isPodcastEpisode
-                          ? () => openCurrentPodcastEpisodeList(context)
-                          : canOpenArtist
-                          ? () => _openArtistPage(context, metadata)
-                          : null,
-                      child: MarqueeTextWidget(
-                        text: metadata.artist!,
-                        fontColor: colorScheme.onSurfaceVariant,
-                        fontSize: artistFontSize * fontScale,
-                        fontWeight: FontWeight.w500,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: isPodcastEpisode
+                    ? () => openCurrentPodcastEpisodeList(context)
+                    : canOpenArtist
+                    ? () => _openArtistPage(context, metadata)
+                    : null,
+                // Extra vertical padding widens the tap target beyond the
+                // text's own tight bounds, since title+artist together are
+                // still a short, easy-to-miss strip otherwise.
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      MarqueeTextWidget(
+                        text: metadata.title,
+                        fontColor: colorScheme.secondary,
+                        fontSize: titleFontSize * fontScale,
+                        fontWeight: FontWeight.bold,
                       ),
-                    ),
-                ],
+                      SizedBox(height: spacing),
+                      if (metadata.artist != null)
+                        MarqueeTextWidget(
+                          text: metadata.artist!,
+                          fontColor: colorScheme.onSurfaceVariant,
+                          fontSize: artistFontSize * fontScale,
+                          fontWeight: FontWeight.w500,
+                        ),
+                    ],
+                  ),
+                ),
               ),
             ),
             if (!isCompact) const Spacer(),

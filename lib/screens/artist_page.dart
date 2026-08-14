@@ -188,7 +188,6 @@ class _ArtistPageState extends State<ArtistPage> {
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return Scaffold(
-            appBar: AppBar(),
             body: SizedBox(
               height: MediaQuery.sizeOf(context).height - 100,
               child: const Spinner(),
@@ -200,7 +199,6 @@ class _ArtistPageState extends State<ArtistPage> {
         if (artist == null) return _buildNotFoundPage();
 
         return Scaffold(
-          appBar: AppBar(),
           body: SingleChildScrollView(
             padding: commonSingleChildScrollViewPadding,
             child: Column(
@@ -300,7 +298,6 @@ class _ArtistPageState extends State<ArtistPage> {
 
   Widget _buildNotFoundPage() {
     return Scaffold(
-      appBar: AppBar(),
       body: CustomScrollView(
         slivers: [
           // Not finding an artist is an answer, not a failure of the app.

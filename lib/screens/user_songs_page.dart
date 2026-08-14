@@ -27,7 +27,6 @@ import 'package:dskplay/main.dart' show logger, audioHandler;
 import 'package:dskplay/models/podcast_model.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/data_manager.dart';
-import 'package:dskplay/services/podcast_feed_service.dart';
 import 'package:dskplay/services/podcast_manager.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/utilities/app_utils.dart';
@@ -292,6 +291,7 @@ class _UserSongsPageState extends State<UserSongsPage> {
     final isLikedSongs = title == context.l10n!.likedSongs;
     final isRecentlyPlayed = title == context.l10n!.recentlyPlayed;
     final isOfflineSongs = title == context.l10n!.offlineSongs;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return ValueListenableBuilder<String>(
       valueListenable: _searchQueryNotifier,
@@ -329,6 +329,66 @@ class _UserSongsPageState extends State<UserSongsPage> {
           );
         }
 
+        // Manual reordering only makes sense against the list's own stored
+        // order - disabled while searching (a filtered subset) and, for
+        // offline songs, while sorted by anything other than "default".
+        final canReorder =
+            !isSearching &&
+            (widget.page == 'liked' ||
+                (widget.page == 'offline' &&
+                    _getCurrentOfflineSortType() == OfflineSortType.default_));
+
+        Widget buildTile(int index) {
+          final song = displayList[index];
+          final borderRadius = getItemBorderRadius(index, displayList.length);
+          return _buildSongBar(
+            song,
+            index,
+            borderRadius,
+            playlist,
+            isRecentSong: isRecentlyPlayed,
+            isOfflineSongsList: isOfflineSongs,
+            reorderHandle: canReorder
+                ? ReorderableDragStartListener(
+                    index: index,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Icon(
+                        FluentIcons.re_order_24_regular,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  )
+                : null,
+          );
+        }
+
+        if (canReorder) {
+          return SliverReorderableList(
+            itemCount: displayList.length,
+            onReorderItem: (oldIndex, newIndex) {
+              final ytid = displayList[oldIndex]['ytid']?.toString();
+              if (ytid == null) return;
+              if (widget.page == 'liked') {
+                reorderLikedSong(ytid, newIndex);
+              } else {
+                reorderOfflineSong(ytid, newIndex);
+              }
+            },
+            proxyDecorator: (child, index, animation) => Material(
+              elevation: 8,
+              color: colorScheme.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(14),
+              shadowColor: colorScheme.shadow.withValues(alpha: 0.35),
+              child: child,
+            ),
+            itemBuilder: (context, index) => KeyedSubtree(
+              key: listItemKey(listKeyScope, index, displayList[index]),
+              child: buildTile(index),
+            ),
+          );
+        }
+
         return SliverList(
           key: isOfflineSongs && !isSearching
               ? ValueKey((
@@ -337,18 +397,9 @@ class _UserSongsPageState extends State<UserSongsPage> {
                 ))
               : null,
           delegate: SliverChildBuilderDelegate((context, index) {
-            final song = displayList[index];
-            final borderRadius = getItemBorderRadius(index, displayList.length);
             return RepaintBoundary(
-              key: listItemKey(listKeyScope, index, song),
-              child: _buildSongBar(
-                song,
-                index,
-                borderRadius,
-                playlist,
-                isRecentSong: isRecentlyPlayed,
-                isOfflineSongsList: isOfflineSongs,
-              ),
+              key: listItemKey(listKeyScope, index, displayList[index]),
+              child: buildTile(index),
             );
           }, childCount: displayList.length),
         );
@@ -375,24 +426,11 @@ class _UserSongsPageState extends State<UserSongsPage> {
         return;
       }
 
-      // The audioUrl was recorded the first time this episode was played and
-      // never touched again - some hosts rotate or expire enclosure URLs
-      // after a while, which then fails to play here even though the same
-      // episode still streams fine anywhere that re-reads the live feed.
-      // Refetch it and prefer whatever the feed currently reports, falling
-      // back to the recorded URL only if the podcast/episode can't be found
-      // there anymore.
-      var currentAudioUrl = audioUrl;
-      final subscribedPodcast = podcastManager.subscriptions.value.where(
-        (p) => p.id == podcastId,
+      final currentAudioUrl = await podcastManager.resolveLatestEpisodeAudioUrl(
+        podcastId,
+        guid,
+        audioUrl,
       );
-      if (subscribedPodcast.isNotEmpty) {
-        final feed = await fetchPodcastFeed(subscribedPodcast.first.feedUrl);
-        final matchingEpisodes = feed?.episodes.where((e) => e.guid == guid);
-        if (matchingEpisodes != null && matchingEpisodes.isNotEmpty) {
-          currentAudioUrl = matchingEpisodes.first.audioUrl;
-        }
-      }
 
       await audioHandler.playPodcastEpisode(
         PodcastEpisode(
@@ -424,6 +462,7 @@ class _UserSongsPageState extends State<UserSongsPage> {
     Map playlist, {
     bool isRecentSong = false,
     bool isOfflineSongsList = false,
+    Widget? reorderHandle,
   }) {
     final isLikedSongs = playlist['title'] == context.l10n!.likedSongs;
 
@@ -436,6 +475,7 @@ class _UserSongsPageState extends State<UserSongsPage> {
       isRecentSong: isRecentSong,
       isFromLikedSongs: isLikedSongs,
       isFromOfflineSongsList: isOfflineSongsList,
+      reorderHandle: reorderHandle,
     );
   }
 

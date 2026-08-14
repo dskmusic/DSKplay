@@ -531,6 +531,7 @@ class SongBar extends StatefulWidget {
     this.rank,
     this.barPadding,
     this.playCountLabel,
+    this.reorderHandle,
     super.key,
   });
 
@@ -558,6 +559,11 @@ class SongBar extends StatefulWidget {
   // YouTube Music's own shortened counter (e.g. `331M`) for the artist page's
   // "top songs" shelf, shown instead of [showPlayTime]'s local play count.
   final String? playCountLabel;
+
+  /// Drag handle shown right before the three-dot menu (e.g. a
+  /// [ReorderableDragStartListener]-wrapped icon), for lists that support
+  /// manual reordering. Null hides it.
+  final Widget? reorderHandle;
   @override
   State<SongBar> createState() => _SongBarState();
 }
@@ -690,6 +696,7 @@ class _SongBarState extends State<SongBar> {
                 ),
               ),
 
+              if (widget.reorderHandle != null) widget.reorderHandle!,
               OverflowMenuButton<String>(
                 onSelected: _runMenuAction,
                 itemBuilder: (context) => _buildMenuItems(context, colorScheme),

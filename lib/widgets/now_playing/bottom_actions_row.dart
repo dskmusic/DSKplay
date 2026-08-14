@@ -30,6 +30,7 @@ import 'package:dskplay/utilities/flutter_bottom_sheet.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/mediaitem.dart';
 import 'package:dskplay/utilities/playlist_dialogs.dart';
+import 'package:dskplay/widgets/confirmation_dialog.dart';
 import 'package:dskplay/widgets/queue_list_view.dart';
 
 class BottomActionsRow extends StatefulWidget {
@@ -53,9 +54,13 @@ class _BottomActionsRowState extends State<BottomActionsRow> {
   late final ValueNotifier<bool> _songLikeStatus;
   // metadata.id is a per-queue-slot id (see QueueEntryIdManager), not the
   // song's real ytid, so like/offline status must key off the ytid extra.
-  late final String? audioId =
+  // Computed as getters (not `late final`) because this State is reused
+  // across queue skips within the same playlist/album - a cached value
+  // would keep pointing at whatever song was playing when the State was
+  // first created.
+  String? get audioId =>
       (widget.metadata.extras?['ytid'] as String?) ?? widget.metadata.id;
-  late final bool isRadioStation = widget.metadata.extras?['isLive'] ?? false;
+  bool get isRadioStation => widget.metadata.extras?['isLive'] ?? false;
 
   @override
   void initState() {
@@ -175,6 +180,29 @@ class _BottomActionsRowState extends State<BottomActionsRow> {
                 if (id == null) return;
 
                 final originalValue = _songLikeStatus.value;
+                final isPodcastEpisode =
+                    !isRadioStation &&
+                    widget.metadata.extras?['isPodcastEpisode'] == true;
+
+                // Unliking a podcast episode is easy to hit by accident from
+                // this quick full-player button (unlike a deliberate "remove"
+                // in the favorites list menu), so confirm before it
+                // disappears from there.
+                if (originalValue && isPodcastEpisode) {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (dialogContext) => ConfirmationDialog(
+                      confirmationMessage:
+                          '¿Quitar este episodio de podcasts favoritos?',
+                      submitMessage: 'Quitar',
+                      isDangerous: true,
+                      onCancel: () => Navigator.of(dialogContext).pop(false),
+                      onSubmit: () => Navigator.of(dialogContext).pop(true),
+                    ),
+                  );
+                  if (confirmed != true || !mounted) return;
+                }
+
                 _songLikeStatus.value = !originalValue;
 
                 try {
@@ -366,33 +394,70 @@ String _formatSpeed(double speed) =>
         ? speed.toStringAsFixed(0)
         : speed.toStringAsFixed(1);
 
+const _minCustomSpeed = 0.1;
+const _maxCustomSpeed = 10.0;
+
 void _showPlaybackSpeedDialog(BuildContext context, double currentSpeed) {
   const speeds = [0.5, 0.8, 1.0, 1.2, 1.5, 1.8, 2.0, 2.5, 3.0];
+  final customSpeedController = TextEditingController();
 
   showDialog<void>(
     context: context,
     builder: (dialogContext) {
       final colorScheme = Theme.of(dialogContext).colorScheme;
+
+      void applyCustomSpeed() {
+        final value = double.tryParse(
+          customSpeedController.text.replaceAll(',', '.'),
+        );
+        if (value == null) return;
+        final clamped = value
+            .clamp(_minCustomSpeed, _maxCustomSpeed)
+            .toDouble();
+        audioHandler.audioPlayer.setSpeed(clamped);
+        Navigator.pop(dialogContext);
+      }
+
       return AlertDialog(
         title: Text(context.l10n!.playbackSpeed),
-        content: Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          alignment: WrapAlignment.center,
-          children: speeds.map((speed) {
-            final selected = speed == currentSpeed;
-            return ChoiceChip(
-              label: Text('${_formatSpeed(speed)}x'),
-              selected: selected,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: speeds.map((speed) {
+                final selected = speed == currentSpeed;
+                return ChoiceChip(
+                  label: Text('${_formatSpeed(speed)}x'),
+                  selected: selected,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  onSelected: (_) {
+                    audioHandler.audioPlayer.setSpeed(speed);
+                    Navigator.pop(dialogContext);
+                  },
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: customSpeedController,
+              autofocus: false,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
               ),
-              onSelected: (_) {
-                audioHandler.audioPlayer.setSpeed(speed);
-                Navigator.pop(dialogContext);
-              },
-            );
-          }).toList(),
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => applyCustomSpeed(),
+              decoration: InputDecoration(
+                labelText: 'Velocidad personalizada (${_minCustomSpeed}x - ${_maxCustomSpeed.toStringAsFixed(0)}x)',
+                border: const OutlineInputBorder(),
+                suffixText: 'x',
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -408,7 +473,7 @@ void _showPlaybackSpeedDialog(BuildContext context, double currentSpeed) {
         ],
       );
     },
-  );
+  ).then((_) => customSpeedController.dispose());
 }
 
 void _showSleepTimerDialog(BuildContext context) {

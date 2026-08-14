@@ -440,6 +440,30 @@ class PodcastManager {
     );
   }
 
+  /// Resolves the freshest audioUrl for a stored episode (recorded the first
+  /// time it was played, so possibly stale by now - some hosts rotate or
+  /// expire enclosure URLs) by refetching the subscribed podcast's live
+  /// feed. Falls back to [fallbackAudioUrl] if unsubscribed or not found
+  /// there anymore. Shared by every place that replays a liked/history
+  /// podcast episode from its stored map instead of a live [PodcastEpisode].
+  Future<String> resolveLatestEpisodeAudioUrl(
+    String podcastId,
+    String guid,
+    String fallbackAudioUrl,
+  ) async {
+    final subscribedPodcast = subscriptions.value.where(
+      (p) => p.id == podcastId,
+    );
+    if (subscribedPodcast.isEmpty) return fallbackAudioUrl;
+
+    final feed = await fetchPodcastFeed(subscribedPodcast.first.feedUrl);
+    final matchingEpisodes = feed?.episodes.where((e) => e.guid == guid);
+    if (matchingEpisodes != null && matchingEpisodes.isNotEmpty) {
+      return matchingEpisodes.first.audioUrl;
+    }
+    return fallbackAudioUrl;
+  }
+
   DateTime? latestEpisodeDate(String podcastId) {
     final raw = latestEpisodeDates.value[podcastId];
     return raw != null ? DateTime.tryParse(raw) : null;

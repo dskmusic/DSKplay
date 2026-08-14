@@ -241,6 +241,36 @@ class SettingsPage extends StatelessWidget {
           },
         ),
         ValueListenableBuilder<bool>(
+          valueListenable: nativeIdleCloseBackupEnabled,
+          builder: (_, value, __) {
+            return CustomBar(
+              'Respaldo nativo del cierre automático',
+              FluentIcons.shield_task_24_regular,
+              description:
+                  'Servicio que mantiene el proceso vivo (con su propia '
+                  'notificación) para garantizar el cierre automático. '
+                  'Desactívalo solo para comprobar si el temporizador '
+                  'funciona por sí solo',
+              trailing: Switch(
+                value: value,
+                onChanged: (value) =>
+                    _toggleNativeIdleCloseBackup(context, value),
+              ),
+            );
+          },
+        ),
+        ValueListenableBuilder<String>(
+          valueListenable: startScreenSetting,
+          builder: (_, value, __) {
+            return CustomBar(
+              'Pantalla de inicio',
+              FluentIcons.home_24_regular,
+              description: _startScreenLabel(context, value),
+              onTap: () => _showStartScreenPicker(context),
+            );
+          },
+        ),
+        ValueListenableBuilder<bool>(
           valueListenable: offlineMode,
           builder: (_, value, __) {
             return CustomBar(
@@ -994,6 +1024,52 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
+  String _startScreenLabel(BuildContext context, String path) {
+    return switch (path) {
+      NavigationManager.podcastsPath => context.l10n!.podcasts,
+      NavigationManager.libraryPath => context.l10n!.library,
+      NavigationManager.localFilesPath => context.l10n!.localFiles,
+      NavigationManager.settingsPath => context.l10n!.settings,
+      _ => context.l10n!.home,
+    };
+  }
+
+  void _showStartScreenPicker(BuildContext context) {
+    const options = NavigationManager.startScreenOptions;
+    const icons = [
+      FluentIcons.home_24_regular,
+      FluentIcons.mic_24_regular,
+      FluentIcons.book_24_regular,
+      FluentIcons.folder_24_regular,
+      FluentIcons.settings_24_regular,
+    ];
+
+    showCustomBottomSheet(
+      context,
+      ListView.builder(
+        shrinkWrap: true,
+        physics: const BouncingScrollPhysics(),
+        padding: commonListViewBottomPadding,
+        itemCount: options.length,
+        itemBuilder: (context, index) {
+          final path = options[index];
+
+          return BottomSheetBar(
+            _startScreenLabel(context, path),
+            () {
+              addOrUpdateData<String>('settings', 'startScreen', path);
+              startScreenSetting.value = path;
+              showToast(context, context.l10n!.settingChangedMsg);
+              Navigator.pop(context);
+            },
+            startScreenSetting.value == path,
+            icon: icons[index],
+          );
+        },
+      ),
+    );
+  }
+
   void _toggleVolumeNormalization(BuildContext context, bool value) {
     addOrUpdateData<bool>('settings', 'volumeNormalizationEnabled', value);
     volumeNormalizationEnabled.value = value;
@@ -1050,6 +1126,12 @@ class SettingsPage extends StatelessWidget {
   void _toggleIncludePodcastsInTimeMachine(BuildContext context, bool value) {
     addOrUpdateData<bool>('settings', 'includePodcastsInTimeMachine', value);
     includePodcastsInTimeMachine.value = value;
+    showToast(context, context.l10n!.settingChangedMsg);
+  }
+
+  void _toggleNativeIdleCloseBackup(BuildContext context, bool value) {
+    addOrUpdateData<bool>('settings', 'nativeIdleCloseBackupEnabled', value);
+    nativeIdleCloseBackupEnabled.value = value;
     showToast(context, context.l10n!.settingChangedMsg);
   }
 

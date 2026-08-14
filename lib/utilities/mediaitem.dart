@@ -37,6 +37,8 @@ Map mediaItemToMap(MediaItem mediaItem) {
       rawArtworkPath.isNotEmpty &&
       !rawArtworkPath.startsWith('http');
 
+  final isPodcastEpisode = extras?['isPodcastEpisode'] == true;
+
   return {
     'id': mediaItem.id,
     'ytid': extras?['ytid'],
@@ -49,6 +51,17 @@ Map mediaItemToMap(MediaItem mediaItem) {
     'lowResImage': extras?['lowResImage'],
     'isLive': extras?['isLive'] ?? false,
     if (isLocalArtworkFile) 'artworkPath': rawArtworkPath,
+    // Carried over so liking a podcast episode from the full player stores
+    // enough to replay/identify it later (see PodcastEpisode.toMap) -
+    // without these, a liked episode looks like a broken song entry.
+    if (isPodcastEpisode) ...{
+      'isPodcastEpisode': true,
+      'guid': extras?['guid'],
+      'podcastId': extras?['podcastId'],
+      'audioUrl': extras?['audioUrl'],
+      'description': extras?['description'],
+      'duration': mediaItem.duration?.inSeconds,
+    },
   };
 }
 
@@ -92,6 +105,11 @@ MediaItem mapToMediaItem(Map song) {
       'isPodcastEpisode': song['isPodcastEpisode'] ?? false,
       'description': song['description'],
       'audioPath': song['audioPath'],
+      if (song['isPodcastEpisode'] == true) ...{
+        'guid': song['guid'],
+        'podcastId': song['podcastId'],
+        'audioUrl': song['audioUrl'],
+      },
     },
   );
 }

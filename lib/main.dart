@@ -353,6 +353,9 @@ class _DskPlayState extends State<DskPlay> with WidgetsBindingObserver {
       );
       unawaited(listeningStatsService.flush());
       unawaited(cloudBackupService.uploadBackup());
+      audioHandler.handleAppBackgrounded();
+    } else if (state == AppLifecycleState.resumed) {
+      audioHandler.handleAppForegrounded();
     }
 
     // Unlike inactive/paused/hidden (which also fire for an ordinary app
