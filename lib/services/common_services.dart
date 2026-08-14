@@ -203,41 +203,55 @@ ValueNotifier<List> userOfflineSongs = ValueNotifier<List>(
 /// Reorders one entry within [userLikedSongsList] (drag-to-reorder in the
 /// "liked songs" library tab, mirroring [reorderLikedLibraryItem]).
 void reorderLikedSong(String ytid, int newIndex) {
-  final list = List<Map>.from(userLikedSongsList.value.whereType<Map>());
-  final oldIndex = list.indexWhere((s) => s['ytid']?.toString() == ytid);
-  if (oldIndex == -1) return;
-
-  final target = newIndex.clamp(0, list.length - 1);
-  list.insert(target, list.removeAt(oldIndex));
-
-  userLikedSongsList.value = list;
-  unawaited(addOrUpdateData<List>('user', 'likedSongs', list));
+  _reorderLikedSubsequence(
+    ytid,
+    newIndex,
+    matches: (song) => song['isPodcastEpisode'] != true,
+  );
 }
 
 /// Reorders one entry among the podcast-episode entries of
-/// [userLikedSongsList], leaving every liked song's own slot untouched -
-/// songs and liked podcast episodes share the same list, so this only
-/// permutes the subsequence of entries with `isPodcastEpisode: true` instead
-/// of reindexing the whole list like [reorderLikedSong] does.
+/// [userLikedSongsList] (drag-to-reorder in the podcast favorites screen).
 void reorderLikedPodcastEpisode(String ytid, int newIndex) {
+  _reorderLikedSubsequence(
+    ytid,
+    newIndex,
+    matches: (song) => song['isPodcastEpisode'] == true,
+  );
+}
+
+/// Reorders one entry within the subsequence of [userLikedSongsList] that
+/// [matches] selects, leaving every other entry's own slot untouched -
+/// liked songs and liked podcast episodes share the same list but are shown
+/// (and reordered) on separate screens, so [reorderLikedSong] and
+/// [reorderLikedPodcastEpisode] must only permute their own subsequence
+/// instead of reindexing the whole list against a drag position computed
+/// from just one of the two filtered views.
+void _reorderLikedSubsequence(
+  String ytid,
+  int newIndex, {
+  required bool Function(Map song) matches,
+}) {
   final full = List<Map>.from(userLikedSongsList.value.whereType<Map>());
-  final episodeSlots = <int>[];
-  final episodes = <Map>[];
+  final slots = <int>[];
+  final subsequence = <Map>[];
   for (var i = 0; i < full.length; i++) {
-    if (full[i]['isPodcastEpisode'] == true) {
-      episodeSlots.add(i);
-      episodes.add(full[i]);
+    if (matches(full[i])) {
+      slots.add(i);
+      subsequence.add(full[i]);
     }
   }
 
-  final oldIndex = episodes.indexWhere((e) => e['ytid']?.toString() == ytid);
+  final oldIndex = subsequence.indexWhere(
+    (s) => s['ytid']?.toString() == ytid,
+  );
   if (oldIndex == -1) return;
 
-  final target = newIndex.clamp(0, episodes.length - 1);
-  episodes.insert(target, episodes.removeAt(oldIndex));
+  final target = newIndex.clamp(0, subsequence.length - 1);
+  subsequence.insert(target, subsequence.removeAt(oldIndex));
 
-  for (var i = 0; i < episodeSlots.length; i++) {
-    full[episodeSlots[i]] = episodes[i];
+  for (var i = 0; i < slots.length; i++) {
+    full[slots[i]] = subsequence[i];
   }
 
   userLikedSongsList.value = full;
