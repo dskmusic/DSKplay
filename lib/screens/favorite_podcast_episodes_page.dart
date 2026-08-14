@@ -35,6 +35,7 @@ import 'package:dskplay/utilities/formatter.dart';
 import 'package:dskplay/widgets/confirmation_dialog.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:dskplay/widgets/overflow_menu_button.dart';
+import 'package:dskplay/widgets/podcast_episode_options.dart';
 import 'package:dskplay/widgets/popup_menu_item.dart';
 
 /// A filtered view of [userLikedSongsList] showing only the entries with
@@ -142,6 +143,10 @@ class _FavoriteEpisodeTile extends StatelessWidget {
   final BorderRadius borderRadius;
   final Widget reorderHandle;
 
+  // Reuses the shared playPodcastEpisode flow (pending-resume check, and the
+  // "something is already playing - play now or queue?" dialog) so tapping a
+  // favorite behaves exactly like tapping the same episode from any other
+  // podcast episode list in the app.
   Future<void> _play(BuildContext context) async {
     final podcastId = song['podcastId']?.toString() ?? '';
     final guid = song['guid']?.toString() ?? '';
@@ -156,23 +161,29 @@ class _FavoriteEpisodeTile extends StatelessWidget {
       guid,
       fallbackAudioUrl,
     );
+    if (!context.mounted) return;
 
-    final episode = FavoritePodcastEpisodesPage._episodeFromMap(song);
-    final success = await audioHandler.playPodcastEpisode(
-      PodcastEpisode(
-        guid: episode.guid,
-        podcastId: episode.podcastId,
-        title: episode.title,
-        audioUrl: audioUrl,
-        image: episode.image,
-        description: episode.description,
-        durationSeconds: episode.durationSeconds,
-      ),
-      podcastTitle: song['artist']?.toString() ?? '',
+    final stored = FavoritePodcastEpisodesPage._episodeFromMap(song);
+    final episode = PodcastEpisode(
+      guid: stored.guid,
+      podcastId: stored.podcastId,
+      title: stored.title,
+      audioUrl: audioUrl,
+      image: stored.image,
+      description: stored.description,
+      durationSeconds: stored.durationSeconds,
     );
-    if (!success && context.mounted) {
-      showToast(context, context.l10n!.playbackFailed);
-    }
+
+    final podcast = _findSubscribedPodcast() ??
+        Podcast(
+          id: podcastId,
+          title: song['artist']?.toString() ?? '',
+          author: '',
+          image: episode.image,
+          feedUrl: '',
+        );
+
+    await playPodcastEpisode(context, podcast, episode);
   }
 
   Future<void> _addToQueue(BuildContext context, {bool playNext = false}) async {
