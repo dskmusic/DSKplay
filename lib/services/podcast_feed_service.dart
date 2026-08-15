@@ -152,8 +152,15 @@ PodcastEpisode? _episodeFromItem(
   if (title == null || audioUrl == null || audioUrl.isEmpty) return null;
 
   final guid = _text(item, 'guid') ?? audioUrl;
+  // content:encoded (the RSS content module's full show notes) is where
+  // feeds put the rich version - images, links, formatting; description and
+  // itunes:summary are usually a shorter plain(ish) fallback, so only used
+  // when content:encoded is absent.
   final description =
-      _text(item, 'itunes:summary') ?? _text(item, 'description') ?? '';
+      _text(item, 'content:encoded') ??
+      _text(item, 'description') ??
+      _text(item, 'itunes:summary') ??
+      '';
   final episodeImage = item
       .getElement('itunes:image')
       ?.getAttribute('href')
@@ -167,7 +174,10 @@ PodcastEpisode? _episodeFromItem(
     image: (episodeImage != null && episodeImage.isNotEmpty)
         ? episodeImage
         : podcastImage,
-    description: _stripHtml(description),
+    // Kept as-is (HTML tags, images, links included) so the UI can render
+    // it properly - only the channel-level description above is stripped,
+    // since that one is only ever shown as truncated plain-text preview.
+    description: description.trim(),
     pubDate: _parseRfc822Date(_text(item, 'pubDate')),
     durationSeconds: _parseItunesDuration(_text(item, 'itunes:duration')),
   );
@@ -178,8 +188,9 @@ String? _text(XmlElement element, String tag) {
   return (value != null && value.isNotEmpty) ? value : null;
 }
 
-/// RSS descriptions are frequently HTML (`<p>`, `<a>`, entities...); episode
-/// rows/detail pages here only render plain text.
+/// Used for the channel-level description only (shown as a truncated
+/// plain-text preview under the podcast header) - episode descriptions keep
+/// their original HTML so it can be rendered properly.
 String _stripHtml(String input) {
   if (input.isEmpty) return input;
   try {

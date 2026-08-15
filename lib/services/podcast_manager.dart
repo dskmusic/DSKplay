@@ -275,6 +275,30 @@ class PodcastManager {
             ),
       );
 
+  // User-written notes per episode key, shown/edited from the favorite
+  // episodes list - backed up the same way as everything else in the 'user'
+  // box, no separate export/restore wiring needed.
+  final ValueNotifier<Map<String, String>> episodeNotes =
+      ValueNotifier<Map<String, String>>(
+        Map<String, String>.from(
+          Hive.box('user').get('podcastEpisodeNotes', defaultValue: {}),
+        ),
+      );
+
+  String? getEpisodeNote(String episodeKey) => episodeNotes.value[episodeKey];
+
+  Future<void> setEpisodeNote(String episodeKey, String note) async {
+    final trimmed = note.trim();
+    final updated = Map<String, String>.from(episodeNotes.value);
+    if (trimmed.isEmpty) {
+      updated.remove(episodeKey);
+    } else {
+      updated[episodeKey] = trimmed;
+    }
+    episodeNotes.value = updated;
+    await addOrUpdateData<Map>('user', 'podcastEpisodeNotes', updated);
+  }
+
   String? _lastAutoMarkedKey;
   StreamSubscription<PositionData>? _positionSub;
 
@@ -733,6 +757,9 @@ class PodcastManager {
                 ).get('podcastListenedSecondsByDay', defaultValue: {})
                 as Map)
             .map((key, value) => MapEntry(key as String, value as int));
+    episodeNotes.value = Map<String, String>.from(
+      Hive.box('user').get('podcastEpisodeNotes', defaultValue: {}),
+    );
   }
 
   /// Watches playback progress and auto-marks the currently playing episode

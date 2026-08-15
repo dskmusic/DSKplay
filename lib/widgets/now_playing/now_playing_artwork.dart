@@ -51,6 +51,7 @@ import 'package:dskplay/utilities/mediaitem.dart';
 import 'package:dskplay/widgets/now_playing/karaoke_color_dialog.dart';
 import 'package:dskplay/widgets/now_playing/karaoke_lyrics_view.dart';
 import 'package:dskplay/widgets/now_playing/lyrics_results_picker.dart';
+import 'package:dskplay/widgets/podcast_html_description.dart';
 import 'package:dskplay/widgets/song_artwork.dart';
 
 class NowPlayingArtwork extends StatelessWidget {
@@ -225,14 +226,10 @@ class _PodcastDescriptionBackContent extends StatelessWidget {
           SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             physics: const BouncingScrollPhysics(),
-            child: Text(
-              description,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: colorScheme.onSecondaryContainer,
-                height: 1.6,
-              ),
+            child: PodcastHtmlDescription(
+              data: description,
+              color: colorScheme.onSecondaryContainer,
+              fontSize: 16,
             ),
           ),
         Positioned(

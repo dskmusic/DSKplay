@@ -19,6 +19,8 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
+import 'package:html/parser.dart' as html_parser;
+
 /// A subscribed/discoverable podcast (an RSS feed).
 ///
 /// [id] is derived from [feedUrl] (see [Podcast.idFromFeedUrl]) so the same
@@ -141,14 +143,28 @@ class PodcastEpisode {
   int get hashCode => key.hashCode;
 }
 
+/// Strips HTML tags from a description (which may be raw HTML from the RSS
+/// feed) down to plain text - used wherever the description is copied or
+/// shared as text rather than rendered.
+String plainTextDescription(String description) {
+  if (description.isEmpty) return description;
+  try {
+    return html_parser.parse(description).body?.text.trim() ??
+        description.trim();
+  } catch (_) {
+    return description.trim();
+  }
+}
+
 /// Plain-text summary of an episode (podcast, episode title, description,
 /// audio link) for the "copy episode info" buttons in the episode list and
 /// full-screen player.
 String podcastEpisodeCopyText(String podcastTitle, PodcastEpisode episode) {
+  final description = plainTextDescription(episode.description);
   final lines = [
     podcastTitle,
     episode.title,
-    if (episode.description.trim().isNotEmpty) episode.description.trim(),
+    if (description.isNotEmpty) description,
     if (episode.audioUrl.trim().isNotEmpty) episode.audioUrl.trim(),
   ];
   return lines.join('\n\n');

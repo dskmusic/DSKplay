@@ -35,6 +35,7 @@ import 'package:dskplay/utilities/artwork_provider.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/formatter.dart';
 import 'package:dskplay/widgets/playback_icon_button.dart';
+import 'package:dskplay/widgets/podcast_html_description.dart';
 
 enum _EpisodeAction { play, download }
 
@@ -177,7 +178,10 @@ Future<void> showPodcastEpisodeOptions(
             ],
             if (episode.description.isNotEmpty) ...[
               const SizedBox(height: 12),
-              Text(episode.description),
+              PodcastHtmlDescription(
+                data: episode.description,
+                color: Theme.of(dialogContext).colorScheme.onSurface,
+              ),
             ],
           ],
         ),

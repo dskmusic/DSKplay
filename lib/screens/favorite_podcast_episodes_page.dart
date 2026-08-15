@@ -35,6 +35,7 @@ import 'package:dskplay/utilities/formatter.dart';
 import 'package:dskplay/widgets/confirmation_dialog.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:dskplay/widgets/overflow_menu_button.dart';
+import 'package:dskplay/widgets/podcast_episode_notes_dialog.dart';
 import 'package:dskplay/widgets/podcast_episode_options.dart';
 import 'package:dskplay/widgets/popup_menu_item.dart';
 
@@ -319,6 +320,12 @@ class _FavoriteEpisodeTile extends StatelessWidget {
                       if (subscribedPodcast != null) {
                         context.push('/podcasts/detail', extra: subscribedPodcast);
                       }
+                    case 'notes':
+                      await showEpisodeNotesDialog(
+                        context,
+                        episodeKey: song['ytid']?.toString() ?? '',
+                        episodeTitle: song['title']?.toString() ?? '',
+                      );
                     case 'remove':
                       await _confirmAndRemove(context);
                   }
@@ -349,6 +356,12 @@ class _FavoriteEpisodeTile extends StatelessWidget {
                       label: 'Ir al podcast',
                       colorScheme: colorScheme,
                     ),
+                  buildPopupMenuItem<String>(
+                    value: 'notes',
+                    icon: FluentIcons.note_24_regular,
+                    label: 'Ver/editar notas',
+                    colorScheme: colorScheme,
+                  ),
                   buildPopupMenuItem<String>(
                     value: 'remove',
                     icon: FluentIcons.heart_off_24_regular,
