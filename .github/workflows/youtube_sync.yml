@@ -109,8 +109,11 @@ jobs:
           }
 
           $forced = "${{ github.event_name }}" -eq "workflow_dispatch"
-          $paths = $files -join ' '
-          git diff --quiet -- $paths
+          # NOTE: pass $files as an array, not a single -join'd string. PowerShell
+          # only splats native-command args from an array; a joined string becomes
+          # ONE pathspec argument (e.g. "a.dart b.dart c.dart") that matches no
+          # real path, so `git diff --quiet` always reported "unchanged" here.
+          git diff --quiet -- $files
           $hasDiff = $LASTEXITCODE -ne 0
           $changed = $forced -or $hasDiff
 
