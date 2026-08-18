@@ -115,6 +115,7 @@ jobs:
           # real path, so `git diff --quiet` always reported "unchanged" here.
           git diff --quiet -- $files
           $hasDiff = $LASTEXITCODE -ne 0
+          $global:LASTEXITCODE = 0
           $changed = $forced -or $hasDiff
 
           Write-Host "Forced (manual trigger): $forced"
