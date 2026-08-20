@@ -30,7 +30,7 @@ import 'package:path_provider/path_provider.dart';
 
 const _repo = 'dskmusic/DSKplay';
 final workflowRunUrl = Uri.parse(
-  'https://github.com/$_repo/actions/workflows/youtube_sync.yml',
+  'https://github.com/$_repo/actions/workflows/newpipe_sync.yml',
 );
 
 // Matches the "BuildNumber: <n>" line the release workflow writes into every
