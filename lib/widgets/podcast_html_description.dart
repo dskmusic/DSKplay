@@ -23,7 +23,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-final _htmlTagPattern = RegExp(r'<[a-zA-Z/][^>]*>');
+final _htmlTagPattern = RegExp('<[a-zA-Z/][^>]*>');
 
 /// Renders a podcast/episode description, which RSS feeds deliver as either
 /// plain text or HTML (paragraphs, links, inline images) - shared by every

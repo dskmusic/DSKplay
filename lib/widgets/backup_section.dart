@@ -19,9 +19,6 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/screens/search_page.dart' show reloadSearchHistoryFromStorage;
@@ -35,6 +32,9 @@ import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/theme/app_themes.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/widgets/custom_bar.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
 /// Local (single file) and cloud (anonymous, Firebase-backed) backup/restore,
 /// each showing when it was last done so it's obvious which one is newer.

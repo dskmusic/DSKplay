@@ -19,9 +19,9 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:flutter/material.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/widgets/song_bar.dart';
+import 'package:flutter/material.dart';
 
 const _dskplayIconAsset = 'assets/logo.png';
 

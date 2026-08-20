@@ -22,13 +22,14 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
-import 'package:hive/hive.dart';
 import 'package:dskplay/main.dart' show audioHandler, logger;
 import 'package:dskplay/models/podcast_model.dart';
 import 'package:dskplay/models/position_data.dart';
 import 'package:dskplay/services/data_manager.dart';
+import 'package:dskplay/services/listening_stats_service.dart' show ListeningStatsService;
 import 'package:dskplay/services/podcast_feed_service.dart';
+import 'package:flutter/foundation.dart';
+import 'package:hive/hive.dart';
 
 /// Subscriptions, listened/downloaded state and playback-progress tracking
 /// for podcasts. Mirrors the radio stations state kept in

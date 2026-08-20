@@ -19,10 +19,8 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:dskplay/constants/version.dart';
+import 'package:dskplay/models/podcast_model.dart';
 import 'package:dskplay/screens/about_page.dart';
 import 'package:dskplay/screens/artist_page.dart';
 import 'package:dskplay/screens/bottom_navigation_page.dart';
@@ -30,7 +28,6 @@ import 'package:dskplay/screens/equalizer_page.dart';
 import 'package:dskplay/screens/home_page.dart';
 import 'package:dskplay/screens/library_page.dart';
 import 'package:dskplay/screens/library_search_page.dart';
-import 'package:dskplay/models/podcast_model.dart';
 import 'package:dskplay/screens/local_files_page.dart';
 import 'package:dskplay/screens/playlist_folder_page.dart';
 import 'package:dskplay/screens/playlist_page.dart';
@@ -44,6 +41,9 @@ import 'package:dskplay/screens/user_songs_page.dart';
 import 'package:dskplay/services/playlist_download_service.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/widgets/offline_search_placeholder.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 class NavigationManager {
   factory NavigationManager() {

@@ -20,10 +20,6 @@
  */
 
 import 'package:audio_service/audio_service.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_flip_card/flutter_flip_card.dart';
-import 'package:go_router/go_router.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/services/router_service.dart';
@@ -33,6 +29,10 @@ import 'package:dskplay/widgets/now_playing/now_playing_artwork.dart';
 import 'package:dskplay/widgets/now_playing/now_playing_controls.dart';
 import 'package:dskplay/widgets/queue_list_view.dart';
 import 'package:dskplay/widgets/song_bar.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_flip_card/flutter_flip_card.dart';
+import 'package:go_router/go_router.dart';
 
 /// The slide-up-from-bottom transition used to open the full player, shared
 /// by the mini player's own tap/swipe and by external code (e.g. opening a

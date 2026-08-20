@@ -24,12 +24,6 @@ import 'dart:io';
 
 import 'package:app_links/app_links.dart';
 import 'package:audio_service/audio_service.dart';
-import 'package:dynamic_color/dynamic_color.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/localization/app_localizations.dart';
 import 'package:dskplay/screens/now_playing_page.dart';
@@ -57,6 +51,12 @@ import 'package:dskplay/utilities/playlist_utils.dart';
 import 'package:dskplay/utilities/sharing_intent.dart';
 import 'package:dskplay/widgets/confirmation_dialog.dart';
 import 'package:dskplay/widgets/update_dialog.dart';
+import 'package:dynamic_color/dynamic_color.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
@@ -499,10 +499,10 @@ class _SplashScreen extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       home: Scaffold(
         backgroundColor: backgroundColor,
-        body: Center(
+        body: const Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: const [
+            children: [
               Text(
                 'DSK Play',
                 style: TextStyle(

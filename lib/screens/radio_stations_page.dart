@@ -20,9 +20,6 @@
  */
 import 'dart:async';
 
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/database/radio_stations.db.dart';
 import 'package:dskplay/extensions/l10n.dart';
@@ -35,6 +32,9 @@ import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/widgets/custom_bar.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:dskplay/widgets/radio_station_card.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 
 // Stations without a real image can't use an empty string (ArtworkProvider
 // throws on that), so they fall back to the app logo.

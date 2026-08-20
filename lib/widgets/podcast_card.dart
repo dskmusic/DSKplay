@@ -19,13 +19,14 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/models/podcast_model.dart';
 import 'package:dskplay/services/podcast_manager.dart';
 import 'package:dskplay/utilities/artwork_provider.dart';
 import 'package:dskplay/widgets/confirmation_dialog.dart';
+import 'package:dskplay/widgets/radio_station_card.dart' show RadioStationCard;
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
 
 /// Card for a podcast, used both in search results and in the subscriptions
 /// grid. Mirrors [RadioStationCard]'s layout, with a subscribe toggle
@@ -257,7 +258,7 @@ class PodcastGridTile extends StatelessWidget {
                   child: Image(
                     image: ArtworkProvider.get(podcast.image),
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Container(
+                    errorBuilder: (context, error, stackTrace) => ColoredBox(
                       color: colorScheme.primaryContainer,
                       child: Icon(
                         FluentIcons.mic_24_regular,

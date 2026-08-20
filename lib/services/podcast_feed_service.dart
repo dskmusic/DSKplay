@@ -21,11 +21,11 @@
 
 import 'dart:convert';
 
+import 'package:dskplay/main.dart' show logger;
+import 'package:dskplay/models/podcast_model.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart';
-import 'package:dskplay/main.dart' show logger;
-import 'package:dskplay/models/podcast_model.dart';
 
 // Free, no-auth podcast directory search - the same one most podcast apps
 // bootstrap their catalog from.

@@ -25,14 +25,9 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:audiotags/audiotags.dart';
-import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
-import 'package:ffmpeg_kit_flutter_new/return_code.dart';
-import 'package:flutter/widgets.dart';
-import 'package:hive/hive.dart';
-import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
 import 'package:dskplay/main.dart' show logger;
 import 'package:dskplay/models/radio_model.dart';
+import 'package:dskplay/screens/user_songs_page.dart' show OfflineSortType;
 import 'package:dskplay/services/data_manager.dart';
 import 'package:dskplay/services/download_foreground_service.dart';
 import 'package:dskplay/services/io_service.dart';
@@ -43,6 +38,12 @@ import 'package:dskplay/services/proxy_manager.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/utilities/app_utils.dart';
 import 'package:dskplay/utilities/formatter.dart';
+import 'package:ffmpeg_kit_flutter_new_audio/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new_audio/return_code.dart';
+import 'package:flutter/widgets.dart';
+import 'package:hive/hive.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 
 List globalSongs = [];
 

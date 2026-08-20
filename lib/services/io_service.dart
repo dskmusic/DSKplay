@@ -21,11 +21,11 @@
 
 import 'dart:io';
 
+import 'package:dskplay/main.dart' show logger;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:dskplay/main.dart' show logger;
 
 const MethodChannel _mediaScannerChannel = MethodChannel(
   'dskplay/media_scanner',

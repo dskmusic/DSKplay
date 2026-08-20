@@ -19,14 +19,14 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/playlist_download_service.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/offline_playlist_dialogs.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
 
 /// Downloads a playlist for offline playback, showing progress and turning
 /// into a "remove offline" button once every song is stored.

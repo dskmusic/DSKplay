@@ -20,10 +20,10 @@
  */
 
 import 'package:audio_service/audio_service.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
 
 // A podcast restored on cold start resumes silently for headless play
 // triggers (notification, media button, Android Auto), but an in-app tap

@@ -19,11 +19,6 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
-import 'package:flutter/services.dart';
-import 'package:go_router/go_router.dart';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
@@ -32,6 +27,11 @@ import 'package:dskplay/utilities/flutter_bottom_sheet.dart'
     show closeCurrentBottomSheet, hasOpenBottomSheet;
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/widgets/mini_player.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 
 class BottomNavigationPage extends StatefulWidget {
   const BottomNavigationPage({required this.child, super.key});

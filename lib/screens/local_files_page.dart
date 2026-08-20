@@ -22,9 +22,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/screens/bottom_navigation_page.dart';
@@ -39,6 +36,9 @@ import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:dskplay/widgets/overflow_menu_button.dart';
 import 'package:dskplay/widgets/popup_menu_item.dart';
 import 'package:dskplay/widgets/swipe_action_pane.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 

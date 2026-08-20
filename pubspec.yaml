@@ -18,7 +18,7 @@ dependencies:
   firebase_auth: ^5.3.4
   firebase_core: ^3.8.1
   firebase_storage: ^12.4.10
-  ffmpeg_kit_flutter_new: ^4.5.1
+  ffmpeg_kit_flutter_new_audio: ^2.5.2
   file_picker: ^11.0.2
   fluentui_system_icons: ^1.1.273
   flutter:

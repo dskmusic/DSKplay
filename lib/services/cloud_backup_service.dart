@@ -22,12 +22,13 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:dskplay/main.dart' show logger;
+import 'package:dskplay/services/audio_service.dart' show DskPlayAudioHandler;
+import 'package:dskplay/services/data_manager.dart';
+import 'package:dskplay/services/io_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:dskplay/main.dart' show logger;
-import 'package:dskplay/services/data_manager.dart';
-import 'package:dskplay/services/io_service.dart';
 
 /// Anonymous, no-personal-data cloud backup: sign-in is anonymous (no
 /// name/email/Google account involved), but the backup file itself is keyed

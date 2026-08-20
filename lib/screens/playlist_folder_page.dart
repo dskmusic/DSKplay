@@ -19,8 +19,6 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/services/playlists_manager.dart';
@@ -33,6 +31,8 @@ import 'package:dskplay/widgets/dialog_item.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:dskplay/widgets/playlist_bar.dart';
 import 'package:dskplay/widgets/popup_menu_item.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
 
 class PlaylistFolderPage extends StatefulWidget {
   const PlaylistFolderPage({

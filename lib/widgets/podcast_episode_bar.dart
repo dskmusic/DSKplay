@@ -19,10 +19,6 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
-import 'package:intl/intl.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/models/podcast_model.dart';
@@ -31,7 +27,12 @@ import 'package:dskplay/services/podcast_manager.dart';
 import 'package:dskplay/utilities/artwork_provider.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/formatter.dart';
+import 'package:dskplay/widgets/custom_bar.dart' show CustomBar;
 import 'package:dskplay/widgets/swipe_action_pane.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:intl/intl.dart';
 
 /// A single episode row: artwork, title, publish date/duration, listened
 /// state, download and play actions, plus a checkbox when [selectionMode]

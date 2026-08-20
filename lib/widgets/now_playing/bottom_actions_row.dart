@@ -20,8 +20,6 @@
  */
 
 import 'package:audio_service/audio_service.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/services/common_services.dart';
@@ -32,6 +30,8 @@ import 'package:dskplay/utilities/mediaitem.dart';
 import 'package:dskplay/utilities/playlist_dialogs.dart';
 import 'package:dskplay/widgets/confirmation_dialog.dart';
 import 'package:dskplay/widgets/queue_list_view.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
 
 class BottomActionsRow extends StatefulWidget {
   const BottomActionsRow({
@@ -413,7 +413,7 @@ void _showPlaybackSpeedDialog(BuildContext context, double currentSpeed) {
         if (value == null) return;
         final clamped = value
             .clamp(_minCustomSpeed, _maxCustomSpeed)
-            .toDouble();
+            ;
         audioHandler.audioPlayer.setSpeed(clamped);
         Navigator.pop(dialogContext);
       }
@@ -445,7 +445,6 @@ void _showPlaybackSpeedDialog(BuildContext context, double currentSpeed) {
             const SizedBox(height: 16),
             TextField(
               controller: customSpeedController,
-              autofocus: false,
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),

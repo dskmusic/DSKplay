@@ -19,9 +19,6 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:dskplay/database/radio_stations.db.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart' show audioHandler;
@@ -37,6 +34,9 @@ import 'package:dskplay/widgets/playlist_bar.dart';
 import 'package:dskplay/widgets/podcast_card.dart';
 import 'package:dskplay/widgets/radio_station_card.dart';
 import 'package:dskplay/widgets/section_header.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 class LibrarySearchPage extends StatefulWidget {
   const LibrarySearchPage({super.key});

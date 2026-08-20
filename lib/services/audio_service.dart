@@ -24,9 +24,6 @@ import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
-import 'package:flutter/services.dart' show MethodChannel;
-import 'package:hive/hive.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/models/podcast_model.dart';
 import 'package:dskplay/models/position_data.dart';
@@ -40,6 +37,12 @@ import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/utilities/map_utils.dart';
 import 'package:dskplay/utilities/mediaitem.dart';
 import 'package:dskplay/utilities/queue_entry_utils.dart';
+import 'package:flutter/cupertino.dart' show WidgetsBindingObserver;
+import 'package:flutter/material.dart' show WidgetsBindingObserver;
+import 'package:flutter/services.dart' show MethodChannel;
+import 'package:flutter/widgets.dart' show WidgetsBindingObserver;
+import 'package:hive/hive.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:rxdart/rxdart.dart';
 
 class DskPlayAudioHandler extends BaseAudioHandler {
@@ -1952,7 +1955,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       if (queueRaw is! List) return null;
       final queue = queueRaw
           .whereType<Map>()
-          .map((s) => Map<String, dynamic>.from(s))
+          .map(Map<String, dynamic>.from)
           .toList();
       if (queue.isEmpty) return null;
 
@@ -1963,7 +1966,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       final originalQueue = originalQueueRaw is List
           ? originalQueueRaw
                 .whereType<Map>()
-                .map((s) => Map<String, dynamic>.from(s))
+                .map(Map<String, dynamic>.from)
                 .toList()
           : <Map>[];
 

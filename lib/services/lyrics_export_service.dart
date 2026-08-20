@@ -82,7 +82,7 @@ Future<String?> exportLyricsAsPdf({
           centeredBlock(
             pw.Text(
               artist,
-              style: pw.TextStyle(fontSize: 13, color: PdfColors.grey700),
+              style: const pw.TextStyle(fontSize: 13, color: PdfColors.grey700),
               textAlign: pw.TextAlign.center,
             ),
           ),

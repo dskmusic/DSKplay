@@ -22,9 +22,6 @@
 import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/services/router_service.dart';
@@ -34,6 +31,9 @@ import 'package:dskplay/widgets/now_playing/marquee_text_widget.dart';
 import 'package:dskplay/widgets/now_playing/now_playing_artwork.dart';
 import 'package:dskplay/widgets/playback_icon_button.dart';
 import 'package:dskplay/widgets/position_slider.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 class NowPlayingControls extends StatelessWidget {
   const NowPlayingControls({
@@ -475,8 +475,7 @@ class _PlaybackControlsRow extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  isPodcastEpisode
-                      ? _PlaybackControlButton(
+                  if (isPodcastEpisode) _PlaybackControlButton(
                           icon: FluentIcons.rewind_24_regular,
                           isEnabled: true,
                           tooltip: context.l10n!.rewind1Minute,
@@ -487,8 +486,7 @@ class _PlaybackControlsRow extends StatelessWidget {
                           buttonPadding: buttonPadding,
                           controlIconSize: controlIconSize,
                           minButtonSize: minButtonSize,
-                        )
-                      : _PlaybackControlButton(
+                        ) else _PlaybackControlButton(
                           icon: FluentIcons.previous_24_regular,
                           isEnabled:
                               audioHandler.hasPrevious ||
@@ -510,8 +508,7 @@ class _PlaybackControlsRow extends StatelessWidget {
                     padding: playPadding,
                   ),
                   SizedBox(width: buttonSpacing),
-                  isPodcastEpisode
-                      ? _PlaybackControlButton(
+                  if (isPodcastEpisode) _PlaybackControlButton(
                           icon: FluentIcons.fast_forward_24_regular,
                           isEnabled: true,
                           tooltip: context.l10n!.fastForward1Minute,
@@ -522,8 +519,7 @@ class _PlaybackControlsRow extends StatelessWidget {
                           buttonPadding: buttonPadding,
                           controlIconSize: controlIconSize,
                           minButtonSize: minButtonSize,
-                        )
-                      : _PlaybackControlButton(
+                        ) else _PlaybackControlButton(
                           icon: FluentIcons.next_24_regular,
                           isEnabled:
                               audioHandler.hasNext ||

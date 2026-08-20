@@ -19,10 +19,10 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
 import 'package:dskplay/widgets/playlist_cube.dart';
 import 'package:dskplay/widgets/section_header.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
 
 /// A titled row of artwork on the artist page: its releases, or the artists
 /// suggested next to it. Releases are shown square, artists round.

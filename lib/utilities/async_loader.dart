@@ -19,10 +19,10 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:flutter/material.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/widgets/spinner.dart';
+import 'package:flutter/material.dart';
 
 Widget _defaultAsyncLoaderErrorBuilder(
   BuildContext context,

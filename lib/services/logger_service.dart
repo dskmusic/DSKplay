@@ -19,9 +19,9 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
+import 'package:dskplay/extensions/l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:dskplay/extensions/l10n.dart';
 
 class Logger {
   String _logs = '';

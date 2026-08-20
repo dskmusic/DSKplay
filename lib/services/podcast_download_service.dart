@@ -22,13 +22,13 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:http/http.dart' as http;
 import 'package:dskplay/main.dart' show logger;
 import 'package:dskplay/models/podcast_model.dart';
 import 'package:dskplay/services/download_foreground_service.dart';
 import 'package:dskplay/services/download_notification_service.dart';
 import 'package:dskplay/services/io_service.dart';
 import 'package:dskplay/services/podcast_manager.dart';
+import 'package:http/http.dart' as http;
 
 // Episode audio is already a direct, ready-to-play file (mp3/m4a/ogg served
 // by the podcast host) - unlike YouTube songs there's no extraction or

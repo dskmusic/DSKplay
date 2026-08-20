@@ -19,10 +19,10 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
 import 'package:dskplay/models/radio_model.dart';
 import 'package:dskplay/utilities/artwork_provider.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
 
 class RadioStationCard extends StatelessWidget {
   const RadioStationCard({

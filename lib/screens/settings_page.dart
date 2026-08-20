@@ -19,12 +19,6 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:file_picker/file_picker.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_colorpicker/flutter_colorpicker.dart';
-import 'package:go_router/go_router.dart';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
@@ -52,6 +46,12 @@ import 'package:dskplay/widgets/custom_bar.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:dskplay/widgets/section_header.dart';
 import 'package:dskplay/widgets/update_dialog.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:go_router/go_router.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -752,8 +752,8 @@ class SettingsPage extends StatelessWidget {
             if (index == presetColors.length) {
               return GestureDetector(
                 onTap: () => _pickCustomColor(context),
-                child: Container(
-                  decoration: const BoxDecoration(
+                child: const DecoratedBox(
+                  decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: SweepGradient(
                       colors: [
@@ -767,7 +767,7 @@ class SettingsPage extends StatelessWidget {
                       ],
                     ),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     FluentIcons.color_24_filled,
                     color: Colors.white,
                     size: 22,

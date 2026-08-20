@@ -19,11 +19,11 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
+import 'package:dskplay/constants/app_constants.dart';
+import 'package:dskplay/services/newpipe.dart';
+import 'package:dskplay/services/settings_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:dskplay/constants/app_constants.dart';
-import 'package:dskplay/services/settings_manager.dart';
-import 'package:dskplay/services/newpipe.dart';
 
 BorderRadius getItemBorderRadius(
   int index,

@@ -21,9 +21,9 @@
 
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/services/podcast_manager.dart';
+import 'package:flutter/material.dart';
 
 /// Small modal to view/edit a free-text note attached to a podcast episode.
 /// Notes live in the same Hive 'user' box as everything else, so they're

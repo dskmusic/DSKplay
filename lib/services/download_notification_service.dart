@@ -22,8 +22,8 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/services.dart';
 import 'package:dskplay/services/download_foreground_service.dart';
+import 'package:flutter/services.dart';
 
 /// Drives the single system notification shown while a download or a
 /// "make available offline" action is running. Android-only: other
@@ -71,7 +71,7 @@ class DownloadNotificationService {
     if (!Platform.isAndroid) return;
     if (DownloadForegroundService.cancelAllRequested) return;
 
-    final percent = (progress ?? 0).clamp(0, 100).toInt();
+    final percent = (progress ?? 0).clamp(0, 100);
 
     if (title != _lastTitle) {
       _lastTitle = title;

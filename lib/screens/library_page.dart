@@ -21,8 +21,6 @@
 
 import 'dart:async';
 
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart' show logger;
@@ -42,6 +40,8 @@ import 'package:dskplay/widgets/confirmation_dialog.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:dskplay/widgets/playlist_bar.dart';
 import 'package:dskplay/widgets/section_header.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
 
 class LibraryPage extends StatefulWidget {
   const LibraryPage({super.key});

@@ -31,9 +31,26 @@ object NewPipeExtraction {
 
     fun init() {
         if (NewPipe.getDownloader() == null) {
-            NewPipe.init(YtDownloader.getInstance(), Localization("en", "US"), ContentCountry("US"))
+            NewPipe.init(YtDownloader.getInstance(), deviceLocalization(), deviceCountry())
         }
     }
+
+    /**
+     * Idioma y pais del movil. YouTube devuelve resultados distintos segun
+     * `hl`/`gl`, asi que buscar desde Espana como si fuera ingles-EEUU daba
+     * resultados peores. Si el sistema no da pais (p.ej. solo "es"), se cae a
+     * US, que es lo que habia fijo antes.
+     */
+    private fun deviceLocalization(): Localization {
+        val locale = java.util.Locale.getDefault()
+        return Localization(
+            locale.language.ifBlank { "en" },
+            locale.country.ifBlank { "US" },
+        )
+    }
+
+    private fun deviceCountry(): ContentCountry =
+        ContentCountry(java.util.Locale.getDefault().country.ifBlank { "US" })
 
     fun setProxy(hostPort: String?) = YtDownloader.getInstance().setProxy(hostPort)
 

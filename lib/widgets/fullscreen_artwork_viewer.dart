@@ -23,14 +23,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart' show logger;
 import 'package:dskplay/services/io_service.dart';
 import 'package:dskplay/utilities/artwork_provider.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 /// Fullscreen preview of an album/playlist cover with pinch-to-zoom, a
 /// double tap to toggle zoomed in/out, and a download-to-device action.
@@ -198,7 +198,7 @@ class _RoundIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return DecoratedBox(
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.45),
         shape: BoxShape.circle,

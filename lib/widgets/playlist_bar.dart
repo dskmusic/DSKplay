@@ -21,9 +21,6 @@
 
 import 'dart:async';
 
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/services/artist_service.dart';
 import 'package:dskplay/services/common_services.dart';
@@ -43,6 +40,9 @@ import 'package:dskplay/widgets/edit_playlist_dialog.dart';
 import 'package:dskplay/widgets/overflow_menu_button.dart';
 import 'package:dskplay/widgets/popup_menu_item.dart';
 import 'package:dskplay/widgets/spinner.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 class PlaylistBar extends StatelessWidget {
   PlaylistBar(

@@ -22,11 +22,11 @@
 import 'dart:async';
 
 import 'package:dskplay/main.dart' show logger;
+import 'package:dskplay/screens/playlist_page.dart' show PlaylistPage;
 import 'package:dskplay/services/data_manager.dart';
-import 'package:dskplay/services/proxy_manager.dart';
-import 'package:dskplay/utilities/formatter.dart';
 import 'package:dskplay/services/newpipe.dart';
 import 'package:dskplay/services/ytmusic.dart';
+import 'package:dskplay/utilities/formatter.dart';
 
 const artistCatalogCacheVersion = 15;
 const artistSearchCacheVersion = 10;

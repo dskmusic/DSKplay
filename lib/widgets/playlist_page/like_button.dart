@@ -21,12 +21,12 @@
 
 import 'dart:async';
 
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/playlists_manager.dart';
 import 'package:dskplay/utilities/offline_playlist_dialogs.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
 
 /// Likes a playlist, an album or an artist. Shared by the playlist page and
 /// the artist page.

@@ -19,8 +19,8 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:flutter/material.dart';
 import 'package:dskplay/widgets/custom_search_bar.dart';
+import 'package:flutter/material.dart';
 
 class SearchBarSection extends StatefulWidget {
   const SearchBarSection({

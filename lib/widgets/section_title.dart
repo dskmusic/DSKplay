@@ -19,8 +19,8 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:flutter/material.dart';
 import 'package:dskplay/widgets/marquee.dart';
+import 'package:flutter/material.dart';
 
 class SectionTitle extends StatelessWidget {
   const SectionTitle(this.title, this.primaryColor, {super.key, this.icon});

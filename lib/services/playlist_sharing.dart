@@ -22,10 +22,10 @@
 import 'dart:convert';
 
 import 'package:dskplay/main.dart';
+import 'package:dskplay/services/newpipe.dart';
 import 'package:dskplay/services/proxy_manager.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/utilities/formatter.dart';
-import 'package:dskplay/services/newpipe.dart';
 
 class PlaylistSharingService {
   static Map<String, dynamic> createCompactPlaylist(

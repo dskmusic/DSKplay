@@ -52,7 +52,9 @@ android {
 
     defaultConfig {
         applicationId = "com.dskmusic.dskplay"
-        minSdk = 24
+        // 26 y no 24: NewPipeExtractor usa java.util.Base64 (API 26) al
+        // extraer LISTAS, asi que en Android 7 abrir una lista petaria.
+        minSdk = 26
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -94,6 +96,17 @@ android {
             applicationIdSuffix = ".debug"
             versionNameSuffix = " DEBUG"
         }
+    }
+}
+
+// x86_64 solo lo usan los emuladores: en el APK universal eran ~76 MB de
+// librerias nativas que ningun movil llega a abrir (122 MB -> 89 MB). Va aqui
+// y no en `ndk { abiFilters }` porque el plugin de Flutter decide los ABIs por
+// su cuenta y pisa esa opcion; y solo en release, para que el debug siga
+// instalando en emulador.
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        variant.packaging.jniLibs.excludes.add("**/x86_64/**")
     }
 }
 

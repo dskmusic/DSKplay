@@ -19,11 +19,11 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:flutter/material.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/models/position_data.dart';
 import 'package:dskplay/services/lyrics_manager.dart';
 import 'package:dskplay/services/settings_manager.dart';
+import 'package:flutter/material.dart';
 
 // Shows the previous/active/next lyric line only, always centered in the
 // available space, so the highlighted line is never pinned to the bottom

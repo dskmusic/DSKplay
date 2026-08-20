@@ -23,9 +23,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/widgets.dart';
-import 'package:hive/hive.dart';
 import 'package:dskplay/database/albums.db.dart';
 import 'package:dskplay/database/playlists.db.dart';
 import 'package:dskplay/extensions/l10n.dart';
@@ -34,6 +31,7 @@ import 'package:dskplay/models/podcast_model.dart';
 import 'package:dskplay/services/artist_service.dart';
 import 'package:dskplay/services/data_manager.dart';
 import 'package:dskplay/services/io_service.dart';
+import 'package:dskplay/services/newpipe.dart';
 import 'package:dskplay/services/playlist_download_service.dart';
 import 'package:dskplay/services/podcast_manager.dart';
 import 'package:dskplay/services/proxy_manager.dart';
@@ -42,7 +40,9 @@ import 'package:dskplay/utilities/app_utils.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/formatter.dart';
 import 'package:dskplay/utilities/playlist_utils.dart';
-import 'package:dskplay/services/newpipe.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/widgets.dart';
+import 'package:hive/hive.dart';
 
 List<Map> playlists = [...playlistsDB, ...albumsDB];
 final userPlaylists = ValueNotifier<List<String>>(
@@ -359,7 +359,7 @@ Future<List<dynamic>> getUserPlaylists() async {
     try {
       final plist = await NewPipe.playlist(playlistID);
       return {
-        'ytid': plist.id.toString(),
+        'ytid': plist.id,
         'title': plist.title,
         'image': null,
         'source': 'user-youtube',

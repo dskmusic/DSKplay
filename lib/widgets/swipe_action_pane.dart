@@ -19,7 +19,6 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 
 /// Shared swipe-to-reveal-actions pane used by every row that supports it

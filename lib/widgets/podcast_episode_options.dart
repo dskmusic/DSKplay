@@ -21,11 +21,6 @@
 
 import 'dart:async';
 
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/models/podcast_model.dart';
@@ -36,6 +31,11 @@ import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/formatter.dart';
 import 'package:dskplay/widgets/playback_icon_button.dart';
 import 'package:dskplay/widgets/podcast_html_description.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 
 enum _EpisodeAction { play, download }
 

@@ -105,7 +105,7 @@ Future<bool> consumeSharedAudioFile(
     final cacheDir = await getTemporaryDirectory();
     final isCachedCopy = path.startsWith(cacheDir.path);
 
-    final List<File> siblings = isCachedCopy
+    final siblings = isCachedCopy
         ? [file]
         : await listAudioFilesInSameFolder(file);
     final songs = await buildLocalSongMaps(siblings);

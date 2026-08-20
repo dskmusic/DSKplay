@@ -21,10 +21,6 @@
 
 import 'dart:async';
 
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/database/radio_stations.db.dart';
 import 'package:dskplay/extensions/l10n.dart';
@@ -33,12 +29,12 @@ import 'package:dskplay/models/radio_model.dart';
 import 'package:dskplay/screens/bottom_navigation_page.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/data_manager.dart';
+import 'package:dskplay/services/newpipe.dart';
 import 'package:dskplay/services/playlists_manager.dart';
 import 'package:dskplay/services/router_service.dart';
 import 'package:dskplay/utilities/app_utils.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/formatter.dart';
-import 'package:dskplay/services/newpipe.dart';
 import 'package:dskplay/widgets/artist_bar.dart';
 import 'package:dskplay/widgets/confirmation_dialog.dart';
 import 'package:dskplay/widgets/custom_bar.dart';
@@ -48,6 +44,10 @@ import 'package:dskplay/widgets/playlist_bar.dart';
 import 'package:dskplay/widgets/radio_station_card.dart';
 import 'package:dskplay/widgets/section_title.dart';
 import 'package:dskplay/widgets/song_bar.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});

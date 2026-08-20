@@ -19,9 +19,6 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
@@ -39,6 +36,9 @@ import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:dskplay/widgets/playlist_cube.dart';
 import 'package:dskplay/widgets/section_header.dart';
 import 'package:dskplay/widgets/song_bar.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});

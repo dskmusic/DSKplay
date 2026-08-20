@@ -19,9 +19,6 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
@@ -33,16 +30,19 @@ import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/utilities/app_utils.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/widgets/artist_shelf.dart';
-import 'package:dskplay/widgets/playlist_page/download_button.dart';
-import 'package:dskplay/widgets/playlist_page/like_button.dart';
-import 'package:dskplay/widgets/playlist_page/playlist_action_buttons.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:dskplay/widgets/playlist_cube.dart';
+import 'package:dskplay/widgets/playlist_page/download_button.dart';
 import 'package:dskplay/widgets/playlist_page/empty_playlist_state.dart';
-import 'package:dskplay/widgets/section_header.dart';
+import 'package:dskplay/widgets/playlist_page/like_button.dart';
+import 'package:dskplay/widgets/playlist_page/playlist_action_buttons.dart';
 import 'package:dskplay/widgets/playlist_page/playlist_header.dart';
+import 'package:dskplay/widgets/section_header.dart';
 import 'package:dskplay/widgets/song_bar.dart';
 import 'package:dskplay/widgets/spinner.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 /// The page an artist opens on: who the artist is, its top songs, its
 /// releases and related artists. Offline, this is just the downloaded songs

@@ -21,9 +21,9 @@
 
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
 import 'package:dskplay/main.dart' show logger;
 import 'package:dskplay/models/radio_model.dart';
+import 'package:http/http.dart' as http;
 
 // Free, open station directory: https://www.radio-browser.info
 const _radioBrowserHost = 'de1.api.radio-browser.info';

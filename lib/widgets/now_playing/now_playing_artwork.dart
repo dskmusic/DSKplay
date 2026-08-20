@@ -19,19 +19,10 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
+import 'dart:async';
 import 'dart:io';
 
-import 'dart:async';
-
 import 'package:audio_service/audio_service.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_flip_card/flutter_flip_card.dart';
-import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
-import 'package:share_plus/share_plus.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart' show audioHandler, logger;
 import 'package:dskplay/models/podcast_model.dart';
@@ -53,6 +44,14 @@ import 'package:dskplay/widgets/now_playing/karaoke_lyrics_view.dart';
 import 'package:dskplay/widgets/now_playing/lyrics_results_picker.dart';
 import 'package:dskplay/widgets/podcast_html_description.dart';
 import 'package:dskplay/widgets/song_artwork.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_flip_card/flutter_flip_card.dart';
+import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
+import 'package:share_plus/share_plus.dart';
 
 class NowPlayingArtwork extends StatelessWidget {
   const NowPlayingArtwork({

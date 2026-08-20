@@ -22,8 +22,6 @@
 import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
@@ -38,6 +36,8 @@ import 'package:dskplay/widgets/fullscreen_artwork_viewer.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:dskplay/widgets/podcast_episode_bar.dart';
 import 'package:dskplay/widgets/podcast_episode_options.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
 
 class PodcastDetailPage extends StatefulWidget {
   const PodcastDetailPage({super.key, required this.podcast, this.openEpisodeKey});

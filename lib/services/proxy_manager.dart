@@ -24,12 +24,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:http/http.dart' as http;
-import 'package:http/io_client.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/models/proxy_model.dart';
-import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/services/newpipe.dart';
+import 'package:dskplay/services/settings_manager.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 
 class _ProxyResources {
   _ProxyResources(this.httpClient, this.ioClient);

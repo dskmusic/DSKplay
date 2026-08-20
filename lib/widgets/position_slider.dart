@@ -19,10 +19,10 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:flutter/material.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/models/position_data.dart';
 import 'package:dskplay/utilities/formatter.dart';
+import 'package:flutter/material.dart';
 
 PositionData _positionData = PositionData(
   Duration.zero,

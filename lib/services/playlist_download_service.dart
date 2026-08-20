@@ -25,8 +25,6 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
-import 'package:hive/hive.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/services/common_services.dart';
@@ -36,6 +34,8 @@ import 'package:dskplay/services/download_notification_service.dart';
 import 'package:dskplay/services/io_service.dart';
 import 'package:dskplay/services/playlists_manager.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
+import 'package:flutter/material.dart';
+import 'package:hive/hive.dart';
 
 class OfflinePlaylistService {
   factory OfflinePlaylistService() => _instance;

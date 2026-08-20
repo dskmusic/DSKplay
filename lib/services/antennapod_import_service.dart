@@ -19,9 +19,9 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:sqlite3/sqlite3.dart';
 import 'package:dskplay/models/podcast_model.dart';
 import 'package:dskplay/services/podcast_manager.dart';
+import 'package:sqlite3/sqlite3.dart';
 
 /// Parsed, ready-to-apply contents of an AntennaPod SQLite backup (its
 /// `Feeds`/`FeedItems`/`FeedMedia` tables), plus a few counters so the UI can

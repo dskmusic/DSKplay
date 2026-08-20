@@ -21,14 +21,14 @@
 
 import 'dart:math' as math;
 
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/models/podcast_model.dart';
 import 'package:dskplay/screens/podcast_detail_page.dart';
 import 'package:dskplay/services/podcast_manager.dart';
 import 'package:dskplay/utilities/artwork_provider.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 String _formatHours(int seconds) {
   final hours = seconds / 3600;
@@ -118,7 +118,7 @@ class _SubscriptionsStatsTab extends StatelessWidget {
                           );
 
                     final monthKeys = byMonth.keys.toList()..sort();
-                    String rangeLabel = '';
+                    var rangeLabel = '';
                     if (monthKeys.isNotEmpty) {
                       final first = monthKeys.first.split('-');
                       final last = monthKeys.last.split('-');
@@ -661,11 +661,11 @@ class _HistoryBarChart extends StatelessWidget {
                       right: 0,
                       child: Divider(height: 1),
                     ),
-                    Positioned(
+                    const Positioned(
                       top: _tooltipReserve + _height / 2,
                       left: 0,
                       right: 0,
-                      child: const Divider(height: 1),
+                      child: Divider(height: 1),
                     ),
                     Positioned(
                       top: _tooltipReserve,

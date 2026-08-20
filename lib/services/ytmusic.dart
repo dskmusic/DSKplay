@@ -21,9 +21,8 @@
 
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
-
 import 'package:dskplay/services/newpipe.dart' show Video;
+import 'package:http/http.dart' as http;
 
 /// Cliente de YouTube Music (endpoints `WEB_REMIX` de InnerTube).
 ///

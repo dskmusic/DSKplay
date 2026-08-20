@@ -23,11 +23,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
-import 'package:go_router/go_router.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/services/common_services.dart';
@@ -46,6 +41,11 @@ import 'package:dskplay/widgets/overflow_menu_button.dart';
 import 'package:dskplay/widgets/popup_menu_item.dart';
 import 'package:dskplay/widgets/rename_song_dialog.dart';
 import 'package:dskplay/widgets/swipe_action_pane.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
 List<PopupMenuEntry<String>> _buildSongMenuItems({

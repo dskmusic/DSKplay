@@ -23,14 +23,14 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:audiotags/audiotags.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart' show audioHandler;
 import 'package:dskplay/services/io_service.dart';
 import 'package:dskplay/services/local_files_service.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/playlist_image_picker.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
 
 /// Opens a dialog to edit [file]'s ID3/Vorbis/MP4 tag (title, artist,
 /// album, cover art) in place. [onSaved] is called after a successful

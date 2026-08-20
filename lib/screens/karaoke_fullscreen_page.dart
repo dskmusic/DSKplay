@@ -19,13 +19,13 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
 import 'package:dskplay/services/lyrics_manager.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/widgets/now_playing/karaoke_lyrics_view.dart';
 import 'package:dskplay/widgets/playback_icon_button.dart';
 import 'package:dskplay/widgets/position_slider.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 // Fullscreen lyrics view, mainly meant for karaoke mode: keeps the screen
@@ -157,7 +157,6 @@ class _FullscreenTransportBar extends StatelessWidget {
             ),
           ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               PlaybackIconButton(
                 iconSize: 24,

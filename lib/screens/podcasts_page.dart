@@ -21,9 +21,6 @@
 
 import 'dart:async';
 
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/models/podcast_model.dart';
@@ -34,6 +31,9 @@ import 'package:dskplay/services/podcast_feed_service.dart';
 import 'package:dskplay/services/podcast_manager.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:dskplay/widgets/podcast_card.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 const _addPodcastUrlHint = 'https://ejemplo.com/feed.rss';
 

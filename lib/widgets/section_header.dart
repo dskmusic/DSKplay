@@ -19,8 +19,8 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:flutter/material.dart';
 import 'package:dskplay/widgets/section_title.dart';
+import 'package:flutter/material.dart';
 
 class SectionHeader extends StatelessWidget {
   const SectionHeader({

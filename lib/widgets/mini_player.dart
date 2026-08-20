@@ -22,14 +22,14 @@
 import 'dart:math' as math;
 
 import 'package:audio_service/audio_service.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
-import 'package:flutter/material.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/models/full_player_state.dart';
 import 'package:dskplay/models/position_data.dart';
 import 'package:dskplay/screens/now_playing_page.dart';
 import 'package:dskplay/widgets/marquee.dart';
 import 'package:dskplay/widgets/song_artwork.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/material.dart';
 import 'package:rxdart/rxdart.dart';
 
 final Stream<FullPlayerState> _fullPlayerStateStream =
