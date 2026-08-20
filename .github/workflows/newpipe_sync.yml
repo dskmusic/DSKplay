@@ -1,0 +1,237 @@
+name: NewPipeExtractor sync & release
+
+# Vigila las releases de TeamNewPipe/NewPipeExtractor (la librería nativa que
+# extrae YouTube desde android/app/src/main/kotlin/.../youtube/) y, cuando hay
+# versión nueva, actualiza la dependencia, compila y publica un APK firmado.
+#
+# Sustituye a youtube_sync.yml, que sincronizaba los ficheros Dart de
+# youtube_explode_dart desde gokadzev/Musify. Ya no hay nada que sincronizar de
+# allí: el descifrado de streams vive dentro de NewPipeExtractor.
+#
+# La versión vive en UNA sola línea de android/app/build.gradle.kts:
+#     val newpipeVersion = "v0.26.5"
+#
+# Modos de release (input `release_mode`, sólo en ejecución manual):
+#   - check         : igual que la ejecución programada. Sólo compila y publica
+#                     si NewPipeExtractor ha sacado versión nueva.
+#   - check_and_build: comprueba (y actualiza si hay versión nueva) pero publica
+#                     siempre, haya cambiado o no.
+#   - build_only    : no comprueba nada; compila y publica el repo tal cual está.
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      release_mode:
+        description: 'Qué hacer'
+        required: true
+        type: choice
+        default: check_and_build
+        options:
+          - check
+          - check_and_build
+          - build_only
+
+concurrency:
+  group: newpipe-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+
+env:
+  UPSTREAM_REPO: TeamNewPipe/NewPipeExtractor
+  GRADLE_FILE: android/app/build.gradle.kts
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Etiqueta de fallos
+        run: gh label create newpipe-sync-failure --color b60205 --description "NewPipe sync needs manual review" --force
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comprobar la última versión de NewPipeExtractor
+        id: newpipe
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          MODE="${{ github.event_name == 'workflow_dispatch' && inputs.release_mode || 'check' }}"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+
+          CURRENT=$(grep -oP 'val newpipeVersion = "\K[^"]+' "$GRADLE_FILE")
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+
+          if [ "$MODE" = "build_only" ]; then
+            echo "Compilación directa, sin comprobar upstream (NewPipeExtractor $CURRENT)."
+            echo "latest=$CURRENT" >> "$GITHUB_OUTPUT"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          LATEST=$(gh api "repos/$UPSTREAM_REPO/releases/latest" --jq '.tag_name')
+          if [ -z "$LATEST" ]; then
+            echo "::error::No se pudo leer la última release de $UPSTREAM_REPO"
+            exit 1
+          fi
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "Actual: $CURRENT / Última: $LATEST"
+
+          if [ "$LATEST" = "$CURRENT" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            [ "$MODE" = "check_and_build" ] \
+              && echo "should_release=true" >> "$GITHUB_OUTPUT" \
+              || echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Nada que hacer
+        if: steps.newpipe.outputs.should_release == 'false'
+        run: echo "NewPipeExtractor sigue en ${{ steps.newpipe.outputs.current }}. Sin cambios."
+
+      # --- A partir de aquí sólo si toca compilar ---
+
+      - name: Actualizar la versión de NewPipeExtractor
+        if: steps.newpipe.outputs.should_release == 'true' && steps.newpipe.outputs.changed == 'true'
+        run: |
+          sed -i 's/val newpipeVersion = "[^"]*"/val newpipeVersion = "${{ steps.newpipe.outputs.latest }}"/' "$GRADLE_FILE"
+          grep -n 'val newpipeVersion' "$GRADLE_FILE"
+
+      - name: Set up Java
+        if: steps.newpipe.outputs.should_release == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        if: steps.newpipe.outputs.should_release == 'true'
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.6'
+          channel: stable
+
+      - name: Configurar firma
+        if: steps.newpipe.outputs.should_release == 'true'
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\n' \
+            "$KEYSTORE_PASSWORD" "$KEY_PASSWORD" "$KEY_ALIAS" > android/key.properties
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/key.jks
+
+      - name: flutter pub get
+        if: steps.newpipe.outputs.should_release == 'true'
+        run: flutter pub get
+
+      - name: Tests de Dart
+        if: steps.newpipe.outputs.should_release == 'true'
+        run: flutter test
+
+      # Lo importante al subir de versión: pega contra YouTube de verdad con
+      # el mismo código que corre en el móvil. Si NewPipeExtractor cambia su
+      # API o deja de extraer, falla aquí y no se publica nada.
+      - name: Sonda de extracción contra YouTube
+        if: steps.newpipe.outputs.should_release == 'true'
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:testReleaseUnitTest --tests "*NewPipeSmokeTest*"
+
+      - name: Subir el build number
+        id: bump
+        if: steps.newpipe.outputs.should_release == 'true'
+        run: |
+          set -euo pipefail
+          VER=$(grep -oP '^version:\s*\K[\d.]+' pubspec.yaml)
+          BUILD=$(( $(grep -oP '^version:\s*[\d.]+\+\K\d+' pubspec.yaml) + 1 ))
+          sed -i "s/^version:.*/version: $VER+$BUILD/" pubspec.yaml
+          # El salto de linea final importa: sync_version.ps1 lo pone,
+          # y sin el cada release del CI dejaba version.dart sucio.
+          printf "const appVersion = '%s';\nconst appBuildNumber = '%s';\n" "$VER" "$BUILD" \
+            > lib/constants/version.dart
+          echo "ver=$VER" >> "$GITHUB_OUTPUT"
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+          echo "tag=newpipe-$(date +%Y.%m.%d)-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Compilar APK release firmado
+        id: build
+        if: steps.newpipe.outputs.should_release == 'true'
+        run: flutter build apk --release
+
+      - name: Commit
+        if: steps.newpipe.outputs.should_release == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$GRADLE_FILE" pubspec.yaml lib/constants/version.dart
+          if git diff --staged --quiet; then
+            echo "Nada que commitear."
+          else
+            if [ "${{ steps.newpipe.outputs.changed }}" = "true" ]; then
+              git commit -m "chore: NewPipeExtractor ${{ steps.newpipe.outputs.latest }} (build ${{ steps.bump.outputs.build }})"
+            else
+              git commit -m "chore: bump build number to ${{ steps.bump.outputs.build }} (release manual)"
+            fi
+            git pull --rebase --autostash origin main
+            git push
+          fi
+
+      - name: Publicar release
+        if: steps.newpipe.outputs.should_release == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ steps.newpipe.outputs.changed }}" = "true" ]; then
+            NOTES="NewPipeExtractor actualizado a ${{ steps.newpipe.outputs.latest }} (antes ${{ steps.newpipe.outputs.current }}) y recompilado."
+          elif [ "${{ steps.newpipe.outputs.mode }}" = "build_only" ]; then
+            NOTES="Release manual del repositorio tal cual, sin comprobar NewPipeExtractor (${{ steps.newpipe.outputs.current }})."
+          else
+            NOTES="Release manual. NewPipeExtractor sigue en ${{ steps.newpipe.outputs.current }}."
+          fi
+          gh release create "${{ steps.bump.outputs.tag }}" \
+            build/app/outputs/flutter-apk/app-release.apk \
+            --title "DSK Play v${{ steps.bump.outputs.ver }} (build ${{ steps.bump.outputs.build }})" \
+            --notes "$NOTES
+
+          BuildNumber: ${{ steps.bump.outputs.build }}"
+
+          ISSUE=$(gh issue list --label newpipe-sync-failure --state open --json number --jq '.[0].number')
+          if [ -n "$ISSUE" ]; then
+            gh issue comment "$ISSUE" --body "Resuelto por una sincronización correcta: ${{ steps.bump.outputs.tag }}"
+            gh issue close "$ISSUE"
+          fi
+
+      - name: Avisar del fallo
+        if: failure()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BODY="@dskmusic la sincronización con NewPipeExtractor no pudo terminar, así que no se compiló ni publicó nada.
+
+          - Versión en el repo: ${{ steps.newpipe.outputs.current }}
+          - Última upstream: ${{ steps.newpipe.outputs.latest }}
+          - Paso de compilación: ${{ steps.build.outcome }}
+          - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          Lo más probable es que la API de NewPipeExtractor haya cambiado y NewPipeBridge.kt ya no compile. **Necesita revisión manual.**"
+
+          ISSUE=$(gh issue list --label newpipe-sync-failure --state open --json number --jq '.[0].number')
+          if [ -n "$ISSUE" ]; then
+            gh issue comment "$ISSUE" --body "$BODY"
+          else
+            gh issue create --title "NewPipe sync needs manual review" --label newpipe-sync-failure --body "$BODY"
+          fi

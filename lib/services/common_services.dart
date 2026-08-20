@@ -31,19 +31,18 @@ import 'package:flutter/widgets.dart';
 import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
-import 'package:dskplay/constants/clients.dart';
 import 'package:dskplay/main.dart' show logger;
 import 'package:dskplay/models/radio_model.dart';
 import 'package:dskplay/services/data_manager.dart';
 import 'package:dskplay/services/download_foreground_service.dart';
 import 'package:dskplay/services/io_service.dart';
 import 'package:dskplay/services/lyrics_manager.dart';
+import 'package:dskplay/services/newpipe.dart';
 import 'package:dskplay/services/playlists_manager.dart';
 import 'package:dskplay/services/proxy_manager.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/utilities/app_utils.dart';
 import 'package:dskplay/utilities/formatter.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 List globalSongs = [];
 
@@ -307,19 +306,23 @@ void reloadSongLibraryStateFromStorage() {
   );
 }
 
+/// Mismo User-Agent que envía YtDownloader.kt al extraer.
+const _streamUserAgent =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+    '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
 // Timeouts and durations used across manifest fetching and cache validation.
 const Duration _manifestTimeout = Duration(seconds: 30);
 const Duration _cacheValidationDuration = Duration(hours: 1);
 
-/// Fetches a stream manifest for a song, honoring proxy settings.
-Future<StreamManifest?> _fetchStreamManifest(String songId) async {
+/// Fetches the audio-only streams for a song, honoring proxy settings.
+Future<List<AudioStreamInfo>?> _fetchAudioStreams(String songId) async {
   if (useProxy.value) {
-    return ProxyManager().getSongManifest(songId).timeout(_manifestTimeout);
+    return ProxyManager().getSongAudioStreams(songId).timeout(_manifestTimeout);
   }
 
-  return ytClient.videos.streams
-      .getManifest(songId, ytClients: customClients)
-      .timeout(_manifestTimeout);
+  final streams = await NewPipe.streams(songId).timeout(_manifestTimeout);
+  return streams.audioOnly;
 }
 
 /// Returns a cached song URL if present and still valid.
@@ -372,18 +375,14 @@ const _searchResultPages = 5;
 
 Future<List> fetchSongsList(String searchQuery) async {
   try {
-    final searchResults = <Video>[];
-    var page = await ytClient.search.search(searchQuery);
-    searchResults.addAll(page);
+    final results = await NewPipe.search(
+      searchQuery,
+      pages: _searchResultPages,
+    );
 
-    for (var i = 1; i < _searchResultPages; i++) {
-      final nextPage = await page.nextPage();
-      if (nextPage == null || nextPage.isEmpty) break;
-      searchResults.addAll(nextPage);
-      page = nextPage;
-    }
-
-    return searchResults.map((video) => returnSongLayout(0, video)).toList();
+    return NewPipe.videosOf(
+      results,
+    ).map((video) => returnSongLayout(0, video)).toList();
   } catch (e, stackTrace) {
     logger.log('Error in fetchSongsList', error: e, stackTrace: stackTrace);
     return [];
@@ -423,8 +422,7 @@ Future<List> _getRecommendationsFromRecentlyPlayed() async {
     final seedIndex = entry.key;
     final songData = entry.value;
     try {
-      final song = await ytClient.videos.get(songData['ytid']);
-      final related = await ytClient.videos.getRelatedVideos(song) ?? [];
+      final related = await NewPipe.related(songData['ytid']);
       for (var i = 0; i < related.length && i < 8; i++) {
         final s = returnSongLayout(0, related[i]);
         final id = s['ytid'];
@@ -728,9 +726,7 @@ Future<List<String>> getSearchSuggestions(String query) async {
 
   // Built-in implementation:
 
-  final suggestions = await ytClient.search.getQuerySuggestions(query);
-
-  return suggestions;
+  return NewPipe.suggestions(query);
 }
 
 Future<List<Map<String, int>>> getSkipSegments(String id) async {
@@ -774,8 +770,7 @@ Future<List<Map<String, int>>> getSkipSegments(String id) async {
 
 Future<void> getSimilarSong(String songYtId) async {
   try {
-    final song = await ytClient.videos.get(songYtId);
-    final relatedSongs = await ytClient.videos.getRelatedVideos(song) ?? [];
+    final relatedSongs = await NewPipe.related(songYtId);
 
     if (relatedSongs.isNotEmpty) {
       nextRecommendedSong = returnSongLayout(0, relatedSongs[0]);
@@ -792,20 +787,19 @@ Future<void> getSimilarSong(String songYtId) async {
 }
 
 /// Fetches the best available audio stream for a song.
-Future<AudioOnlyStreamInfo?> fetchBestAudioStream(String? songId) async {
+Future<AudioStreamInfo?> fetchBestAudioStream(String? songId) async {
   try {
     if (songId == null || songId.isEmpty) {
       logger.log('fetchBestAudioStream: songId is null or empty');
       return null;
     }
 
-    final manifest = await _fetchStreamManifest(songId);
-    final audioStream = manifest?.audioOnly;
-    if (audioStream == null || audioStream.isEmpty) {
+    final audioStreams = await _fetchAudioStreams(songId);
+    if (audioStreams == null || audioStreams.isEmpty) {
       logger.log('fetchBestAudioStream: no audio streams for $songId');
       return null;
     }
-    return selectAudioOnlyStreamForQuality(audioStream.sortByBitrate());
+    return selectAudioOnlyStreamForQuality(audioStreams.sortByBitrate());
   } on TimeoutException catch (_) {
     logger.log('fetchBestAudioStream request timed out for $songId');
     return null;
@@ -827,9 +821,8 @@ Future<String?> fetchSongStreamUrl(String songId, bool isLive) async {
       return null;
     }
     if (isLive) {
-      final streamInfo = await ytClient.videos.streamsClient
-          .getHttpLiveStreamUrl(VideoId(songId));
-      return streamInfo;
+      final hlsUrl = (await NewPipe.streams(songId)).hlsUrl;
+      return hlsUrl.isEmpty ? null : hlsUrl;
     }
 
     const _cacheDuration = Duration(hours: 3);
@@ -842,8 +835,7 @@ Future<String?> fetchSongStreamUrl(String songId, bool isLive) async {
     }
 
     // Get fresh URL
-    final manifest = await _fetchStreamManifest(songId);
-    final audioStreams = manifest?.audioOnly;
+    final audioStreams = await _fetchAudioStreams(songId);
     if (audioStreams == null || audioStreams.isEmpty) {
       logger.log('fetchSongStreamUrl: no audio streams for $songId');
       return null;
@@ -852,7 +844,7 @@ Future<String?> fetchSongStreamUrl(String songId, bool isLive) async {
     final selectedStream = selectAudioOnlyStreamForQuality(
       audioStreams.sortByBitrate(),
     );
-    final url = selectedStream.url.toString();
+    final url = selectedStream.url;
 
     unawaited(addOrUpdateData<String>('cache', cacheKey, url));
 
@@ -875,7 +867,7 @@ Future<Map<String, dynamic>> getSongDetails(
   String songId,
 ) async {
   try {
-    final song = await ytClient.videos.get(songId);
+    final song = await NewPipe.video(songId);
     return returnSongLayout(songIndex, song);
   } catch (e, stackTrace) {
     logger.log(
@@ -945,6 +937,7 @@ Future<bool> _downloadAndTagAudioFile(
   await audioFile.parent.create(recursive: true);
 
   IOSink? fileStream;
+  final httpClient = http.Client();
   try {
     final audioManifest = await fetchBestAudioStream(ytid);
     if (audioManifest == null) {
@@ -952,11 +945,18 @@ Future<bool> _downloadAndTagAudioFile(
       return false;
     }
 
-    final stream = ytClient.videos.streamsClient.get(audioManifest);
+    // NewPipeExtractor sólo resuelve la URL; la descarga es un GET normal.
+    // El Content-Length hace de tamaño total (la API nativa no lo trae).
+    // La UA es la misma que usa YtDownloader al extraer: googlevideo responde
+    // 403 si la petición no se parece a la que generó la URL.
+    final response = await httpClient.send(
+      http.Request('GET', Uri.parse(audioManifest.url))
+        ..headers['User-Agent'] = _streamUserAgent,
+    );
     fileStream = rawFile.openWrite();
-    final totalBytes = audioManifest.size.totalBytes;
+    final totalBytes = response.contentLength ?? 0;
     var receivedBytes = 0;
-    await for (final chunk in stream) {
+    await for (final chunk in response.stream) {
       if (DownloadForegroundService.cancelAllRequested) {
         throw Exception('Download cancelled by user');
       }
@@ -980,6 +980,8 @@ Future<bool> _downloadAndTagAudioFile(
       await rawFile.delete();
     }
     return false;
+  } finally {
+    httpClient.close();
   }
 
   // Always transcode to MP3 with libmp3lame, regardless of the source

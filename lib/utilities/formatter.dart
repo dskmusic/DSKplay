@@ -19,7 +19,7 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import 'package:dskplay/services/newpipe.dart';
 
 const _noiseTerms =
     'official music video|official lyric video|official lyrics video|'
@@ -75,10 +75,10 @@ Map<String, dynamic> returnSongLayout(
 
   return {
     'id': index,
-    'ytid': song.id.toString(),
+    'ytid': song.id,
     'title': title.isEmpty ? rawTitle.trim() : title,
     'artist': artist,
-    'artistId': song.channelId.toString(),
+    'artistId': song.channelId,
     'videoAuthor': song.author,
     'image': playlistImage ?? song.thumbnails.standardResUrl,
     'lowResImage': playlistImage ?? song.thumbnails.lowResUrl,

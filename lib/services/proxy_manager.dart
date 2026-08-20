@@ -26,11 +26,10 @@ import 'dart:math';
 
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
-import 'package:dskplay/constants/clients.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/models/proxy_model.dart';
 import 'package:dskplay/services/settings_manager.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import 'package:dskplay/services/newpipe.dart';
 
 class _ProxyResources {
   _ProxyResources(this.httpClient, this.ioClient);
@@ -52,8 +51,6 @@ class ProxyManager {
   // Singleton
   factory ProxyManager() => _instance;
   ProxyManager._internal() {
-    _defaultYt = YoutubeExplode();
-    _sharedYt = _defaultYt;
     if (useProxy.value) {
       _initSharedProxyClient();
     }
@@ -61,13 +58,7 @@ class ProxyManager {
       if (useProxy.value) {
         await _initSharedProxyClient();
       } else {
-        if (_sharedYt != _defaultYt) {
-          try {
-            _sharedYt?.close();
-          } catch (_) {}
-          _sharedYt = _defaultYt;
-        }
-        _sharedProxyAddress = null;
+        await _setNativeProxy(null);
         _closeAllProxyResources();
       }
     });
@@ -85,13 +76,6 @@ class ProxyManager {
   );
 
   static final ProxyManager _instance = ProxyManager._internal();
-
-  /// Default non-proxy YoutubeExplode instance (long-lived)
-  late final YoutubeExplode _defaultYt;
-
-  /// Currently active shared YoutubeExplode - either [_defaultYt] or a
-  /// proxy-backed client. Use [getClientSync] to access.
-  YoutubeExplode? _sharedYt;
 
   Future<void>? _fetchingProxiesFuture;
   Completer<void>? _initializationCompletion;
@@ -197,7 +181,7 @@ class ProxyManager {
     );
   }
 
-  /// Initialize a shared YoutubeExplode client that uses a working proxy.
+  /// Point the native extractor at a working proxy.
   Future<void> _initSharedProxyClient({int timeoutSeconds = 5}) async {
     if (_initializationCompletion != null) {
       return _initializationCompletion!.future;
@@ -212,21 +196,10 @@ class ProxyManager {
         final proxy = await _getRandomProxy();
         if (proxy == null) break;
         try {
-          final res = _ensureProxyResources(
-            proxy,
-            timeoutSeconds: timeoutSeconds,
-          );
-          final ytClient = YoutubeExplode(
-            httpClient: YoutubeHttpClient(res.ioClient),
-          );
-
-          if (_sharedYt != null && _sharedYt != _defaultYt) {
-            try {
-              _sharedYt?.close();
-            } catch (_) {}
-          }
-          _sharedYt = ytClient;
-          _sharedProxyAddress = proxy.address;
+          // Sigue haciendo falta para getProxiedResponse (SponsorBlock y
+          // demas), que se queda en Dart.
+          _ensureProxyResources(proxy, timeoutSeconds: timeoutSeconds);
+          await _setNativeProxy(proxy.address);
           _workingProxies.add(proxy);
           break;
         } catch (e, stackTrace) {
@@ -251,40 +224,45 @@ class ProxyManager {
     }
   }
 
-  /// Returns the currently active YoutubeExplode client. Never null.
-  YoutubeExplode getClientSync() => _sharedYt ?? _defaultYt;
+  /// El proxy del extractor nativo es estado global del proceso, asi que hay
+  /// un unico proxy activo a la vez, igual que antes habia un unico
+  /// _sharedYt.
+  Future<void> _setNativeProxy(String? address) async {
+    if (_sharedProxyAddress == address) return;
+    await NewPipe.setProxy(address);
+    _sharedProxyAddress = address;
+  }
 
-  Future<StreamManifest?> _validateDirect(
+  Future<List<AudioStreamInfo>?> _validateDirect(
     String songId,
     int timeoutSeconds,
   ) async {
     try {
-      final manifest = await _defaultYt.videos.streams
-          .getManifest(songId, ytClients: customClients)
-          .timeout(Duration(seconds: timeoutSeconds));
-      return manifest;
+      await _setNativeProxy(null);
+      final streams = await NewPipe.streams(
+        songId,
+      ).timeout(Duration(seconds: timeoutSeconds));
+      return streams.audioOnly.isEmpty ? null : streams.audioOnly;
     } catch (e) {
       return null;
     }
   }
 
-  Future<StreamManifest?> _validateProxy(
+  Future<List<AudioStreamInfo>?> _validateProxy(
     ProxyInfo proxy,
     String songId,
     int timeoutSeconds,
   ) async {
     if (!useProxy.value) return null;
-    YoutubeExplode? ytClient;
-    var shouldCloseClient = false;
     try {
-      final res = _ensureProxyResources(proxy, timeoutSeconds: timeoutSeconds);
-      ytClient = YoutubeExplode(httpClient: YoutubeHttpClient(res.ioClient));
-      final manifest = await ytClient.videos.streams
-          .getManifest(songId, ytClients: customClients)
-          .timeout(Duration(seconds: timeoutSeconds));
+      _ensureProxyResources(proxy, timeoutSeconds: timeoutSeconds);
+      await _setNativeProxy(proxy.address);
+      final streams = await NewPipe.streams(
+        songId,
+      ).timeout(Duration(seconds: timeoutSeconds));
+      if (streams.audioOnly.isEmpty) return null;
       _workingProxies.add(proxy);
-      shouldCloseClient = true;
-      return manifest;
+      return streams.audioOnly;
     } catch (e, stackTrace) {
       logger.log(
         'ProxyManager: failed to validate proxy ${proxy.address}',
@@ -293,12 +271,6 @@ class ProxyManager {
       );
       _discardProxy(proxy, reason: 'validation failed', closeResources: false);
       return null;
-    } finally {
-      if (shouldCloseClient) {
-        try {
-          ytClient?.close();
-        } catch (_) {}
-      }
     }
   }
 
@@ -493,13 +465,7 @@ class ProxyManager {
     }
 
     if (_sharedProxyAddress == address) {
-      if (_sharedYt != null && _sharedYt != _defaultYt) {
-        try {
-          _sharedYt?.close();
-        } catch (_) {}
-      }
-      _sharedYt = _defaultYt;
-      _sharedProxyAddress = null;
+      unawaited(_setNativeProxy(null));
     }
 
     logger.log(
@@ -507,12 +473,13 @@ class ProxyManager {
     );
   }
 
-  Future<StreamManifest?> getSongManifest(String songId) async {
+  /// Audio-only streams for a song, trying direct first and then proxies.
+  Future<List<AudioStreamInfo>?> getSongAudioStreams(String songId) async {
     if (!useProxy.value) {
       return _validateDirect(songId, _validateDirectTimeout);
     }
-    var manifest = await _validateDirect(songId, _validateDirectTimeout);
-    if (manifest != null) return manifest;
+    var streams = await _validateDirect(songId, _validateDirectTimeout);
+    if (streams != null) return streams;
 
     if (DateTime.now().difference(_lastFetched).inMinutes >=
         _proxyRefreshIntervalMinutes) {
@@ -521,22 +488,22 @@ class ProxyManager {
 
     _maybeCleanupProxies();
 
-    manifest = await _tryProxies(songId);
-    return manifest;
+    streams = await _tryProxies(songId);
+    return streams;
   }
 
-  Future<StreamManifest?> _tryProxies(String songId) async {
+  Future<List<AudioStreamInfo>?> _tryProxies(String songId) async {
     if (!useProxy.value) return null;
-    StreamManifest? manifest;
+    List<AudioStreamInfo>? streams;
     var attempts = 0;
     const maxAttempts = 5;
     do {
       if (attempts++ >= maxAttempts) break;
       final proxy = await _getRandomProxy();
       if (proxy == null) break;
-      manifest = await _validateProxy(proxy, songId, 5);
-    } while (manifest == null);
-    return manifest;
+      streams = await _validateProxy(proxy, songId, 5);
+    } while (streams == null);
+    return streams;
   }
 
   /// Performs an HTTP GET request that respects current proxy settings.
@@ -588,49 +555,41 @@ class ProxyManager {
     _sharedProxyAddress = null;
   }
 
-  /// Try to create a [YoutubeExplode] client that routes requests through a
-  /// working proxy. Returns null if no proxy client could be created.
+  /// Routes the native extractor through a working proxy for the calls that
+  /// follow, returning false when none could be selected.
   ///
-  /// **IMPORTANT**: Caller is responsible for calling `close()` on the returned
-  /// [YoutubeExplode] when finished to free resources. Failure to close will leak
-  /// HTTP connections and memory.
-  Future<YoutubeExplode?> getYoutubeExplodeClient({
-    int timeoutSeconds = 5,
-  }) async {
-    if (!useProxy.value) return null;
+  /// Replaces the old per-call proxied YoutubeExplode client: the proxy now
+  /// lives in the native OkHttp client, so it stays until something changes
+  /// it (there is no client to close).
+  Future<bool> useAnyProxy({int timeoutSeconds = 5}) async {
+    if (!useProxy.value) return false;
     if (!_hasFetched) await _fetchProxies();
 
     if (_proxiesByCountry.isEmpty) await _fetchProxies();
 
-    if (_proxiesByCountry.isEmpty) return null;
+    if (_proxiesByCountry.isEmpty) return false;
 
     do {
       final proxy = await _getRandomProxy();
       if (proxy == null) break;
 
       try {
-        final res = _ensureProxyResources(
-          proxy,
-          timeoutSeconds: timeoutSeconds,
-        );
-        final ytClient = YoutubeExplode(
-          httpClient: YoutubeHttpClient(res.ioClient),
-        );
-
+        _ensureProxyResources(proxy, timeoutSeconds: timeoutSeconds);
+        await _setNativeProxy(proxy.address);
         _workingProxies.add(proxy);
-        return ytClient;
+        return true;
       } catch (e, stackTrace) {
         logger.log(
-          'ProxyManager: failed to create proxy youtube client for ${proxy.address}',
+          'ProxyManager: failed to route through proxy ${proxy.address}',
           error: e,
           stackTrace: stackTrace,
         );
-        _discardProxy(proxy, reason: 'youtube client creation failed');
+        _discardProxy(proxy, reason: 'native proxy switch failed');
         continue;
       }
     } while (true);
 
-    return null;
+    return false;
   }
 
   Future<void> _fetchSpysMe() async {
@@ -793,5 +752,3 @@ class ProxyManager {
     }
   }
 }
-
-final ytClient = ProxyManager().getClientSync();

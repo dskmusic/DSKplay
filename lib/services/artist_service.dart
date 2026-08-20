@@ -25,8 +25,8 @@ import 'package:dskplay/main.dart' show logger;
 import 'package:dskplay/services/data_manager.dart';
 import 'package:dskplay/services/proxy_manager.dart';
 import 'package:dskplay/utilities/formatter.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
-import 'package:youtube_music_explode_dart/youtube_music_explode_dart.dart';
+import 'package:dskplay/services/newpipe.dart';
+import 'package:dskplay/services/ytmusic.dart';
 
 const artistCatalogCacheVersion = 15;
 const artistSearchCacheVersion = 10;
@@ -37,8 +37,6 @@ const _artistProfileTimeout = Duration(seconds: 15);
 const _musicDiscographyTimeout = Duration(seconds: 25);
 const _musicAlbumTimeout = Duration(seconds: 12);
 const _musicAlbumBatchSize = 6;
-
-final ytMusicClient = YoutubeMusicExplode();
 
 Future<List<Map<String, dynamic>>> searchVerifiedArtists(
   String query, {
@@ -61,7 +59,7 @@ Future<List<Map<String, dynamic>>> searchVerifiedArtists(
 
   try {
     final artists = _dedupeResolvedArtists(
-      (await ytMusicClient.music
+      (await ytMusic
               .searchArtists(normalizedQuery)
               .timeout(_artistRequestTimeout))
           .where((artist) => !looksUnofficialArtistName(artist.name))
@@ -123,16 +121,13 @@ Future<Map<String, dynamic>?> resolveArtist(
 
   if (normalizedSourceSongId != null && normalizedSourceSongId.isNotEmpty) {
     try {
-      final sourceVideo = await ytClient.videos
-          .get(normalizedSourceSongId)
-          .timeout(_artistRequestTimeout);
+      final sourceVideo = await NewPipe.video(
+        normalizedSourceSongId,
+      ).timeout(_artistRequestTimeout);
       resolvedSourceVideoAuthor = sourceVideo.author.trim();
       sourceVideoArtist = _artistNameFromVideoTitle(sourceVideo.title);
       addAliases(sourceVideoArtist);
       addAliases(resolvedSourceVideoAuthor);
-      for (final musicData in sourceVideo.musicData) {
-        addAliases(musicData.artist);
-      }
     } catch (e, stackTrace) {
       logger.log(
         'Could not load source video $normalizedSourceSongId for artist lookup',
@@ -144,9 +139,9 @@ Future<Map<String, dynamic>?> resolveArtist(
 
   if (_isChannelId(normalizedLookup)) {
     try {
-      final channel = await ytClient.channels
-          .get(normalizedLookup)
-          .timeout(_artistRequestTimeout);
+      final channel = await NewPipe.channel(
+        normalizedLookup,
+      ).timeout(_artistRequestTimeout);
       addAliases(channel.title);
     } catch (e, stackTrace) {
       logger.log(
@@ -298,7 +293,7 @@ Future<Map<String, dynamic>?> getArtistProfile(
       await deleteData('cache', '${cacheKey}_date');
     }
 
-    final profile = await ytMusicClient.music
+    final profile = await ytMusic
         .getArtistProfile(resolvedArtistId)
         .timeout(_artistProfileTimeout);
 
@@ -360,7 +355,7 @@ Future<Map<String, dynamic>?> getArtistAlbum(
   }
 
   try {
-    final release = await ytMusicClient.music
+    final release = await ytMusic
         .getAlbum(normalizedAlbumId)
         .timeout(_musicAlbumTimeout);
 
@@ -533,7 +528,7 @@ Future<Map<String, dynamic>?> _resolveMusicArtistFromTerms(
 
     List<MusicArtist> candidates;
     try {
-      candidates = await ytMusicClient.music
+      candidates = await ytMusic
           .searchArtists(term)
           .timeout(_artistRequestTimeout);
     } catch (e, stackTrace) {
@@ -640,7 +635,7 @@ Future<List<Map<String, dynamic>>> _buildArtistCatalogFromMusic(
   );
 
   try {
-    final releases = await ytMusicClient.music
+    final releases = await ytMusic
         .getArtistReleases(artistId)
         .timeout(_musicDiscographyTimeout);
 
@@ -678,7 +673,7 @@ Future<List<Map<String, dynamic>>> _loadAlbumSongs(
   String artistName,
 ) async {
   try {
-    final tracks = await ytMusicClient.music
+    final tracks = await ytMusic
         .getAlbumTracks(album.id, author: artistName, channelId: channelId)
         .timeout(_musicAlbumTimeout);
     return [for (final track in tracks) returnSongLayout(0, track)];

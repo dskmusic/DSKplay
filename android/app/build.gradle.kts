@@ -1,6 +1,10 @@
 import java.util.Properties
 import java.io.FileInputStream
 
+// Version de NewPipeExtractor. La actualiza sola el workflow
+// .github/workflows/newpipe_sync.yml; no cambiar el formato de esta linea.
+val newpipeVersion = "v0.26.5"
+
 plugins {
     id("com.android.application")
     id("dev.flutter.flutter-gradle-plugin")
@@ -99,6 +103,14 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+
+    // Extraccion de YouTube en el dispositivo (busqueda, streams, listas,
+    // canales) - sustituye a youtube_explode_dart.
+    implementation("com.github.TeamNewPipe:NewPipeExtractor:$newpipeVersion")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // Sonda de extraccion contra YouTube de verdad (NewPipeSmokeTest).
+    testImplementation("junit:junit:4.13.2")
 }
 
 kotlin {

@@ -38,7 +38,7 @@ import 'package:dskplay/services/router_service.dart';
 import 'package:dskplay/utilities/app_utils.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/formatter.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import 'package:dskplay/services/newpipe.dart';
 import 'package:dskplay/widgets/artist_bar.dart';
 import 'package:dskplay/widgets/confirmation_dialog.dart';
 import 'package:dskplay/widgets/custom_bar.dart';

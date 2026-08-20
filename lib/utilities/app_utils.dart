@@ -23,7 +23,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/services/settings_manager.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import 'package:dskplay/services/newpipe.dart';
 
 BorderRadius getItemBorderRadius(
   int index,
@@ -111,8 +111,8 @@ String formatMonthPeriodLabel(Locale locale, String monthKey) {
       : '${label[0].toUpperCase()}${label.substring(1)}';
 }
 
-AudioOnlyStreamInfo selectAudioOnlyStreamForQuality(
-  List<AudioOnlyStreamInfo> availableSources,
+AudioStreamInfo selectAudioOnlyStreamForQuality(
+  List<AudioStreamInfo> availableSources,
 ) {
   final sortedByCompatibility = _sortAudioOnlyByCompatibility(availableSources);
   final compatibleSources = _filterCompatibleAudioOnlySources(
@@ -133,12 +133,12 @@ AudioOnlyStreamInfo selectAudioOnlyStreamForQuality(
   return selectionPool.withHighestBitrate();
 }
 
-List<AudioOnlyStreamInfo> _filterCompatibleAudioOnlySources(
-  List<AudioOnlyStreamInfo> sources,
+List<AudioStreamInfo> _filterCompatibleAudioOnlySources(
+  List<AudioStreamInfo> sources,
 ) {
   return sources.where((stream) {
-    final codec = stream.codec.toString().toLowerCase();
-    final container = stream.container.name.toLowerCase();
+    final codec = stream.codec.toLowerCase();
+    final container = stream.container.toLowerCase();
 
     if (_isDolbyCodec(codec)) {
       return false;
@@ -148,10 +148,10 @@ List<AudioOnlyStreamInfo> _filterCompatibleAudioOnlySources(
   }).toList();
 }
 
-List<AudioOnlyStreamInfo> _sortAudioOnlyByCompatibility(
-  List<AudioOnlyStreamInfo> sources,
+List<AudioStreamInfo> _sortAudioOnlyByCompatibility(
+  List<AudioStreamInfo> sources,
 ) {
-  final sorted = List<AudioOnlyStreamInfo>.from(sources)
+  final sorted = List<AudioStreamInfo>.from(sources)
     ..sort((a, b) {
       final aScore = _audioOnlyCompatibilityScore(a);
       final bScore = _audioOnlyCompatibilityScore(b);
@@ -160,9 +160,9 @@ List<AudioOnlyStreamInfo> _sortAudioOnlyByCompatibility(
   return sorted;
 }
 
-int _audioOnlyCompatibilityScore(AudioOnlyStreamInfo stream) {
-  final codec = stream.codec.toString().toLowerCase();
-  final container = stream.container.name.toLowerCase();
+int _audioOnlyCompatibilityScore(AudioStreamInfo stream) {
+  final codec = stream.codec.toLowerCase();
+  final container = stream.container.toLowerCase();
 
   if (_isDolbyCodec(codec)) {
     return 0;

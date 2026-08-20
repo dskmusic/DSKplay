@@ -25,7 +25,7 @@ import 'package:dskplay/main.dart';
 import 'package:dskplay/services/proxy_manager.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/utilities/formatter.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import 'package:dskplay/services/newpipe.dart';
 
 class PlaylistSharingService {
   static Map<String, dynamic> createCompactPlaylist(
@@ -43,41 +43,28 @@ class PlaylistSharingService {
     Map<String, dynamic> compactPlaylist,
   ) async {
     final List<dynamic> songIds = compactPlaylist['list'];
-    YoutubeExplode? ytClient;
-    try {
-      if (useProxy.value) {
-        ytClient = await ProxyManager().getYoutubeExplodeClient();
-      } else {
-        ytClient = ProxyManager().getClientSync();
-      }
+    if (useProxy.value) await ProxyManager().useAnyProxy();
 
-      final expandedSongs = await Future.wait(
-        songIds.map((ytid) async {
-          try {
-            final video = await ytClient!.videos.get(ytid);
-            return returnSongLayout(songIds.indexOf(ytid), video);
-          } catch (e, stackTrace) {
-            logger.log(
-              'Error expanding song: $ytid',
-              error: e,
-              stackTrace: stackTrace,
-            );
-            return null;
-          }
-        }),
-      );
-
-      return {
-        ...compactPlaylist,
-        'list': expandedSongs.where((song) => song != null).toList(),
-      };
-    } finally {
-      try {
-        if (useProxy.value) {
-          ytClient?.close();
+    final expandedSongs = await Future.wait(
+      songIds.map((ytid) async {
+        try {
+          final video = await NewPipe.video(ytid);
+          return returnSongLayout(songIds.indexOf(ytid), video);
+        } catch (e, stackTrace) {
+          logger.log(
+            'Error expanding song: $ytid',
+            error: e,
+            stackTrace: stackTrace,
+          );
+          return null;
         }
-      } catch (_) {}
-    }
+      }),
+    );
+
+    return {
+      ...compactPlaylist,
+      'list': expandedSongs.where((song) => song != null).toList(),
+    };
   }
 
   static String encodePlaylist(Map<String, dynamic> playlist) {

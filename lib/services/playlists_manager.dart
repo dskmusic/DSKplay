@@ -42,7 +42,7 @@ import 'package:dskplay/utilities/app_utils.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/formatter.dart';
 import 'package:dskplay/utilities/playlist_utils.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import 'package:dskplay/services/newpipe.dart';
 
 List<Map> playlists = [...playlistsDB, ...albumsDB];
 final userPlaylists = ValueNotifier<List<String>>(
@@ -357,7 +357,7 @@ final _latestPlaylistLikeUpdateTokens = <String, int>{};
 Future<List<dynamic>> getUserPlaylists() async {
   final futures = userPlaylists.value.map((playlistID) async {
     try {
-      final plist = await ytClient.playlists.get(playlistID);
+      final plist = await NewPipe.playlist(playlistID);
       return {
         'ytid': plist.id.toString(),
         'title': plist.title,
@@ -404,7 +404,7 @@ Future<String> addUserPlaylist(String input, BuildContext context) async {
       return '${context.l10n!.playlistAlreadyExists}!';
     }
 
-    final playlist = await ytClient.playlists.get(playlistId);
+    final playlist = await NewPipe.playlist(playlistId);
     if (playlist.title.isEmpty) {
       return '${context.l10n!.invalidYouTubePlaylist}!';
     }
@@ -1076,11 +1076,13 @@ Future<List> getPlaylists({
 
     final searchTerm = type == 'album' ? '$query album' : query;
 
-    late final Iterable searchResultsIterable;
+    late final List<YtPlaylist> searchResultsIterable;
     try {
-      searchResultsIterable = await ytClient.search.searchContent(
-        searchTerm,
-        filter: TypeFilters.playlist,
+      searchResultsIterable = NewPipe.playlistsOf(
+        await NewPipe.search(
+          searchTerm,
+          filters: const [SearchFilter.playlists],
+        ),
       );
     } catch (e, st) {
       logger.log(
@@ -1088,27 +1090,22 @@ Future<List> getPlaylists({
         error: e,
         stackTrace: st,
       );
-      if (useProxy.value) {
-        final proxyYt = await ProxyManager().getYoutubeExplodeClient();
-        if (proxyYt != null) {
-          try {
-            searchResultsIterable = await proxyYt.search.searchContent(
+      // El proxy ya no es un cliente aparte: se enruta el extractor nativo y
+      // se repite la misma busqueda.
+      if (useProxy.value && await ProxyManager().useAnyProxy()) {
+        try {
+          searchResultsIterable = NewPipe.playlistsOf(
+            await NewPipe.search(
               searchTerm,
-              filter: TypeFilters.playlist,
-            );
-          } catch (e2, st2) {
-            logger.log('Proxy search failed:', error: e2, stackTrace: st2);
-            searchResultsIterable = <dynamic>[];
-          } finally {
-            try {
-              proxyYt.close();
-            } catch (_) {}
-          }
-        } else {
-          searchResultsIterable = <dynamic>[];
+              filters: const [SearchFilter.playlists],
+            ),
+          );
+        } catch (e2, st2) {
+          logger.log('Proxy search failed:', error: e2, stackTrace: st2);
+          searchResultsIterable = <YtPlaylist>[];
         }
       } else {
-        searchResultsIterable = <dynamic>[];
+        searchResultsIterable = <YtPlaylist>[];
       }
     }
 
@@ -1117,12 +1114,11 @@ Future<List> getPlaylists({
         .toSet();
 
     final newPlaylists = searchResultsIterable
-        .whereType<SearchPlaylist>()
         .map((playlist) {
           final playlistMap = {
-            'ytid': playlist.id.toString(),
+            'ytid': playlist.id,
             'title': playlist.title,
-            'image': playlist.thumbnails.first.url.toString(),
+            'image': playlist.thumbnail,
             'source': 'youtube',
             'list': [],
           };
@@ -1345,11 +1341,11 @@ Future<Map?> _fetchYouTubePlaylist(String id) async {
   // 4. Fetch from YouTube as a last resort.
   if (playlist == null) {
     try {
-      final ytPlaylist = await ytClient.playlists.get(id);
+      final ytPlaylist = await NewPipe.playlist(id);
       playlist = {
-        'ytid': ytPlaylist.id.toString(),
+        'ytid': ytPlaylist.id,
         'title': ytPlaylist.title,
-        'image': ytPlaylist.thumbnails.mediumResUrl,
+        'image': ytPlaylist.thumbnail,
         'source': 'user-youtube',
         'list': [],
       };
@@ -1403,7 +1399,7 @@ Future<List> getSongsFromPlaylist(
   final songList = await getData('cache', 'playlistSongs$playlistId') ?? [];
 
   if (songList.isEmpty) {
-    await for (final song in ytClient.playlists.getVideos(playlistId)) {
+    for (final song in await NewPipe.playlistItems('$playlistId')) {
       songList.add(
         returnSongLayout(songList.length, song, playlistImage: playlistImage),
       );
@@ -1426,7 +1422,7 @@ Future updatePlaylistList(BuildContext context, String playlistId) async {
 
   try {
     final songList = [];
-    await for (final song in ytClient.playlists.getVideos(playlistId)) {
+    for (final song in await NewPipe.playlistItems(playlistId)) {
       songList.add(returnSongLayout(songList.length, song));
     }
 
