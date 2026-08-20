@@ -56,6 +56,22 @@ final rememberLastPlayback = ValueNotifier<bool>(
   Hive.box('settings').get('rememberLastPlayback', defaultValue: true),
 );
 
+/// Interruptor de emergencia para los adornos de la página de artista que
+/// vienen de YouTube Music: oyentes mensuales, top de canciones con sus
+/// reproducciones y artistas relacionados.
+///
+/// Los saca `lib/services/ytmusic.dart` leyendo los renderers de YouTube
+/// Music, que es la única extracción que NO cubre NewPipeExtractor: si Google
+/// cambia ese formato, ninguna actualización de NewPipe lo arregla. Cuando
+/// dejan de venir, la UI ya los oculta sola; esto es para el otro caso, el de
+/// que lleguen pero con datos mal.
+///
+/// Solo tapa la interfaz: los datos se siguen pidiendo y cacheando, así que
+/// volver a activarlo los enseña al momento.
+final showArtistExtras = ValueNotifier<bool>(
+  Hive.box('settings').get('showArtistExtras', defaultValue: true),
+);
+
 /// Which bottom-nav tab the app opens on at cold start (route path, e.g.
 /// '/home', '/podcasts'). Read once by NavigationManager's initialLocation -
 /// stored in the same 'settings' box as everything else, so it's carried

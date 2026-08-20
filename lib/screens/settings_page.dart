@@ -214,6 +214,23 @@ class SettingsPage extends StatelessWidget {
           },
         ),
         ValueListenableBuilder<bool>(
+          valueListenable: showArtistExtras,
+          builder: (_, value, __) {
+            return CustomBar(
+              'Datos extra de artista',
+              FluentIcons.person_24_regular,
+              description:
+                  'Oyentes mensuales, top de canciones con reproducciones y '
+                  'artistas relacionados. Desactivalo si YouTube cambia algo y '
+                  'salen mal: los albumes y las canciones no se ven afectados',
+              trailing: Switch(
+                value: value,
+                onChanged: (value) => _toggleShowArtistExtras(context, value),
+              ),
+            );
+          },
+        ),
+        ValueListenableBuilder<bool>(
           valueListenable: rememberLastPlayback,
           builder: (_, value, __) {
             return CustomBar(
@@ -1121,6 +1138,12 @@ class SettingsPage extends StatelessWidget {
     if (context.mounted) {
       showToast(context, context.l10n!.settingChangedMsg);
     }
+  }
+
+  void _toggleShowArtistExtras(BuildContext context, bool value) {
+    addOrUpdateData<bool>('settings', 'showArtistExtras', value);
+    showArtistExtras.value = value;
+    showToast(context, context.l10n!.settingChangedMsg);
   }
 
   void _toggleIncludePodcastsInTimeMachine(BuildContext context, bool value) {

@@ -73,11 +73,20 @@ class _ArtistPageState extends State<ArtistPage> {
   @override
   void initState() {
     super.initState();
+    // Los adornos de YouTube Music se filtran al pintar, asi que si el ajuste
+    // cambia con esta pagina ya abierta hay que repintar: si no, apagarlo
+    // pareceria no hacer nada hasta volver a entrar en el artista.
+    showArtistExtras.addListener(_onArtistExtrasChanged);
     if (!offlineMode.value) _artistFuture = _loadArtist();
+  }
+
+  void _onArtistExtrasChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    showArtistExtras.removeListener(_onArtistExtrasChanged);
     _isLoadingCatalog.dispose();
     super.dispose();
   }
@@ -227,7 +236,7 @@ class _ArtistPageState extends State<ArtistPage> {
                       onTap: _openRelease,
                     ),
                   ),
-                if (_relatedArtists.isNotEmpty)
+                if (showArtistExtras.value && _relatedArtists.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 24),
                     child: ArtistShelf(
@@ -328,7 +337,9 @@ class _ArtistPageState extends State<ArtistPage> {
           ),
           _artistTitle,
           isArtist: true,
-          monthlyListeners: _artist!['monthlyListeners']?.toString(),
+          monthlyListeners: showArtistExtras.value
+              ? _artist!['monthlyListeners']?.toString()
+              : null,
           description: _artist!['description']?.toString(),
         ),
         ValueListenableBuilder<bool>(
@@ -365,7 +376,9 @@ class _ArtistPageState extends State<ArtistPage> {
   }
 
   Widget _buildTopSongsSection() {
-    if (_topSongs.isEmpty) return const SizedBox.shrink();
+    if (!showArtistExtras.value || _topSongs.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return Column(
       children: [
