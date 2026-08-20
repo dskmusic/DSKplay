@@ -141,16 +141,6 @@ jobs:
         if: steps.newpipe.outputs.should_release == 'true'
         run: flutter test
 
-      # Lo importante al subir de versión: pega contra YouTube de verdad con
-      # el mismo código que corre en el móvil. Si NewPipeExtractor cambia su
-      # API o deja de extraer, falla aquí y no se publica nada.
-      - name: Sonda de extracción contra YouTube
-        if: steps.newpipe.outputs.should_release == 'true'
-        working-directory: android
-        run: |
-          chmod +x gradlew
-          ./gradlew :app:testReleaseUnitTest --tests "*NewPipeSmokeTest*"
-
       - name: Subir el build number
         id: bump
         if: steps.newpipe.outputs.should_release == 'true'
@@ -171,6 +161,21 @@ jobs:
         id: build
         if: steps.newpipe.outputs.should_release == 'true'
         run: flutter build apk --release
+
+      # Va DESPUÉS de compilar a propósito: android/gradlew está en el
+      # .gitignore de Flutter, así que en el runner no existe hasta que
+      # `flutter build` lo genera. Da igual para lo que importa: el commit y
+      # el release van detrás, así que si la sonda falla no se publica nada.
+      #
+      # Pega contra YouTube de verdad con el mismo código que corre en el
+      # móvil: si NewPipeExtractor cambia su API o deja de extraer, muere aquí.
+      - name: Sonda de extracción contra YouTube
+        id: probe
+        if: steps.newpipe.outputs.should_release == 'true'
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:testReleaseUnitTest --tests "*NewPipeSmokeTest*"
 
       - name: Commit
         if: steps.newpipe.outputs.should_release == 'true'
@@ -225,6 +230,7 @@ jobs:
           - Versión en el repo: ${{ steps.newpipe.outputs.current }}
           - Última upstream: ${{ steps.newpipe.outputs.latest }}
           - Paso de compilación: ${{ steps.build.outcome }}
+          - Sonda de extracción: ${{ steps.probe.outcome }}
           - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
           Lo más probable es que la API de NewPipeExtractor haya cambiado y NewPipeBridge.kt ya no compile. **Necesita revisión manual.**"
