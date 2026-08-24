@@ -91,7 +91,7 @@ class _EditTagsDialogState extends State<_EditTagsDialog> {
   }
 
   Future<void> _changeCover() async {
-    final picked = await pickImage();
+    final picked = await pickImage(context);
     if (picked == null) return;
     final base64Data = picked.contains(',') ? picked.split(',').last : picked;
     setState(() {

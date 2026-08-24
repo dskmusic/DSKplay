@@ -32,6 +32,7 @@ import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/playlist_utils.dart';
 import 'package:dskplay/utilities/song_filtering.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
+import 'package:dskplay/widgets/multi_select.dart';
 import 'package:dskplay/widgets/playlist_cube.dart';
 import 'package:dskplay/widgets/playlist_page/empty_playlist_state.dart';
 import 'package:dskplay/widgets/playlist_page/playlist_header.dart';
@@ -57,14 +58,29 @@ class _UserSongsPageState extends State<UserSongsPage> {
   late final TextEditingController _searchController;
   late final FocusNode _searchFocusNode;
 
+  /// Selección múltiple para borrar: ytid de las canciones marcadas.
+  final _selectedIds = <String>{};
+  bool _selectionMode = false;
+
   // Liked podcast episodes live in the same [userLikedSongsList] as liked
   // songs (see mediaItemToMap), but have their own dedicated screen
   // (FavoritePodcastEpisodesPage) - hidden here so "liked songs" only shows
   // songs, matching what the header count/play/shuffle buttons operate on.
   List _filterLiked(List list) {
     if (widget.page != 'liked') return list;
-    return list.where((s) => s is! Map || s['isPodcastEpisode'] != true).toList();
+    return list
+        .where((s) => s is! Map || s['isPodcastEpisode'] != true)
+        .toList();
   }
+
+  /// La lista que toca según la pestaña, sin buscar ni ordenar.
+  List _rawList() => _filterLiked(
+    widget.page == 'liked'
+        ? userLikedSongsList.value
+        : widget.page == 'offline'
+        ? userOfflineSongs.value
+        : userRecentlyPlayed.value,
+  );
 
   List _getDisplayList(List songsList) {
     var list = filterSongsByQuery(songsList, _searchQueryNotifier.value);
@@ -100,6 +116,15 @@ class _UserSongsPageState extends State<UserSongsPage> {
     final isOfflineSongs = title == context.l10n!.offlineSongs;
 
     return Scaffold(
+      appBar: _selectionMode
+          ? buildSelectionAppBar(
+              context,
+              selectedCount: _selectedIds.length,
+              onClose: _exitSelection,
+              onSelectAll: _selectAll,
+              onDelete: () => _deleteSelected(title),
+            )
+          : null,
       body: Padding(
         padding: commonSingleChildScrollViewPadding,
         child: ValueListenableBuilder(
@@ -188,13 +213,7 @@ class _UserSongsPageState extends State<UserSongsPage> {
                     icon: const Icon(FluentIcons.play_24_filled),
                     label: Text(context.l10n!.play),
                     onPressed: () {
-                      final songsList = _filterLiked(
-                        widget.page == 'liked'
-                            ? userLikedSongsList.value
-                            : widget.page == 'offline'
-                            ? userOfflineSongs.value
-                            : userRecentlyPlayed.value,
-                      );
+                      final songsList = _rawList();
                       var sortedList = songsList;
                       if (isOfflineSongs) {
                         sortedList = _sortOfflineSongsLocal(
@@ -226,13 +245,7 @@ class _UserSongsPageState extends State<UserSongsPage> {
                     icon: const Icon(FluentIcons.arrow_shuffle_24_filled),
                     label: Text(context.l10n!.shuffle),
                     onPressed: () async {
-                      final songs = _filterLiked(
-                        widget.page == 'liked'
-                            ? userLikedSongsList.value
-                            : widget.page == 'offline'
-                            ? userOfflineSongs.value
-                            : userRecentlyPlayed.value,
-                      );
+                      final songs = _rawList();
                       if (songs.isEmpty) return;
                       final shuffled = List<Map>.from(songs.whereType<Map>())
                         ..shuffle();
@@ -295,7 +308,8 @@ class _UserSongsPageState extends State<UserSongsPage> {
       // Half the usual playlist artwork size: these library tabs (recents,
       // liked, offline) show a generic icon, not real artwork, so the
       // normal full-width cube wastes vertical space here.
-      size: (isLandscape ? 250 : screenWidth / commonPlaylistArtworkDivision) / 2,
+      size:
+          (isLandscape ? 250 : screenWidth / commonPlaylistArtworkDivision) / 2,
       cubeIcon: icon,
     );
   }
@@ -309,13 +323,7 @@ class _UserSongsPageState extends State<UserSongsPage> {
     return ValueListenableBuilder<String>(
       valueListenable: _searchQueryNotifier,
       builder: (_, searchQuery, __) {
-        final songsList = _filterLiked(
-          widget.page == 'liked'
-              ? userLikedSongsList.value
-              : widget.page == 'offline'
-              ? userOfflineSongs.value
-              : userRecentlyPlayed.value,
-        );
+        final songsList = _rawList();
         final listKeyScope = 'user_song_${widget.page}';
         final isSearching = searchQuery.isNotEmpty;
         final displayList = _getDisplayList(songsList);
@@ -356,25 +364,32 @@ class _UserSongsPageState extends State<UserSongsPage> {
         Widget buildTile(int index) {
           final song = displayList[index];
           final borderRadius = getItemBorderRadius(index, displayList.length);
-          return _buildSongBar(
-            song,
-            index,
-            borderRadius,
-            playlist,
-            isRecentSong: isRecentlyPlayed,
-            isOfflineSongsList: isOfflineSongs,
-            reorderHandle: canReorder
-                ? ReorderableDragStartListener(
-                    index: index,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Icon(
-                        FluentIcons.re_order_24_regular,
-                        color: colorScheme.onSurfaceVariant,
+          final ytid = song['ytid']?.toString() ?? '';
+          return buildSelectableItem(
+            selectionMode: _selectionMode,
+            selected: _selectedIds.contains(ytid),
+            onToggle: () => _toggleSelection(ytid),
+            onLongPress: () => _startSelection(ytid),
+            child: _buildSongBar(
+              song,
+              index,
+              borderRadius,
+              playlist,
+              isRecentSong: isRecentlyPlayed,
+              isOfflineSongsList: isOfflineSongs,
+              reorderHandle: canReorder
+                  ? ReorderableDragStartListener(
+                      index: index,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Icon(
+                          FluentIcons.re_order_24_regular,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                       ),
-                    ),
-                  )
-                : null,
+                    )
+                  : null,
+            ),
           );
         }
 
@@ -420,6 +435,62 @@ class _UserSongsPageState extends State<UserSongsPage> {
         );
       },
     );
+  }
+
+  void _startSelection(String ytid) {
+    if (ytid.isEmpty) return;
+    setState(() {
+      _selectionMode = true;
+      _selectedIds.add(ytid);
+    });
+  }
+
+  void _toggleSelection(String ytid) {
+    setState(() {
+      if (!_selectedIds.remove(ytid)) _selectedIds.add(ytid);
+    });
+  }
+
+  void _exitSelection() {
+    setState(() {
+      _selectionMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  void _selectAll() {
+    setState(() {
+      _selectedIds.addAll(
+        _getDisplayList(_rawList())
+            .map((song) => song['ytid']?.toString() ?? '')
+            .where((ytid) => ytid.isNotEmpty),
+      );
+    });
+  }
+
+  Future<void> _deleteSelected(String title) async {
+    final ids = _selectedIds.toList();
+    if (ids.isEmpty) return;
+    final message = switch (widget.page) {
+      'offline' => '¿Borrar la descarga de ${ids.length} canciones?',
+      'recents' => '¿Quitar ${ids.length} canciones del historial?',
+      _ => '¿Quitar ${ids.length} canciones de "$title"?',
+    };
+    if (!await confirmMultiDelete(context, message)) return;
+
+    for (final ytid in ids) {
+      switch (widget.page) {
+        case 'offline':
+          await removeSongFromOffline(ytid);
+        case 'recents':
+          await removeFromRecentlyPlayed(ytid);
+        default:
+          await updateSongLikeStatus(ytid, false);
+      }
+    }
+    if (!mounted) return;
+    _exitSelection();
+    showToast(context, '${ids.length} canciones eliminadas');
   }
 
   // A podcast episode's ytid is its internal key, not a real YouTube video

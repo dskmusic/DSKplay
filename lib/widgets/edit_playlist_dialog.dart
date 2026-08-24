@@ -41,7 +41,7 @@ class _EditPlaylistDialogState extends State<EditPlaylistDialog> {
   }
 
   Future<void> _pickImage() async {
-    final result = await pickImage();
+    final result = await pickImage(context);
     if (result != null) {
       setState(() {
         _imageBase64 = result;

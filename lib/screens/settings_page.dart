@@ -68,24 +68,24 @@ class SettingsPage extends StatelessWidget {
         if (!didPop) BottomNavigationPage.handleBackPress(context);
       },
       child: Scaffold(
-      appBar: AppBar(title: Text(context.l10n!.settings)),
-      body: SingleChildScrollView(
-        padding: commonSingleChildScrollViewPadding,
-        child: Column(
-          children: <Widget>[
-            _buildPreferencesSection(
-              context,
-              primaryColor,
-              activatedColor,
-              inactivatedColor,
-            ),
-            if (!offlineMode.value) _buildOnlineFeaturesSection(context),
-            _buildOthersSection(context),
-            const SizedBox(height: 20),
-            const MiniPlayerBottomSpace(),
-          ],
+        appBar: AppBar(title: Text(context.l10n!.settings)),
+        body: SingleChildScrollView(
+          padding: commonSingleChildScrollViewPadding,
+          child: Column(
+            children: <Widget>[
+              _buildPreferencesSection(
+                context,
+                primaryColor,
+                activatedColor,
+                inactivatedColor,
+              ),
+              if (!offlineMode.value) _buildOnlineFeaturesSection(context),
+              _buildOthersSection(context),
+              const SizedBox(height: 20),
+              const MiniPlayerBottomSpace(),
+            ],
+          ),
         ),
-      ),
       ),
     );
   }
@@ -139,7 +139,8 @@ class SettingsPage extends StatelessWidget {
               description: 'Iguala el volumen entre canciones',
               trailing: Switch(
                 value: value,
-                onChanged: (value) => _toggleVolumeNormalization(context, value),
+                onChanged: (value) =>
+                    _toggleVolumeNormalization(context, value),
               ),
             );
           },
@@ -239,7 +240,8 @@ class SettingsPage extends StatelessWidget {
               description: context.l10n!.rememberLastPlaybackDescription,
               trailing: Switch(
                 value: value,
-                onChanged: (value) => _toggleRememberLastPlayback(context, value),
+                onChanged: (value) =>
+                    _toggleRememberLastPlayback(context, value),
               ),
             );
           },
@@ -467,7 +469,11 @@ class SettingsPage extends StatelessWidget {
                 );
               }
             } catch (e, str) {
-              logger.log('Error exporting user data', error: e, stackTrace: str);
+              logger.log(
+                'Error exporting user data',
+                error: e,
+                stackTrace: str,
+              );
               if (context.mounted) {
                 showToast(
                   context,
@@ -502,7 +508,11 @@ class SettingsPage extends StatelessWidget {
                 );
               }
             } catch (e, str) {
-              logger.log('Error importing user data', error: e, stackTrace: str);
+              logger.log(
+                'Error importing user data',
+                error: e,
+                stackTrace: str,
+              );
               if (context.mounted) {
                 showToast(
                   context,
@@ -513,10 +523,29 @@ class SettingsPage extends StatelessWidget {
             }
           },
         ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: CustomBar(
+            'Importar listas de Spotify',
+            FluentIcons.music_note_2_24_filled,
+            description:
+                'Convierte un CSV de Chosic, Exportify o TuneMyMusic'
+                ' en listas propias buscando cada canción en YouTube',
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+            textColor: Theme.of(context).colorScheme.onPrimaryContainer,
+            borderRadius: BorderRadius.circular(15),
+            trailing: Icon(
+              FluentIcons.chevron_right_24_regular,
+              color: Theme.of(context).colorScheme.onPrimaryContainer,
+            ),
+            onTap: () => context.push('/settings/spotify-import'),
+          ),
+        ),
         CustomBar(
           'Importar desde otra app',
           FluentIcons.arrow_import_24_regular,
-          description: 'Migra suscripciones y estadísticas desde un backup'
+          description:
+              'Migra suscripciones y estadísticas desde un backup'
               ' (.db) de AntennaPod',
           borderRadius: commonCustomBarRadiusLast,
           onTap: () => _importFromOtherApp(context),
@@ -525,10 +554,7 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  Future<bool?> _showImportConfirmation(
-    BuildContext context,
-    String message,
-  ) {
+  Future<bool?> _showImportConfirmation(BuildContext context, String message) {
     return showDialog<bool>(
       context: context,
       builder: (dialogContext) => ConfirmationDialog(
@@ -552,7 +578,11 @@ class SettingsPage extends StatelessWidget {
     try {
       preview = analyzeAntennaPodBackup(path);
     } catch (e, str) {
-      logger.log('Error analyzing AntennaPod backup', error: e, stackTrace: str);
+      logger.log(
+        'Error analyzing AntennaPod backup',
+        error: e,
+        stackTrace: str,
+      );
       if (context.mounted) {
         showToast(
           context,
@@ -589,7 +619,11 @@ class SettingsPage extends StatelessWidget {
         showToast(context, '${context.l10n!.restoredSuccess}!');
       }
     } catch (e, str) {
-      logger.log('Error importing AntennaPod backup', error: e, stackTrace: str);
+      logger.log(
+        'Error importing AntennaPod backup',
+        error: e,
+        stackTrace: str,
+      );
       if (context.mounted) {
         showToast(
           context,
@@ -730,10 +764,7 @@ class SettingsPage extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     // Last preset is replaced by a rainbow tile that opens a full color
     // picker instead of a fixed swatch.
-    final presetColors = availableColors.sublist(
-      0,
-      availableColors.length - 1,
-    );
+    final presetColors = availableColors.sublist(0, availableColors.length - 1);
 
     showCustomBottomSheet(
       context,
@@ -1209,5 +1240,4 @@ class SettingsPage extends StatelessWidget {
       },
     );
   }
-
 }

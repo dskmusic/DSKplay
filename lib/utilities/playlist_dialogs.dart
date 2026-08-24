@@ -47,7 +47,7 @@ void showCreatePlaylistDialog(
           final colorScheme = Theme.of(context).colorScheme;
 
           Future<void> _pickImage() async {
-            final result = await pickImage();
+            final result = await pickImage(context);
             if (result != null) {
               dialogSetState(() {
                 imageBase64 = result;

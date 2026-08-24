@@ -38,6 +38,7 @@ import 'package:dskplay/utilities/playlist_dialogs.dart';
 import 'package:dskplay/utilities/playlist_utils.dart';
 import 'package:dskplay/widgets/confirmation_dialog.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
+import 'package:dskplay/widgets/multi_select.dart';
 import 'package:dskplay/widgets/playlist_bar.dart';
 import 'package:dskplay/widgets/section_header.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -50,7 +51,89 @@ class LibraryPage extends StatefulWidget {
   _LibraryPageState createState() => _LibraryPageState();
 }
 
+/// Secciones de la biblioteca con selección múltiple para borrar.
+enum _SelectableSection { customPlaylists, likedPlaylists, likedArtists }
+
 class _LibraryPageState extends State<LibraryPage> {
+  /// Sección en modo selección (null: ninguna). Sólo una a la vez: mezclar
+  /// listas y artistas en el mismo borrado no significa nada.
+  _SelectableSection? _selectionSection;
+  final _selectedIds = <String>{};
+
+  /// Lo que se está mostrando en cada sección seleccionable, para poder
+  /// resolver "seleccionar todo" y el borrado sin recalcular los filtros.
+  final _sectionItems = <_SelectableSection, List>{};
+
+  void _startSelection(_SelectableSection section, String ytid) {
+    if (ytid.isEmpty) return;
+    setState(() {
+      _selectionSection = section;
+      _selectedIds
+        ..clear()
+        ..add(ytid);
+    });
+  }
+
+  void _toggleSelection(String ytid) {
+    setState(() {
+      if (!_selectedIds.remove(ytid)) _selectedIds.add(ytid);
+    });
+  }
+
+  void _exitSelection() {
+    setState(() {
+      _selectionSection = null;
+      _selectedIds.clear();
+    });
+  }
+
+  void _selectAll() {
+    final items = _sectionItems[_selectionSection] ?? const [];
+    setState(() {
+      _selectedIds.addAll(
+        items
+            .map((playlist) => playlist['ytid']?.toString() ?? '')
+            .where((ytid) => ytid.isNotEmpty),
+      );
+    });
+  }
+
+  Future<void> _deleteSelected() async {
+    final section = _selectionSection;
+    final ids = _selectedIds.toList();
+    if (section == null || ids.isEmpty) return;
+
+    final message = switch (section) {
+      _SelectableSection.customPlaylists =>
+        '¿Eliminar ${ids.length} listas de reproducción?',
+      _SelectableSection.likedPlaylists =>
+        '¿Quitar ${ids.length} listas de tus favoritas?',
+      _SelectableSection.likedArtists =>
+        '¿Quitar ${ids.length} artistas de tus favoritos?',
+    };
+    if (!await confirmMultiDelete(context, message)) return;
+
+    final items = _sectionItems[section] ?? const [];
+    for (final id in ids) {
+      if (section == _SelectableSection.customPlaylists) {
+        final playlist = items.firstWhere(
+          (p) => p['ytid']?.toString() == id,
+          orElse: () => null,
+        );
+        if (playlist == null) continue;
+        removeUserPlaylistEntry(playlist);
+        if (offlinePlaylistService.isPlaylistDownloaded(id)) {
+          unawaited(offlinePlaylistService.removeOfflinePlaylist(id));
+        }
+      } else {
+        await updatePlaylistLikeStatus(id, false);
+      }
+    }
+    if (!mounted) return;
+    _exitSelection();
+    showToast(context, '${ids.length} elementos eliminados');
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -129,17 +212,25 @@ class _LibraryPageState extends State<LibraryPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(context.l10n!.library),
-        actions: [
-          IconButton(
-            icon: const Icon(FluentIcons.search_24_regular),
-            tooltip: context.l10n!.search,
-            onPressed: () =>
-                NavigationManager.router.go('/library/search'),
-          ),
-        ],
-      ),
+      appBar: _selectionSection != null
+          ? buildSelectionAppBar(
+              context,
+              selectedCount: _selectedIds.length,
+              onClose: _exitSelection,
+              onSelectAll: _selectAll,
+              onDelete: _deleteSelected,
+            )
+          : AppBar(
+              title: Text(context.l10n!.library),
+              actions: [
+                IconButton(
+                  icon: const Icon(FluentIcons.search_24_regular),
+                  tooltip: context.l10n!.search,
+                  onPressed: () =>
+                      NavigationManager.router.go('/library/search'),
+                ),
+              ],
+            ),
       body: AnimatedBuilder(
         animation: Listenable.merge([
           pinnedPlaylistIds,
@@ -309,7 +400,14 @@ class _LibraryPageState extends State<LibraryPage> {
       }
       if (hasCustomPlaylists) {
         slivers.add(
-          _buildSliverPlaylistList(playlistsNotInFolders, hasItemsBefore: true),
+          _buildSliverPlaylistList(
+            playlistsNotInFolders,
+            hasItemsBefore: true,
+            selectionSection: _SelectableSection.customPlaylists,
+            // Sin conexión la sección muestra sólo una parte de las listas,
+            // así que el índice del arrastre no cuadraría con el guardado.
+            onReorder: isOffline ? null : reorderCustomPlaylist,
+          ),
         );
       }
     }
@@ -383,6 +481,7 @@ class _LibraryPageState extends State<LibraryPage> {
       ),
       _buildSliverPlaylistList(
         likedPlaylists,
+        selectionSection: _SelectableSection.likedPlaylists,
         onReorder: (ytid, newIndex) =>
             reorderLikedLibraryItem(ytid, newIndex, isArtist: false),
       ),
@@ -401,6 +500,7 @@ class _LibraryPageState extends State<LibraryPage> {
       ),
       _buildSliverPlaylistList(
         likedArtists,
+        selectionSection: _SelectableSection.likedArtists,
         onReorder: (ytid, newIndex) =>
             reorderLikedLibraryItem(ytid, newIndex, isArtist: true),
       ),
@@ -413,8 +513,12 @@ class _LibraryPageState extends State<LibraryPage> {
     bool hasItemsAfter = false,
     bool hasItemsBefore = false,
     void Function(String ytid, int newIndex)? onReorder,
+    _SelectableSection? selectionSection,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    if (selectionSection != null) _sectionItems[selectionSection] = playlists;
+    final selectionMode =
+        selectionSection != null && _selectionSection == selectionSection;
 
     Widget buildTile(int index) {
       final playlist = playlists[index];
@@ -425,7 +529,7 @@ class _LibraryPageState extends State<LibraryPage> {
         hasItemsBefore: hasItemsBefore,
         hasItemsAfter: hasItemsAfter,
       );
-      return PlaylistBar(
+      final tile = PlaylistBar(
         key: listItemKey('library_playlist', index, playlist),
         playlist['title'],
         playlistId: playlist['ytid'],
@@ -462,6 +566,16 @@ class _LibraryPageState extends State<LibraryPage> {
                   ),
                 ),
               ),
+      );
+
+      if (selectionSection == null) return tile;
+      final ytid = playlist['ytid']?.toString() ?? '';
+      return buildSelectableItem(
+        selectionMode: selectionMode,
+        selected: _selectedIds.contains(ytid),
+        onToggle: () => _toggleSelection(ytid),
+        onLongPress: () => _startSelection(selectionSection, ytid),
+        child: tile,
       );
     }
 

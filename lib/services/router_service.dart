@@ -36,6 +36,7 @@ import 'package:dskplay/screens/podcasts_page.dart';
 import 'package:dskplay/screens/radio_stations_page.dart';
 import 'package:dskplay/screens/search_page.dart';
 import 'package:dskplay/screens/settings_page.dart';
+import 'package:dskplay/screens/spotify_import_page.dart';
 import 'package:dskplay/screens/time_machine_page.dart';
 import 'package:dskplay/screens/user_songs_page.dart';
 import 'package:dskplay/services/playlist_download_service.dart';
@@ -377,6 +378,11 @@ class NavigationManager {
                 path: 'equalizer',
                 pageBuilder: (context, state) =>
                     _pushPage(child: const EqualizerPage(), state: state),
+              ),
+              GoRoute(
+                path: 'spotify-import',
+                pageBuilder: (context, state) =>
+                    _pushPage(child: const SpotifyImportPage(), state: state),
               ),
             ],
           ),

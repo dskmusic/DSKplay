@@ -22,11 +22,45 @@
 import 'dart:convert';
 
 import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/widgets/pixabay_search_dialog.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 
-Future<String?> pickImage() async {
+/// Pregunta de dónde sacar la imagen (dispositivo o Pixabay) y la devuelve
+/// como data URI base64.
+///
+/// El origen se elige aquí y no en cada diálogo a propósito: así los tres
+/// sitios que piden una imagen (crear lista, editar lista, editar etiquetas)
+/// ganan la búsqueda online sin tocar su interfaz.
+Future<String?> pickImage(BuildContext context) async {
+  final fromDevice = await showModalBottomSheet<bool>(
+    context: context,
+    builder: (sheetContext) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(FluentIcons.phone_24_regular),
+            title: Text(sheetContext.l10n!.pickImageFromDevice),
+            onTap: () => Navigator.of(sheetContext).pop(true),
+          ),
+          ListTile(
+            leading: const Icon(FluentIcons.search_24_regular),
+            title: const Text('Buscar imagen online (Pixabay)'),
+            onTap: () => Navigator.of(sheetContext).pop(false),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  if (fromDevice == null) return null;
+  if (!context.mounted) return null;
+  return fromDevice ? pickImageFromDevice() : showPixabaySearchDialog(context);
+}
+
+Future<String?> pickImageFromDevice() async {
   final result = await FilePicker.pickFiles(
     type: FileType.image,
     withData: true,
@@ -139,11 +173,7 @@ Widget buildImagePickerRow(
           size: 20,
         ),
       ),
-      label: Text(
-        isImagePicked
-            ? context.l10n!.imagePicked
-            : context.l10n!.pickImageFromDevice,
-      ),
+      label: Text(isImagePicked ? context.l10n!.imagePicked : 'Elegir imagen'),
     ),
   );
 }

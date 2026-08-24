@@ -215,20 +215,28 @@ class _PlaylistPageState extends State<PlaylistPage> {
                       valueListenable: _searchQueryNotifier,
                       builder: (context, searchQuery, _) {
                         final sourceList = _getSourceList(searchQuery);
+                        final isRemovable =
+                            _playlist['source'] == 'user-created';
+                        // Arrastrar sólo tiene sentido contra el orden
+                        // guardado de la lista: ni buscando (un subconjunto)
+                        // ni con otra ordenación aplicada encima.
+                        final canReorder =
+                            isRemovable &&
+                            searchQuery.isEmpty &&
+                            _sortType == PlaylistSortType.default_;
                         return SliverPadding(
                           padding: commonListViewBottomPadding,
-                          sliver: SliverList.builder(
-                            itemCount: sourceList.length,
-                            itemBuilder: (context, index) {
-                              final isRemovable =
-                                  _playlist['source'] == 'user-created';
-                              return _buildSongListItem(
-                                sourceList[index],
-                                index,
-                                isRemovable,
-                              );
-                            },
-                          ),
+                          sliver: canReorder
+                              ? _buildReorderableSongList(sourceList)
+                              : SliverList.builder(
+                                  itemCount: sourceList.length,
+                                  itemBuilder: (context, index) =>
+                                      _buildSongListItem(
+                                        sourceList[index],
+                                        index,
+                                        isRemovable,
+                                      ),
+                                ),
                         );
                       },
                     ),
@@ -455,19 +463,17 @@ class _PlaylistPageState extends State<PlaylistPage> {
             ? IconButton.filled(
                 icon: Icon(icon),
                 iconSize: 24,
-                onPressed: () => showRemoveFromLikedPlaylistsDialog(
-                  context,
-                  () {
-                    playlistLikeStatus.value = !playlistLikeStatus.value;
-                    unawaited(
-                      updatePlaylistLikeStatus(
-                        _playlist['ytid'],
-                        playlistLikeStatus.value,
-                        playlistData: _playlist,
-                      ),
-                    );
-                  },
-                ),
+                onPressed: () =>
+                    showRemoveFromLikedPlaylistsDialog(context, () {
+                      playlistLikeStatus.value = !playlistLikeStatus.value;
+                      unawaited(
+                        updatePlaylistLikeStatus(
+                          _playlist['ytid'],
+                          playlistLikeStatus.value,
+                          playlistData: _playlist,
+                        ),
+                      );
+                    }),
                 tooltip: context.l10n!.removeFromLikedSongs,
               )
             : IconButton.filledTonal(
@@ -887,7 +893,50 @@ class _PlaylistPageState extends State<PlaylistPage> {
     }
   }
 
-  Widget _buildSongListItem(dynamic song, int index, bool isRemovable) {
+  Widget _buildReorderableSongList(List<dynamic> songs) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return SliverReorderableList(
+      itemCount: songs.length,
+      onReorderItem: (oldIndex, newIndex) {
+        if (!reorderSongInPlaylist(_playlist, oldIndex, newIndex)) return;
+        setState(() {
+          _originalPlaylistList = List<dynamic>.from(_playlist['list'] as List);
+        });
+      },
+      proxyDecorator: (child, index, animation) => Material(
+        elevation: 8,
+        color: colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
+        shadowColor: colorScheme.shadow.withValues(alpha: 0.35),
+        child: child,
+      ),
+      itemBuilder: (context, index) => KeyedSubtree(
+        key: listItemKey('playlist_song_reorder', index, songs[index]),
+        child: _buildSongListItem(
+          songs[index],
+          index,
+          true,
+          reorderHandle: ReorderableDragStartListener(
+            index: index,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Icon(
+                FluentIcons.re_order_24_regular,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSongListItem(
+    dynamic song,
+    int index,
+    bool isRemovable, {
+    Widget? reorderHandle,
+  }) {
     final sourceList = _getSourceList(_searchQueryNotifier.value);
     final totalItems = sourceList.length;
     final borderRadius = getItemBorderRadius(index, totalItems);
@@ -926,6 +975,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
       borderRadius: borderRadius,
       playlistId: playlistId,
       onRenamed: () => setState(() {}),
+      reorderHandle: reorderHandle,
     );
   }
 }
