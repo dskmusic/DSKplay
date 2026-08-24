@@ -23,6 +23,7 @@ DSK Play is a mobile music player built with Flutter. It streams music on demand
 - [✨ Features](#-features)
   - [🎧 Streaming & search](#-streaming--search)
   - [📃 Playlists & library](#-playlists--library)
+  - [🟩 Spotify import](#-spotify-import)
   - [📻 Radio stations](#-radio-stations)
   - [🎙️ Podcasts](#️-podcasts)
   - [📂 Local files](#-local-files)
@@ -37,7 +38,6 @@ DSK Play is a mobile music player built with Flutter. It streams music on demand
 - [🛠️ Built with](#️-built-with)
 - [🏗️ Building](#️-building)
 - [📄 License](#-license)
-- [🙏 Acknowledgments](#-acknowledgments)
 
 ## ✨ Features
 
@@ -55,6 +55,14 @@ DSK Play is a mobile music player built with Flutter. It streams music on demand
 - Save the current queue as a new playlist on the spot
 - Import/export playlists
 - Share a playlist with another DSK Play install via a link
+
+### 🟩 Spotify import
+
+- Bring your Spotify music over from a CSV export - no Spotify account or API key needed
+- Works with the three usual exporters: [Chosic](https://www.chosic.com/spotify-playlist-exporter/) and [Exportify](https://exportify.net/) for single playlists, [TuneMyMusic](https://www.tunemymusic.com/) for single playlists or your whole library
+- A full-library export comes in as a whole: every playlist is recreated, and your liked songs, liked albums and followed artists land in your favorites
+- Pick the CSV file or just paste its contents - the parser handles all three formats, their different column names and encodings
+- Each track is matched on YouTube in the background: the import survives leaving the screen, minimizing or closing the app, and shows live progress in a notification with its own Cancel button
 
 ### 📻 Radio stations
 
@@ -117,7 +125,7 @@ DSK Play is a mobile music player built with Flutter. It streams music on demand
 
 ### 🌍 Languages
 
-- Available in 21 languages, from the community-driven Musify translations this project builds on
+- Available in 21 languages
 
 ### 🔗 Sharing & integration
 
@@ -145,7 +153,3 @@ flutter build apk --release
 ## 📄 License
 
 DSK Play is free software, licensed under the [GNU General Public License v3.0](LICENSE).
-
-## 🙏 Acknowledgments
-
-Built on top of the open-source [Musify](https://github.com/gokadzev/Musify) project by Valeri Gokadze.
