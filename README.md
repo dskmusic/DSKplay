@@ -11,8 +11,8 @@
   ![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)
   ![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)
 
-  [![Sync YouTube libs](https://github.com/dskmusic/DSKplay/actions/workflows/youtube_sync.yml/badge.svg)](https://github.com/dskmusic/DSKplay/actions/workflows/youtube_sync.yml)
-</div>
+
+  </div>
 
 ---
 
