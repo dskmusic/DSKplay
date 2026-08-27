@@ -234,9 +234,30 @@ Future<({String message, bool success})> importUserDataFromFile(
 bool isArtistPlaylist(dynamic playlist) =>
     PlaylistUtils.isArtistPlaylist(playlist);
 
-List<Map> getLikedPlaylistItems({bool includeArtists = false}) {
+/// Carpetas de un tipo concreto: 'custom' para las de la seccion de listas
+/// propias (las de siempre, sin marca) y 'liked' para las de favoritas.
+List<Map> playlistFoldersOfKind(String kind) => userPlaylistFolders.value
+    .where((folder) => (folder['kind']?.toString() ?? 'custom') == kind)
+    .toList();
+
+/// ytids que ya viven dentro de una carpeta de [kind], para no repetirlos en
+/// el listado principal de esa seccion.
+Set<String> playlistIdsInFolders(String kind) => {
+  for (final folder in playlistFoldersOfKind(kind))
+    for (final playlist in (folder['playlists'] as List? ?? []))
+      if (playlist['ytid'] != null) playlist['ytid'].toString(),
+};
+
+List<Map> getLikedPlaylistItems({
+  bool includeArtists = false,
+  bool includeInFolders = false,
+}) {
+  final inFolders = includeInFolders
+      ? const <String>{}
+      : playlistIdsInFolders('liked');
   return userLikedPlaylists.value
       .where((playlist) => includeArtists || !isArtistPlaylist(playlist))
+      .where((playlist) => !inFolders.contains(playlist['ytid']?.toString()))
       .toList();
 }
 
@@ -268,10 +289,15 @@ void reorderLikedLibraryItem(
   int newIndex, {
   required bool isArtist,
 }) {
+  final inFolders = isArtist
+      ? const <String>{}
+      : playlistIdsInFolders('liked');
   final full = List<Map>.from(userLikedPlaylists.value);
   final matchingIndices = <int>[
     for (var i = 0; i < full.length; i++)
-      if (isArtistPlaylist(full[i]) == isArtist) i,
+      if (isArtistPlaylist(full[i]) == isArtist &&
+          !inFolders.contains(full[i]['ytid']?.toString()))
+        i,
   ];
   final subList = [for (final i in matchingIndices) full[i]];
 
@@ -878,12 +904,16 @@ bool _removePlaylistFromLikedPlaylists(String playlistId) {
   return true;
 }
 
-String createPlaylistFolder(String folderName, [BuildContext? context]) {
+String createPlaylistFolder(
+  String folderName, [
+  BuildContext? context,
+  String kind = 'custom',
+]) {
   if (folderName.trim().isEmpty) {
     return context?.l10n?.enterFolderName ?? 'Please enter a folder name';
   }
 
-  final exists = userPlaylistFolders.value.any(
+  final exists = playlistFoldersOfKind(kind).any(
     (folder) =>
         folder['name'].toString().toLowerCase() ==
         folderName.trim().toLowerCase(),
@@ -896,6 +926,7 @@ String createPlaylistFolder(String folderName, [BuildContext? context]) {
   final newFolder = {
     'id': DateTime.now().millisecondsSinceEpoch.toString(),
     'name': folderName.trim(),
+    'kind': kind,
     'playlists': <Map>[],
     'createdAt': DateTime.now().millisecondsSinceEpoch,
   };
@@ -942,11 +973,77 @@ String renamePlaylistFolder(
   return context?.l10n?.folderUpdated ?? 'Folder updated successfully';
 }
 
+/// Cambia la caratula de la carpeta [folderId]. Una cadena vacia la quita y
+/// la fila vuelve al icono de carpeta.
+void setPlaylistFolderImage(String folderId, String image) {
+  final updatedFolders = List<Map>.from(userPlaylistFolders.value);
+  final folderIndex = updatedFolders.indexWhere((f) => f['id'] == folderId);
+  if (folderIndex == -1) return;
+
+  if (image.trim().isEmpty) {
+    updatedFolders[folderIndex].remove('image');
+  } else {
+    updatedFolders[folderIndex]['image'] = image.trim();
+  }
+  userPlaylistFolders.value = updatedFolders;
+
+  unawaited(
+    addOrUpdateData<List>('user', 'playlistFolders', userPlaylistFolders.value),
+  );
+}
+
+/// Carpeta en la que esta guardada una lista, si esta en alguna.
+Map? findFolderForPlaylist(String? playlistId, {String? kind}) {
+  if (playlistId == null || playlistId.isEmpty) return null;
+  for (final folder in userPlaylistFolders.value) {
+    if (kind != null && folder['kind'] != kind) continue;
+    final playlists = folder['playlists'] as List? ?? const [];
+    if (playlists.any((p) => p is Map && p['ytid']?.toString() == playlistId)) {
+      return folder;
+    }
+  }
+  return null;
+}
+
+/// Ultima cancion escuchada de cada lista: `{idDeLista: ytid}`.
+/// ponytail: guarda la cancion, no el segundo exacto; para reanudar dentro de
+/// la pista habria que ir persistiendo la posicion cada pocos segundos.
+final Map<String, String> _playlistProgress = Map<String, String>.from(
+  Hive.box('user').get('playlistProgress', defaultValue: <String, String>{}),
+);
+
+void rememberPlaylistProgress(String? playlistId, String? ytid) {
+  if (playlistId == null || playlistId.isEmpty) return;
+  if (ytid == null || ytid.isEmpty) return;
+  if (_playlistProgress[playlistId] == ytid) return;
+  _playlistProgress[playlistId] = ytid;
+  unawaited(Hive.box('user').put('playlistProgress', _playlistProgress));
+}
+
+/// Indice por el que reanudar una lista, o 0 si nunca se escucho (o si la
+/// cancion guardada ya no esta en ella).
+int resumePlaylistIndex(Map? playlist) {
+  final playlistId = playlist?['ytid']?.toString();
+  final ytid = playlistId == null ? null : _playlistProgress[playlistId];
+  if (ytid == null) return 0;
+  final songs = playlist?['list'] as List? ?? const [];
+  final index = songs.indexWhere(
+    (s) => s is Map && s['ytid']?.toString() == ytid,
+  );
+  return index < 0 ? 0 : index;
+}
+
+/// Mueve [playlist] a la carpeta [folderId] (o la saca, con `null`).
+///
+/// Con [liked] la lista solo cambia de carpeta: sigue en [userLikedPlaylists] y
+/// no se toca ni la seccion de listas propias ni la de anadidas, que es lo que
+/// hace falta para las carpetas de favoritas.
 String movePlaylistToFolder(
   Map playlist,
   String? folderId,
-  BuildContext context,
-) {
+  BuildContext context, {
+  bool liked = false,
+}) {
   try {
     final updatedFolders = List<Map>.from(userPlaylistFolders.value);
     final updatedCustomPlaylists = List<Map>.from(userCustomPlaylists.value);
@@ -966,11 +1063,24 @@ String movePlaylistToFolder(
       );
 
       if (targetFolder.isNotEmpty) {
+        // De una favorita basta con lo que pinta la fila: la copia buena, con
+        // sus canciones, se queda en userLikedPlaylists.
+        final entry = liked
+            ? <String, dynamic>{
+                'ytid': playlist['ytid'],
+                'title': playlist['title'],
+                'image': playlist['image'],
+                'source': playlist['source'],
+                'isAlbum': playlist['isAlbum'],
+              }
+            : playlist;
         final folderPlaylists = List<Map>.from(targetFolder['playlists'] ?? [])
-          ..add(playlist);
+          ..add(entry);
         targetFolder['playlists'] = folderPlaylists;
 
-        if (playlist['source'] == 'user-created') {
+        if (liked) {
+          // Nada que quitar: las favoritas se filtran por pertenencia.
+        } else if (playlist['source'] == 'user-created') {
           updatedCustomPlaylists.removeWhere(
             (p) => p['ytid'] == playlist['ytid'],
           );
@@ -983,7 +1093,7 @@ String movePlaylistToFolder(
         );
         return context.l10n!.error;
       }
-    } else {
+    } else if (!liked) {
       if (playlist['source'] == 'user-created') {
         if (!updatedCustomPlaylists.any((p) => p['ytid'] == playlist['ytid'])) {
           updatedCustomPlaylists.add(playlist);
@@ -1035,7 +1145,11 @@ String deletePlaylistFolder(String folderId, [BuildContext? context]) {
     );
 
     if (folderToDelete.isNotEmpty) {
-      final folderPlaylists = List<Map>.from(folderToDelete['playlists'] ?? []);
+      final isLikedFolder =
+          (folderToDelete['kind']?.toString() ?? 'custom') == 'liked';
+      final folderPlaylists = isLikedFolder
+          ? const <Map>[]
+          : List<Map>.from(folderToDelete['playlists'] ?? []);
       final updatedCustomPlaylists = List<Map>.from(userCustomPlaylists.value);
       final updatedYoutubePlaylists = List<String>.from(userPlaylists.value);
 
@@ -1092,6 +1206,51 @@ String deletePlaylistFolder(String folderId, [BuildContext? context]) {
   }
 }
 
+/// Reordena una carpeta dentro de su propia seccion ([kind]): las del otro
+/// tipo se quedan donde estaban en la lista guardada.
+void reorderPlaylistFolder(
+  String folderId,
+  int newIndex, {
+  String kind = 'custom',
+}) {
+  final full = List<Map>.from(userPlaylistFolders.value);
+  final matchingIndices = <int>[
+    for (var i = 0; i < full.length; i++)
+      if ((full[i]['kind']?.toString() ?? 'custom') == kind) i,
+  ];
+  final subList = [for (final i in matchingIndices) full[i]];
+
+  final oldIndex = subList.indexWhere((f) => f['id']?.toString() == folderId);
+  if (oldIndex == -1) return;
+
+  final target = newIndex.clamp(0, subList.length - 1);
+  subList.insert(target, subList.removeAt(oldIndex));
+
+  for (var i = 0; i < matchingIndices.length; i++) {
+    full[matchingIndices[i]] = subList[i];
+  }
+
+  userPlaylistFolders.value = full;
+  unawaited(addOrUpdateData<List>('user', 'playlistFolders', full));
+}
+
+/// Reordena una lista dentro de la carpeta que la contiene.
+void reorderPlaylistInFolder(String folderId, String ytid, int newIndex) {
+  final folders = List<Map>.from(userPlaylistFolders.value);
+  final folderIndex = folders.indexWhere((f) => f['id']?.toString() == folderId);
+  if (folderIndex == -1) return;
+
+  final items = List<Map>.from(folders[folderIndex]['playlists'] ?? []);
+  final oldIndex = items.indexWhere((p) => p['ytid']?.toString() == ytid);
+  if (oldIndex == -1) return;
+
+  items.insert(newIndex.clamp(0, items.length - 1), items.removeAt(oldIndex));
+  folders[folderIndex]['playlists'] = items;
+
+  userPlaylistFolders.value = folders;
+  unawaited(addOrUpdateData<List>('user', 'playlistFolders', folders));
+}
+
 List<Map> getPlaylistsInFolder(String folderId) {
   try {
     final folder = userPlaylistFolders.value.firstWhere(
@@ -1127,6 +1286,185 @@ List<Map> getPlaylistsNotInFolders() {
       })
       .toList()
       .cast<Map>();
+}
+
+/// Terminos con los que se piden sugerencias a YouTube. Se rota uno al azar en
+/// cada refresco para que la portada no muestre siempre las mismas listas.
+const _suggestionSeeds = [
+  'top hits',
+  'pop hits',
+  'rock classics',
+  'indie mix',
+  'hip hop essentials',
+  'rnb soul mix',
+  'electronic dance mix',
+  'latin hits',
+  'jazz essentials',
+  'classical masterpieces',
+  'metal anthems',
+  'country roads mix',
+  'lofi chill beats',
+  'workout motivation mix',
+  'focus study music',
+  'road trip songs',
+  'party anthems',
+  'acoustic covers',
+  'reggae vibes',
+  '80s greatest hits',
+  '90s throwback',
+  '2000s hits',
+  'k-pop hits',
+  'anime openings',
+  'movie soundtracks',
+  'sleep relax music',
+  'summer vibes',
+  'blues legends',
+  'punk rock mix',
+  'french pop',
+  'spanish pop',
+  'flamenco esencial',
+  'rock en espanol',
+  'reggaeton hits',
+  'salsa clasica',
+  'bachata mix',
+  'cumbia mix',
+  'tango esencial',
+  'bossa nova',
+  'samba brasil',
+  'afrobeats hits',
+  'amapiano mix',
+  'italian pop',
+  'german pop',
+  'nordic pop',
+  'balkan hits',
+  'arabic hits',
+  'bollywood hits',
+  'j-pop hits',
+  'city pop',
+  'mandopop hits',
+  'turkish pop',
+  'greek hits',
+  'celtic folk',
+  'gospel classics',
+  'soul motown',
+  'funk grooves',
+  'disco classics',
+  'house classics',
+  'techno mix',
+  'trance classics',
+  'drum and bass mix',
+  'dubstep mix',
+  'synthwave mix',
+  'ambient soundscapes',
+  'piano covers',
+  'guitar instrumental',
+  'violin classical',
+  'opera arias',
+  'film scores epic',
+  'video game music',
+  'anime lofi',
+  'karaoke hits',
+  'acapella mix',
+  'singer songwriter',
+  'folk americana',
+  'bluegrass mix',
+  'hard rock anthems',
+  'progressive rock',
+  'psychedelic rock',
+  'grunge 90s',
+  'emo classics',
+  'pop punk hits',
+  'alternative rock mix',
+  'shoegaze dream pop',
+  'post rock',
+  'trap hits',
+  'drill uk',
+  'old school hip hop',
+  'jazz rap',
+  'chillhop study',
+  'meditation music',
+  'yoga relax',
+  'nature sounds sleep',
+  'christmas classics',
+  'halloween songs',
+  'wedding songs',
+  'love ballads',
+  'breakup songs',
+  'feel good songs',
+  'sad songs',
+  'rainy day mix',
+  'morning coffee jazz',
+  'sunset chill',
+  'beach party mix',
+  'running playlist',
+  'gym hardstyle',
+  'kids songs',
+  'lullabies',
+  'oldies 60s',
+  'oldies 70s',
+  'one hit wonders',
+  'viral tiktok songs',
+  'billboard hot 100',
+  'new music friday',
+  'indie folk',
+  'country pop hits',
+  'latin trap',
+  'k-drama ost',
+  'lofi hip hop radio',
+  'deep focus',
+  'instrumental study',
+  'jazz piano bar',
+];
+
+/// Busca en YouTube listas para la seccion de sugeridas. Devuelve vacio ante
+/// cualquier fallo para que la portada caiga en las listas locales.
+Future<List<Map>> _fetchSuggestedPlaylists(int playlistsNum) async {
+  final seed = (List<String>.from(_suggestionSeeds)..shuffle()).first;
+  final cacheKey = 'suggestions_${seed.replaceAll(' ', '_')}';
+
+  final cached = await getData(
+    'cache',
+    cacheKey,
+    cachingDuration: const Duration(days: 1),
+  );
+  if (cached is List && cached.isNotEmpty) {
+    return _pickSuggestions(
+      cached.whereType<Map>().map(Map<String, dynamic>.from).toList(),
+      playlistsNum,
+    );
+  }
+
+  try {
+    final found = NewPipe.playlistsOf(
+      await NewPipe.search(seed, filters: const [SearchFilter.playlists]),
+    );
+    final mapped = found
+        .where((p) => p.id.isNotEmpty && p.title.isNotEmpty)
+        .map(
+          (p) => <String, dynamic>{
+            'ytid': p.id,
+            'title': p.title,
+            'image': p.thumbnail,
+            'source': 'youtube',
+            'list': [],
+          },
+        )
+        .toList();
+    if (mapped.isEmpty) return [];
+    await addOrUpdateData('cache', cacheKey, mapped);
+    return _pickSuggestions(mapped, playlistsNum);
+  } catch (e, st) {
+    logger.log('Error fetching suggested playlists:', error: e, stackTrace: st);
+    return [];
+  }
+}
+
+List<Map> _pickSuggestions(List<Map<String, dynamic>> found, int playlistsNum) {
+  final picked = (List<Map<String, dynamic>>.from(found)..shuffle())
+      .take(playlistsNum)
+      .toList();
+  picked.forEach(_updateOnlineCache);
+  return picked;
 }
 
 Future<List> getPlaylists({
@@ -1216,6 +1554,8 @@ Future<List> getPlaylists({
   }
 
   if (playlistsNum != null && query == null) {
+    final online = await _fetchSuggestedPlaylists(playlistsNum);
+    if (online.isNotEmpty) return online;
     final suggestedPlaylists = List<Map>.from(playlists)..shuffle();
     return suggestedPlaylists.take(playlistsNum).toList();
   }

@@ -45,6 +45,7 @@ import 'package:dskplay/widgets/fullscreen_artwork_viewer.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:dskplay/widgets/playlist_cube.dart';
 import 'package:dskplay/widgets/playlist_page/empty_playlist_state.dart';
+import 'package:dskplay/widgets/playlist_page/playlist_action_buttons.dart';
 import 'package:dskplay/widgets/playlist_page/playlist_header.dart';
 import 'package:dskplay/widgets/playlist_page/search_bar_section.dart';
 import 'package:dskplay/widgets/song_bar.dart';
@@ -96,6 +97,10 @@ class _PlaylistPageState extends State<PlaylistPage> {
   );
   late bool _sortAscending = playlistSortAscending;
 
+  // Desplazamiento hasta la cancion que suena al entrar desde el reproductor.
+  final _scrollController = ScrollController();
+  final _headerKey = GlobalKey();
+
   // Search
   final ValueNotifier<String> _searchQueryNotifier = ValueNotifier('');
   late final TextEditingController _searchController;
@@ -128,6 +133,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
     _searchController.dispose();
     _searchFocusNode.dispose();
     _searchQueryNotifier.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -192,8 +198,37 @@ class _PlaylistPageState extends State<PlaylistPage> {
       _isInitializingPlaylist = false;
       if (mounted) {
         setState(() {});
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _scrollToNowPlaying(),
+        );
       }
     }
+  }
+
+  /// Si lo que suena salio de esta lista, deja la cancion activa a la vista.
+  /// ponytail: altura de fila estimada (SongBar = 52 de caratula + 20 de
+  /// margen); si algun dia la fila cambia de alto, ajustar la constante.
+  void _scrollToNowPlaying() {
+    if (!mounted || !_scrollController.hasClients) return;
+    final source = nowPlayingSource.value;
+    if (source?['ytid']?.toString() != _resolvedPlaylistId) return;
+
+    final playingId = nowPlayingYtid.value;
+    if (playingId == null || playingId.isEmpty) return;
+
+    final list = _getSourceList(_searchQueryNotifier.value);
+    final index = list.indexWhere(
+      (s) => s is Map && s['ytid']?.toString() == playingId,
+    );
+    // Las primeras filas ya se ven con la cabecera: no merece la pena saltar.
+    if (index < 3) return;
+
+    const rowHeight = 72.0;
+    final targetOffset =
+        (_headerKey.currentContext?.size?.height ?? 0.0) + index * rowHeight;
+    _scrollController.jumpTo(
+      targetOffset.clamp(0.0, _scrollController.position.maxScrollExtent),
+    );
   }
 
   @override
@@ -208,8 +243,14 @@ class _PlaylistPageState extends State<PlaylistPage> {
               )
             : _playlist != null
             ? CustomScrollView(
+                controller: _scrollController,
                 slivers: [
-                  SliverToBoxAdapter(child: _buildHeaderSection()),
+                  SliverToBoxAdapter(
+                    child: KeyedSubtree(
+                      key: _headerKey,
+                      child: _buildHeaderSection(),
+                    ),
+                  ),
                   if ((_playlist['list'] as List? ?? const []).isNotEmpty) ...[
                     ValueListenableBuilder<String>(
                       valueListenable: _searchQueryNotifier,
@@ -277,7 +318,9 @@ class _PlaylistPageState extends State<PlaylistPage> {
         : _playlist;
     final cube = PlaylistCube(
       playlist,
-      size: isLandscape ? 250 : screenWidth / commonPlaylistArtworkDivision,
+      size:
+          (isLandscape ? 250 : screenWidth / commonPlaylistArtworkDivision) *
+          compactHeaderScale,
       cubeIcon: widget.cubeIcon,
       showTypeLabel: false,
     );
@@ -298,7 +341,6 @@ class _PlaylistPageState extends State<PlaylistPage> {
   Widget _buildHeaderSection() {
     final songsLength = (_playlist['list'] as List? ?? const []).length;
     final isUserCreated = _playlist['source'] == 'user-created';
-    final colorScheme = Theme.of(context).colorScheme;
     final playlistTitle = widget.isArtist
         ? normalizeArtistDisplayTitle(_playlist['title']?.toString() ?? '')
         : _playlist['title']?.toString() ?? '';
@@ -307,6 +349,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
         (widget.playlistId != null && !isUserCreated && !offlineMode.value) ||
         !offlineMode.value ||
         isUserCreated;
+    final isCompact = compactMode.value;
+    final showCompactPlayback = isCompact && songsLength > 0;
 
     return Column(
       children: [
@@ -317,53 +361,20 @@ class _PlaylistPageState extends State<PlaylistPage> {
           isAlbum: _playlist['isAlbum'] == true,
           isArtist: widget.isArtist,
         ),
-        if (songsLength > 0) ...[
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Row(
-              children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    icon: const Icon(FluentIcons.play_24_filled),
-                    label: Text(context.l10n!.play),
-                    onPressed: () => audioHandler.playPlaylistSong(
-                      playlist: _playlist,
-                      songIndex: 0,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: colorScheme.secondaryContainer,
-                      foregroundColor: colorScheme.onSecondaryContainer,
-                    ),
-                    icon: const Icon(FluentIcons.arrow_shuffle_24_filled),
-                    label: Text(context.l10n!.shuffle),
-                    onPressed: () async {
-                      final songs = _playlist['list'] as List? ?? [];
-                      if (songs.isEmpty) return;
-                      final shuffled = List<Map>.from(songs.whereType<Map>())
-                        ..shuffle();
-                      await audioHandler.addPlaylistToQueue(
-                        shuffled,
-                        replace: true,
-                        startIndex: 0,
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-        if (hasSecondaryActions) ...[
+        if (songsLength > 0 && !isCompact)
+          PlaylistActionButtons(onPlay: _playAll, onShuffle: _shufflePlaylist),
+        if (hasSecondaryActions || showCompactPlayback) ...[
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             spacing: 5,
             children: [
+              if (showCompactPlayback)
+                PlaylistActionButtons(
+                  compact: true,
+                  onPlay: _playAll,
+                  onShuffle: _shufflePlaylist,
+                ),
               if (widget.playlistId != null &&
                   !isUserCreated &&
                   !offlineMode.value)
@@ -425,7 +436,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
   Widget _buildShareButton() {
     return IconButton.filledTonal(
       icon: const Icon(FluentIcons.share_24_regular),
-      iconSize: 24,
+      iconSize: playlistActionIconSize,
+      style: playlistActionButtonStyle,
       onPressed: () async {
         try {
           final encodedPlaylist = PlaylistSharingService.encodePlaylist(
@@ -462,7 +474,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
         return value
             ? IconButton.filled(
                 icon: Icon(icon),
-                iconSize: 24,
+                iconSize: playlistActionIconSize,
+                style: playlistActionButtonStyle,
                 onPressed: () =>
                     showRemoveFromLikedPlaylistsDialog(context, () {
                       playlistLikeStatus.value = !playlistLikeStatus.value;
@@ -478,7 +491,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
               )
             : IconButton.filledTonal(
                 icon: Icon(icon),
-                iconSize: 24,
+                iconSize: playlistActionIconSize,
+                style: playlistActionButtonStyle,
                 onPressed: () {
                   playlistLikeStatus.value = !playlistLikeStatus.value;
                   unawaited(
@@ -498,7 +512,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
   Widget _buildSyncButton() {
     return IconButton.filledTonal(
       icon: const Icon(FluentIcons.arrow_sync_24_filled),
-      iconSize: 24,
+      iconSize: playlistActionIconSize,
+      style: playlistActionButtonStyle,
       onPressed: _handleSyncPlaylist,
       tooltip: context.l10n!.update,
     );
@@ -507,7 +522,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
   Widget _buildAddToPlaylistButton() {
     return IconButton.filledTonal(
       icon: const Icon(FluentIcons.album_add_24_regular),
-      iconSize: 24,
+      iconSize: playlistActionIconSize,
+      style: playlistActionButtonStyle,
       onPressed: _handleAddFullPlaylistToPlaylist,
       tooltip: context.l10n!.addToPlaylist,
     );
@@ -529,7 +545,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
   Widget _buildEditButton() {
     return IconButton.filledTonal(
       icon: const Icon(FluentIcons.edit_24_filled),
-      iconSize: 24,
+      iconSize: playlistActionIconSize,
+      style: playlistActionButtonStyle,
       onPressed: () async {
         final result = await showDialog<Map?>(
           context: context,
@@ -629,7 +646,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
                   FluentIcons.cloud_off_24_filled,
                   color: Theme.of(context).colorScheme.onPrimary,
                 ),
-                iconSize: 18,
+                iconSize: playlistActionIconSize,
+                style: playlistActionButtonStyle,
                 onPressed: () => _showRemoveOfflineDialog(playlistId),
                 tooltip: context.l10n!.removeOffline,
               );
@@ -645,14 +663,14 @@ class _PlaylistPageState extends State<PlaylistPage> {
 
                 if (isDownloading) {
                   return SizedBox(
-                    width: 40,
-                    height: 40,
+                    width: 42,
+                    height: 42,
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
                         SizedBox(
-                          width: 34,
-                          height: 34,
+                          width: 36,
+                          height: 36,
                           child: CircularProgressIndicator(
                             value: progress.isCancelled
                                 ? null
@@ -684,7 +702,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
 
                 return IconButton.filledTonal(
                   icon: const Icon(FluentIcons.cloud_arrow_down_24_filled),
-                  iconSize: 18,
+                  iconSize: playlistActionIconSize,
+                  style: playlistActionButtonStyle,
                   onPressed: () => offlinePlaylistService.downloadPlaylist(
                     context,
                     _playlist,
@@ -696,6 +715,25 @@ class _PlaylistPageState extends State<PlaylistPage> {
           },
         );
       },
+    );
+  }
+
+  void _playAll() {
+    // Sigue donde se dejo la lista; 0 si es la primera vez.
+    audioHandler.playPlaylistSong(
+      playlist: _playlist,
+      songIndex: resumePlaylistIndex(_playlist),
+    );
+  }
+
+  Future<void> _shufflePlaylist() async {
+    final songs = _playlist['list'] as List? ?? [];
+    if (songs.isEmpty) return;
+    final shuffled = List<Map>.from(songs.whereType<Map>())..shuffle();
+    await audioHandler.addPlaylistToQueue(
+      shuffled,
+      replace: true,
+      startIndex: 0,
     );
   }
 
@@ -728,8 +766,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
           customBorder: const CircleBorder(),
           onTap: onPressed,
           child: SizedBox(
-            width: 40,
-            height: 40,
+            width: 42,
+            height: 42,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,

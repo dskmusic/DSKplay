@@ -25,6 +25,7 @@ import 'package:dskplay/services/playlist_download_service.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/offline_playlist_dialogs.dart';
+import 'package:dskplay/widgets/playlist_page/playlist_action_buttons.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 
@@ -82,7 +83,8 @@ class _PlaylistDownloadButtonState extends State<PlaylistDownloadButton> {
                 FluentIcons.cloud_off_24_filled,
                 color: Theme.of(context).colorScheme.onPrimary,
               ),
-              iconSize: 24,
+              iconSize: playlistActionIconSize,
+              style: playlistActionButtonStyle,
               onPressed: () =>
                   showRemoveOfflinePlaylistDialog(context, playlistId),
               tooltip: context.l10n!.removeOffline,
@@ -102,8 +104,8 @@ class _PlaylistDownloadButtonState extends State<PlaylistDownloadButton> {
 
               if (_isResolving) {
                 return const SizedBox(
-                  width: 48,
-                  height: 48,
+                  width: 42,
+                  height: 42,
                   child: Center(
                     child: SizedBox(
                       width: 24,
@@ -116,7 +118,8 @@ class _PlaylistDownloadButtonState extends State<PlaylistDownloadButton> {
 
               return IconButton.filledTonal(
                 icon: const Icon(FluentIcons.cloud_arrow_down_24_filled),
-                iconSize: 24,
+                iconSize: playlistActionIconSize,
+                style: playlistActionButtonStyle,
                 onPressed: () => _download(context),
                 tooltip: context.l10n!.downloadPlaylist,
               );
@@ -129,14 +132,14 @@ class _PlaylistDownloadButtonState extends State<PlaylistDownloadButton> {
 
   Widget _buildProgress(BuildContext context, DownloadProgress progress) {
     return SizedBox(
-      width: 48,
-      height: 48,
+      width: 42,
+      height: 42,
       child: Stack(
         alignment: Alignment.center,
         children: [
           SizedBox(
-            width: 40,
-            height: 40,
+            width: 36,
+            height: 36,
             child: CircularProgressIndicator(
               value: progress.isCancelled ? null : progress.progress,
               strokeWidth: 3,

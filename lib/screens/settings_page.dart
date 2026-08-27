@@ -154,6 +154,20 @@ class SettingsPage extends StatelessWidget {
           ),
         ),
         ValueListenableBuilder<bool>(
+          valueListenable: compactMode,
+          builder: (_, value, __) {
+            return CustomBar(
+              'Modo compacto',
+              FluentIcons.arrow_minimize_24_regular,
+              description: 'Menos espacio por elemento, mas contenido a la vez',
+              trailing: Switch(
+                value: value,
+                onChanged: (value) => _toggleCompactMode(context, value),
+              ),
+            );
+          },
+        ),
+        ValueListenableBuilder<bool>(
           valueListenable: predictiveBack,
           builder: (_, value, __) {
             return CustomBar(
@@ -215,6 +229,21 @@ class SettingsPage extends StatelessWidget {
           },
         ),
         ValueListenableBuilder<bool>(
+          valueListenable: includePodcastsInSuggestions,
+          builder: (_, value, __) {
+            return CustomBar(
+              context.l10n!.includePodcastsInSuggestions,
+              FluentIcons.mic_24_regular,
+              description: context.l10n!.includePodcastsInSuggestionsDescription,
+              trailing: Switch(
+                value: value,
+                onChanged: (value) =>
+                    _toggleIncludePodcastsInSuggestions(context, value),
+              ),
+            );
+          },
+        ),
+        ValueListenableBuilder<bool>(
           valueListenable: showArtistExtras,
           builder: (_, value, __) {
             return CustomBar(
@@ -256,6 +285,37 @@ class SettingsPage extends StatelessWidget {
                   ? 'Nunca se cierra sola'
                   : 'Se cierra tras $value min inactiva',
               onTap: () => _showAutoCloseAfterPausePicker(context),
+            );
+          },
+        ),
+        ValueListenableBuilder<bool>(
+          valueListenable: sleepTimerFadeEnabled,
+          builder: (_, value, __) {
+            return CustomBar(
+              context.l10n!.sleepTimerFade,
+              FluentIcons.arrow_trending_down_24_regular,
+              description: context.l10n!.sleepTimerFadeDescription,
+              trailing: Switch(
+                value: value,
+                onChanged: (value) => _toggleSleepTimerFade(context, value),
+              ),
+            );
+          },
+        ),
+        ValueListenableBuilder<bool>(
+          valueListenable: sleepTimerFadeEnabled,
+          builder: (_, fadeEnabled, __) {
+            if (!fadeEnabled) return const SizedBox.shrink();
+            return ValueListenableBuilder<int>(
+              valueListenable: sleepTimerFadeSeconds,
+              builder: (_, seconds, __) {
+                return CustomBar(
+                  context.l10n!.sleepTimerFadeDuration,
+                  FluentIcons.timer_24_regular,
+                  description: '$seconds s',
+                  onTap: () => _showSleepTimerFadePicker(context),
+                );
+              },
             );
           },
         ),
@@ -1030,6 +1090,41 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
+  void _toggleSleepTimerFade(BuildContext context, bool value) {
+    addOrUpdateData<bool>('settings', 'sleepTimerFadeEnabled', value);
+    sleepTimerFadeEnabled.value = value;
+    showToast(context, context.l10n!.settingChangedMsg);
+  }
+
+  void _showSleepTimerFadePicker(BuildContext context) {
+    const options = [5, 10, 20, 30, 60];
+
+    showCustomBottomSheet(
+      context,
+      ListView.builder(
+        shrinkWrap: true,
+        physics: const BouncingScrollPhysics(),
+        padding: commonListViewBottomPadding,
+        itemCount: options.length,
+        itemBuilder: (context, index) {
+          final seconds = options[index];
+
+          return BottomSheetBar(
+            '$seconds s',
+            () {
+              addOrUpdateData<int>('settings', 'sleepTimerFadeSeconds', seconds);
+              sleepTimerFadeSeconds.value = seconds;
+              showToast(context, context.l10n!.settingChangedMsg);
+              Navigator.pop(context);
+            },
+            sleepTimerFadeSeconds.value == seconds,
+            icon: FluentIcons.arrow_trending_down_24_regular,
+          );
+        },
+      ),
+    );
+  }
+
   void _showAutoCloseAfterPausePicker(BuildContext context) {
     const options = [0, 1, 5, 10, 15, 30, 60];
     const labels = [
@@ -1135,6 +1230,12 @@ class SettingsPage extends StatelessWidget {
     showToast(context, context.l10n!.settingChangedMsg);
   }
 
+  void _toggleCompactMode(BuildContext context, bool value) {
+    addOrUpdateData<bool>('settings', 'compactMode', value);
+    compactMode.value = value;
+    showToast(context, context.l10n!.settingChangedMsg);
+  }
+
   void _togglePredictiveBack(BuildContext context, bool value) {
     addOrUpdateData<bool>('settings', 'predictiveBack', value);
     predictiveBack.value = value;
@@ -1180,6 +1281,12 @@ class SettingsPage extends StatelessWidget {
   void _toggleIncludePodcastsInTimeMachine(BuildContext context, bool value) {
     addOrUpdateData<bool>('settings', 'includePodcastsInTimeMachine', value);
     includePodcastsInTimeMachine.value = value;
+    showToast(context, context.l10n!.settingChangedMsg);
+  }
+
+  void _toggleIncludePodcastsInSuggestions(BuildContext context, bool value) {
+    addOrUpdateData<bool>('settings', 'includePodcastsInSuggestions', value);
+    includePodcastsInSuggestions.value = value;
     showToast(context, context.l10n!.settingChangedMsg);
   }
 

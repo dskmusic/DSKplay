@@ -20,6 +20,7 @@
  */
 
 import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/widgets/playlist_artwork.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
@@ -46,6 +47,24 @@ class PlaylistCube extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // La marca de "sonando" se recalcula sola al cambiar la lista activa.
+    return ValueListenableBuilder<Map?>(
+      valueListenable: nowPlayingSource,
+      builder: (context, source, _) {
+        final sourceId = source?['ytid']?.toString();
+        final playlistId = playlist['ytid']?.toString();
+        return _buildCube(
+          context,
+          isNowPlaying:
+              sourceId != null && sourceId.isNotEmpty && sourceId == playlistId,
+        );
+      },
+    );
+  }
+
+  Widget _buildCube(BuildContext context, {required bool isNowPlaying}) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Material(
       borderRadius: BorderRadius.circular(borderRadius),
       clipBehavior: Clip.antiAlias,
@@ -62,6 +81,34 @@ class PlaylistCube extends StatelessWidget {
               right: typeLabelOffset,
               child: _buildLabel(context),
             ),
+          if (isNowPlaying) ...[
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: colorScheme.primary, width: 3),
+                    borderRadius: BorderRadius.circular(borderRadius),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: typeLabelOffset,
+              bottom: typeLabelOffset,
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: colorScheme.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  FluentIcons.speaker_2_24_filled,
+                  size: 14,
+                  color: colorScheme.onPrimary,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

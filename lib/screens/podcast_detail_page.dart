@@ -40,7 +40,11 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 
 class PodcastDetailPage extends StatefulWidget {
-  const PodcastDetailPage({super.key, required this.podcast, this.openEpisodeKey});
+  const PodcastDetailPage({
+    super.key,
+    required this.podcast,
+    this.openEpisodeKey,
+  });
 
   final Podcast podcast;
   // When set, the matching episode's detail dialog opens automatically once
@@ -436,10 +440,8 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
                     );
                     return IconButton(
                       tooltip: context.l10n!.sortByDate,
-                      onPressed: () => podcastManager.setEpisodeSortAscendingFor(
-                        _podcast.id,
-                        !ascending,
-                      ),
+                      onPressed: () => podcastManager
+                          .setEpisodeSortAscendingFor(_podcast.id, !ascending),
                       icon: Icon(
                         ascending
                             ? FluentIcons.arrow_sort_up_24_regular
@@ -522,225 +524,239 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
                 ),
               ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _loadFailed
-          ? Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(context.l10n!.podcastLoadFailed),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: _loadFeed,
-                    child: Text(context.l10n!.retry),
-                  ),
-                ],
-              ),
-            )
-          : ListenableBuilder(
-              listenable: Listenable.merge([
-                podcastManager.episodeSortAscendingByPodcast,
-                podcastManager.listenedEpisodeKeys,
-              ]),
-              builder: (context, _) {
-                final episodes = _sortedEpisodes(
-                  podcastManager.episodeSortAscendingFor(_podcast.id),
-                );
-                return StreamBuilder<MediaItem?>(
-                  stream: audioHandler.mediaItem,
-                  builder: (context, snapshot) {
-                    final nowPlayingKey = snapshot.data?.id;
-                    return StreamBuilder<PlaybackState>(
-                      stream: audioHandler.playbackState,
-                      builder: (context, playbackSnapshot) {
-                        final isPlaying =
-                            playbackSnapshot.data?.playing ?? false;
-                        return ListView(
-                          controller: _episodeListController,
-                          padding: commonSingleChildScrollViewPadding,
-                          children: [
-                            Column(
-                              key: _episodeListHeaderKey,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
-                                  child: Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      GestureDetector(
-                                        onTap: () =>
-                                            FullscreenArtworkViewer.show(
-                                              context,
-                                              artwork: _podcast.image,
-                                              fileName: _podcast.title,
+      body: PopScope(
+        // El boton del dispositivo tambien deshace la seleccion, no
+        // solo la X de la barra.
+        canPop: !_selectionMode,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) setState(_selectedKeys.clear);
+        },
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _loadFailed
+            ? Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(context.l10n!.podcastLoadFailed),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: _loadFeed,
+                      child: Text(context.l10n!.retry),
+                    ),
+                  ],
+                ),
+              )
+            : ListenableBuilder(
+                listenable: Listenable.merge([
+                  podcastManager.episodeSortAscendingByPodcast,
+                  podcastManager.listenedEpisodeKeys,
+                ]),
+                builder: (context, _) {
+                  final episodes = _sortedEpisodes(
+                    podcastManager.episodeSortAscendingFor(_podcast.id),
+                  );
+                  return StreamBuilder<MediaItem?>(
+                    stream: audioHandler.mediaItem,
+                    builder: (context, snapshot) {
+                      final nowPlayingKey = snapshot.data?.id;
+                      return StreamBuilder<PlaybackState>(
+                        stream: audioHandler.playbackState,
+                        builder: (context, playbackSnapshot) {
+                          final isPlaying =
+                              playbackSnapshot.data?.playing ?? false;
+                          return ListView(
+                            controller: _episodeListController,
+                            padding: commonSingleChildScrollViewPadding,
+                            children: [
+                              Column(
+                                key: _episodeListHeaderKey,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        GestureDetector(
+                                          onTap: () =>
+                                              FullscreenArtworkViewer.show(
+                                                context,
+                                                artwork: _podcast.image,
+                                                fileName: _podcast.title,
+                                              ),
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
                                             ),
-                                        child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                          child: Image(
-                                            image: ArtworkProvider.get(
-                                              _podcast.image,
+                                            child: Image(
+                                              image: ArtworkProvider.get(
+                                                _podcast.image,
+                                              ),
+                                              width: 88,
+                                              height: 88,
+                                              fit: BoxFit.cover,
                                             ),
-                                            width: 88,
-                                            height: 88,
-                                            fit: BoxFit.cover,
                                           ),
                                         ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              _podcast.title,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .titleMedium
-                                                  ?.copyWith(
-                                                    fontWeight: FontWeight.w700,
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                _podcast.title,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .titleMedium
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                _podcast.author,
+                                                style: TextStyle(
+                                                  color: colorScheme
+                                                      .onSurfaceVariant,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                '${_episodes.length} ${context.l10n!.episodes}',
+                                                style: TextStyle(
+                                                  color: colorScheme
+                                                      .onSurfaceVariant,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                              if (_podcast
+                                                  .description
+                                                  .isNotEmpty) ...[
+                                                const SizedBox(height: 4),
+                                                GestureDetector(
+                                                  onTap: () => setState(
+                                                    () => _descriptionExpanded =
+                                                        !_descriptionExpanded,
                                                   ),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              _podcast.author,
-                                              style: TextStyle(
-                                                color: colorScheme
-                                                    .onSurfaceVariant,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              '${_episodes.length} ${context.l10n!.episodes}',
-                                              style: TextStyle(
-                                                color: colorScheme
-                                                    .onSurfaceVariant,
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                            if (_podcast
-                                                .description
-                                                .isNotEmpty) ...[
-                                              const SizedBox(height: 4),
-                                              GestureDetector(
-                                                onTap: () => setState(
-                                                  () => _descriptionExpanded =
-                                                      !_descriptionExpanded,
+                                                  child: Text(
+                                                    _podcast.description,
+                                                    maxLines:
+                                                        _descriptionExpanded
+                                                        ? null
+                                                        : 3,
+                                                    overflow:
+                                                        _descriptionExpanded
+                                                        ? null
+                                                        : TextOverflow.ellipsis,
+                                                    style: Theme.of(
+                                                      context,
+                                                    ).textTheme.bodySmall,
+                                                  ),
                                                 ),
-                                                child: Text(
-                                                  _podcast.description,
-                                                  maxLines: _descriptionExpanded
-                                                      ? null
-                                                      : 3,
-                                                  overflow: _descriptionExpanded
-                                                      ? null
-                                                      : TextOverflow.ellipsis,
-                                                  style: Theme.of(
-                                                    context,
-                                                  ).textTheme.bodySmall,
-                                                ),
-                                              ),
+                                              ],
                                             ],
-                                          ],
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 12),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: TextField(
-                                          controller: _searchController,
-                                          decoration: InputDecoration(
-                                            hintText:
-                                                context.l10n!.searchEpisodes,
-                                            prefixIcon: const Icon(
-                                              FluentIcons.search_24_regular,
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: TextField(
+                                            controller: _searchController,
+                                            decoration: InputDecoration(
+                                              hintText:
+                                                  context.l10n!.searchEpisodes,
+                                              prefixIcon: const Icon(
+                                                FluentIcons.search_24_regular,
+                                              ),
+                                              isDense: true,
+                                              border: OutlineInputBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
                                             ),
-                                            isDense: true,
-                                            border: OutlineInputBorder(
+                                            onChanged: (value) => setState(
+                                              () => _episodeQuery = value,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        IconButton(
+                                          tooltip: context
+                                              .l10n!
+                                              .nextUnlistenedEpisode,
+                                          onPressed: () =>
+                                              _scrollToNextUnlistened(episodes),
+                                          icon: const Icon(
+                                            FluentIcons
+                                                .arrow_circle_down_24_regular,
+                                          ),
+                                          style: IconButton.styleFrom(
+                                            backgroundColor: colorScheme
+                                                .surfaceContainerHighest,
+                                            shape: RoundedRectangleBorder(
                                               borderRadius:
                                                   BorderRadius.circular(12),
                                             ),
                                           ),
-                                          onChanged: (value) => setState(
-                                            () => _episodeQuery = value,
-                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      IconButton(
-                                        tooltip:
-                                            context.l10n!.nextUnlistenedEpisode,
-                                        onPressed: () =>
-                                            _scrollToNextUnlistened(episodes),
-                                        icon: const Icon(
-                                          FluentIcons
-                                              .arrow_circle_down_24_regular,
-                                        ),
-                                        style: IconButton.styleFrom(
-                                          backgroundColor: colorScheme
-                                              .surfaceContainerHighest,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              for (final episode in episodes)
+                                Padding(
+                                  key: _episodeItemKeys.putIfAbsent(
+                                    episode.key,
+                                    GlobalKey.new,
+                                  ),
+                                  padding: const EdgeInsets.only(bottom: 6),
+                                  child: PodcastEpisodeBar(
+                                    episode: episode,
+                                    podcast: _podcast,
+                                    isPlaying:
+                                        episode.key == nowPlayingKey &&
+                                        isPlaying,
+                                    selectionMode: _selectionMode,
+                                    selected: _selectedKeys.contains(
+                                      episode.key,
+                                    ),
+                                    onSelectToggle: () =>
+                                        _toggleSelection(episode.key),
+                                    onLongPress: () =>
+                                        _toggleSelection(episode.key),
+                                    onTap: () => _selectionMode
+                                        ? _toggleSelection(episode.key)
+                                        : _showEpisodeOptions(episode),
+                                    onPlayPauseTap: _selectionMode
+                                        ? null
+                                        : () => episode.key == nowPlayingKey
+                                              ? (isPlaying
+                                                    ? audioHandler.pause()
+                                                    : audioHandler.play())
+                                              : _playEpisode(episode),
                                   ),
                                 ),
-                              ],
-                            ),
-                            for (final episode in episodes)
-                              Padding(
-                                key: _episodeItemKeys.putIfAbsent(
-                                  episode.key,
-                                  GlobalKey.new,
-                                ),
-                                padding: const EdgeInsets.only(bottom: 6),
-                                child: PodcastEpisodeBar(
-                                  episode: episode,
-                                  podcast: _podcast,
-                                  isPlaying:
-                                      episode.key == nowPlayingKey && isPlaying,
-                                  selectionMode: _selectionMode,
-                                  selected: _selectedKeys.contains(episode.key),
-                                  onSelectToggle: () =>
-                                      _toggleSelection(episode.key),
-                                  onLongPress: () =>
-                                      _toggleSelection(episode.key),
-                                  onTap: () => _selectionMode
-                                      ? _toggleSelection(episode.key)
-                                      : _showEpisodeOptions(episode),
-                                  onPlayPauseTap: _selectionMode
-                                      ? null
-                                      : () => episode.key == nowPlayingKey
-                                            ? (isPlaying
-                                                  ? audioHandler.pause()
-                                                  : audioHandler.play())
-                                            : _playEpisode(episode),
-                                ),
-                              ),
-                          ],
-                        );
-                      },
-                    );
-                  },
-                );
-              },
-            ),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                  );
+                },
+              ),
+      ),
       bottomNavigationBar: const MiniPlayerBottomSpace(),
     );
   }

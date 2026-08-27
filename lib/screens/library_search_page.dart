@@ -109,7 +109,8 @@ class _LibrarySearchPageState extends State<LibrarySearchPage> {
         ? const <Map>[]
         : <Map>[
             ...getPlaylistsNotInFolders(),
-            ...getLikedPlaylistItems(),
+            // La busqueda tambien tiene que ver las que estan en carpetas.
+            ...getLikedPlaylistItems(includeInFolders: true),
             ...offlinePlaylistService.offlinePlaylists.value
                 .whereType<Map>()
                 .where((p) => !PlaylistUtils.isArtistPlaylist(p)),

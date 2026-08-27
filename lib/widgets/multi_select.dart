@@ -38,6 +38,7 @@ AppBar buildSelectionAppBar(
   required VoidCallback onClose,
   required VoidCallback onSelectAll,
   required VoidCallback onDelete,
+  VoidCallback? onMove,
 }) {
   return AppBar(
     leading: IconButton(
@@ -45,11 +46,17 @@ AppBar buildSelectionAppBar(
       tooltip: context.l10n!.cancel,
       onPressed: onClose,
     ),
-    title: Text('$selectedCount seleccionados'),
+    title: Text(context.l10n!.selectedItems(selectedCount)),
     actions: [
+      if (onMove != null)
+        IconButton(
+          icon: const Icon(FluentIcons.folder_arrow_right_24_regular),
+          tooltip: context.l10n!.moveToFolder,
+          onPressed: selectedCount == 0 ? null : onMove,
+        ),
       IconButton(
         icon: const Icon(FluentIcons.select_all_on_24_regular),
-        tooltip: 'Seleccionar todo',
+        tooltip: context.l10n!.selectAll,
         onPressed: onSelectAll,
       ),
       IconButton(

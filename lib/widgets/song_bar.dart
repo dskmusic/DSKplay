@@ -257,7 +257,15 @@ Future<void> _handleSongMenuAction({
       }
       break;
     case 'remove':
-      onRemove?.call();
+      // Cualquier borrado pide confirmacion, venga del menu o del deslizar.
+      if (await _confirmRemoval(
+        context,
+        context.l10n!.removeSongFromPlaylistQuestion(
+          _songTitleOf(context, song),
+        ),
+      )) {
+        onRemove?.call();
+      }
       break;
     case 'dismiss_suggestion':
       onDismissSuggestion?.call();
@@ -269,11 +277,7 @@ Future<void> _handleSongMenuAction({
       showAddToPlaylistDialog(context, song: song);
       break;
     case 'remove_from_recents':
-      try {
-        await removeFromRecentlyPlayed(ytid);
-      } catch (e) {
-        logger.log('Error removing from recently played', error: e);
-      }
+      await _removeFromRecentsWithUndo(context, ytid);
       break;
     case 'offline':
       await _toggleSongOfflineStatus(context, song, ytid, songOfflineStatus);
@@ -290,21 +294,61 @@ Future<void> _handleSongMenuAction({
   }
 }
 
-Future<void> _confirmAndRemoveFromTimeMachine(
+String _songTitleOf(BuildContext context, dynamic song) {
+  final title = song is Map ? (song['title']?.toString().trim() ?? '') : '';
+  return title.isEmpty ? context.l10n!.thisSong : title;
+}
+
+/// El historial es de bajo riesgo y se rehace solo escuchando: en vez de
+/// preguntar antes, se quita y se ofrece deshacer.
+Future<void> _removeFromRecentsWithUndo(
   BuildContext context,
-  VoidCallback? onRemoveFromTimeMachine,
+  dynamic ytid,
 ) async {
+  final index = userRecentlyPlayed.value.indexWhere((s) => s['ytid'] == ytid);
+  final removed = index == -1
+      ? null
+      : Map.from(userRecentlyPlayed.value[index] as Map);
+  try {
+    await removeFromRecentlyPlayed(ytid);
+  } catch (e) {
+    logger.log('Error removing from recently played', error: e);
+    return;
+  }
+  if (removed == null || !context.mounted) return;
+  showToastWithButton(
+    context,
+    context.l10n!.removedFromRecents,
+    context.l10n!.undo,
+    () => restoreToRecentlyPlayed(removed, index),
+  );
+}
+
+/// Confirmación estándar para cualquier borrado de una canción.
+Future<bool> _confirmRemoval(BuildContext context, String message) async {
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => ConfirmationDialog(
-      confirmationMessage: dialogContext.l10n!.removeFromTimeMachineQuestion,
+      confirmationMessage: message,
       submitMessage: dialogContext.l10n!.remove,
       isDangerous: true,
       onCancel: () => Navigator.of(dialogContext).pop(false),
       onSubmit: () => Navigator.of(dialogContext).pop(true),
     ),
   );
-  if (confirmed == true) onRemoveFromTimeMachine?.call();
+  return confirmed ?? false;
+}
+
+Future<void> _confirmAndRemoveFromTimeMachine(
+  BuildContext context,
+  VoidCallback? onRemoveFromTimeMachine,
+) async {
+  if (await _confirmRemoval(
+    context,
+    context.l10n!.removeFromTimeMachineQuestion,
+  )) {
+    onRemoveFromTimeMachine?.call();
+  }
 }
 
 Future<void> _exportSongToDeviceFlow(BuildContext context, dynamic song) async {
@@ -462,6 +506,15 @@ Future<void> _toggleSongOfflineStatus(
   ValueNotifier<bool> songOfflineStatus,
 ) async {
   final originalValue = songOfflineStatus.value;
+  // Quitar de sin conexion borra el archivo descargado: se confirma.
+  if (originalValue &&
+      !await _confirmRemoval(
+        context,
+        context.l10n!.removeDownloadQuestion(_songTitleOf(context, song)),
+      )) {
+    return;
+  }
+  if (!context.mounted) return;
   songOfflineStatus.value = !originalValue;
 
   try {
@@ -592,7 +645,7 @@ class _SongBarState extends State<SongBar> {
     _songArtist = widget.song['artist']?.toString() ?? '';
     _artworkPath = widget.song['artworkPath'];
     _audioPath = widget.song['audioPath'];
-    _lowResImageUrl = widget.song['lowResImage']?.toString() ?? '';
+    _lowResImageUrl = songArtworkUrl(widget.song);
     _ytid = widget.song['ytid'] ?? '';
 
     // Initialize ValueNotifiers only once
@@ -644,6 +697,17 @@ class _SongBarState extends State<SongBar> {
 
   @override
   Widget build(BuildContext context) {
+    // La marca de "sonando" se recalcula sola cuando cambia la cancion activa.
+    return ValueListenableBuilder<String?>(
+      valueListenable: nowPlayingYtid,
+      builder: (context, playingYtid, _) => _buildRow(
+        context,
+        isNowPlaying: _ytid.isNotEmpty && _ytid == playingYtid,
+      ),
+    );
+  }
+
+  Widget _buildRow(BuildContext context, {required bool isNowPlaying}) {
     final colorScheme = Theme.of(context).colorScheme;
     final _plays = widget.showPlayTime
         ? (widget.song['listeningCount'] is int)
@@ -653,7 +717,9 @@ class _SongBarState extends State<SongBar> {
         : null;
 
     final row = Material(
-      color: widget.backgroundColor ?? colorScheme.surfaceContainerLow,
+      color: isNowPlaying
+          ? colorScheme.primaryContainer
+          : (widget.backgroundColor ?? colorScheme.surfaceContainerLow),
       borderRadius: widget.borderRadius,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -696,6 +762,15 @@ class _SongBarState extends State<SongBar> {
                 ),
               ),
 
+              if (isNowPlaying)
+                Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: Icon(
+                    FluentIcons.speaker_2_24_filled,
+                    size: 18,
+                    color: colorScheme.primary,
+                  ),
+                ),
               if (widget.reorderHandle != null) widget.reorderHandle!,
               OverflowMenuButton<String>(
                 onSelected: _runMenuAction,

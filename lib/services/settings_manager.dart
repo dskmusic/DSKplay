@@ -52,6 +52,10 @@ final includePodcastsInTimeMachine = ValueNotifier<bool>(
   Hive.box('settings').get('includePodcastsInTimeMachine', defaultValue: true),
 );
 
+final includePodcastsInSuggestions = ValueNotifier<bool>(
+  Hive.box('settings').get('includePodcastsInSuggestions', defaultValue: true),
+);
+
 final rememberLastPlayback = ValueNotifier<bool>(
   Hive.box('settings').get('rememberLastPlayback', defaultValue: true),
 );
@@ -87,12 +91,31 @@ final autoCloseAfterPauseMinutes = ValueNotifier<int>(
   Hive.box('settings').get('autoCloseAfterPauseMinutes', defaultValue: 10),
 );
 
+// Desvanecido del temporizador de apagado: en vez de cortar de golpe, baja
+// el volumen durante los ultimos segundos.
+final sleepTimerFadeEnabled = ValueNotifier<bool>(
+  Hive.box('settings').get('sleepTimerFadeEnabled', defaultValue: true),
+);
+
+final sleepTimerFadeSeconds = ValueNotifier<int>(
+  Hive.box('settings').get('sleepTimerFadeSeconds', defaultValue: 20),
+);
+
 // Debug: lets you test whether the Dart-only timer above closes the app by
 // itself, without the native foreground-service backup (and its notification)
 // covering for it if the Flutter engine gets torn down while backgrounded.
 final nativeIdleCloseBackupEnabled = ValueNotifier<bool>(
   Hive.box('settings').get('nativeIdleCloseBackupEnabled', defaultValue: true),
 );
+
+/// Modo compacto: encoge cabeceras y accesos directos para que entre mas
+/// contenido en pantalla. Activado por defecto.
+final compactMode = ValueNotifier<bool>(
+  Hive.box('settings').get('compactMode', defaultValue: true),
+);
+
+/// Escala de la imagen de cabecera de listas, albumes y artistas.
+double get compactHeaderScale => compactMode.value ? 0.9 : 1;
 
 final predictiveBack = ValueNotifier<bool>(
   Hive.box('settings').get('predictiveBack', defaultValue: true),
@@ -212,6 +235,24 @@ void setKaraokeInactiveLyricColor(Color color) {
   Hive.box('settings').put('karaokeInactiveLyricColor', color.toARGB32());
 }
 
+/// Cabeceras de la biblioteca que el usuario ha plegado. Vive en la caja
+/// `settings`, asi que entra sola en la copia de seguridad.
+final collapsedLibrarySections = ValueNotifier<List<String>>(
+  List<String>.from(
+    Hive.box('settings').get('collapsedLibrarySections', defaultValue: []),
+  ),
+);
+
+void toggleLibrarySectionCollapsed(String sectionId) {
+  final updated = List<String>.from(collapsedLibrarySections.value);
+  if (!updated.remove(sectionId)) updated.add(sectionId);
+  collapsedLibrarySections.value = updated;
+  Hive.box('settings').put('collapsedLibrarySections', updated);
+}
+
+bool isLibrarySectionCollapsed(String sectionId) =>
+    collapsedLibrarySections.value.contains(sectionId);
+
 void resetKaraokeColors() {
   setKaraokeBackgroundColor(karaokeDefaultBackgroundColor);
   setKaraokeActiveLyricColor(karaokeDefaultActiveLyricColor);
@@ -229,6 +270,21 @@ final repeatNotifier = ValueNotifier<AudioServiceRepeatMode>(
 );
 
 // Non-storage notifiers
+
+/// `ytid` de lo que suena ahora mismo. Lo alimenta el AudioHandler desde el
+/// stream de `mediaItem`, así que da igual por qué camino haya empezado la
+/// reproducción: las filas de canción lo escuchan para pintar la marca de
+/// "sonando".
+final nowPlayingYtid = ValueNotifier<String?>(null);
+
+/// Lista, álbum o carpeta de la que salió lo que suena, con las claves
+/// `ytid`, `title` y `source`. `null` cuando la reproducción no viene de una
+/// lista concreta (una canción suelta, radio...).
+/// Se rescata de Hive al arrancar para que el enlace del reproductor siga
+/// funcionando con la cancion que se restaura de la sesion anterior.
+final nowPlayingSource = ValueNotifier<Map?>(
+  Hive.box('user').get('nowPlayingSource') as Map?,
+);
 
 var sleepTimerNotifier = ValueNotifier<Duration?>(null);
 

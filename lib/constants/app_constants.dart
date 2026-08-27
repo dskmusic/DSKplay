@@ -21,7 +21,11 @@
 
 import 'package:flutter/material.dart';
 
-const recommendedCubesNumber = 8;
+const recommendedCubesNumber = 10;
+
+// Los favoritos ya estan descargados en local, asi que caben mas que las
+// sugerencias sin coste de red.
+const likedCubesNumber = 16;
 
 const commonSingleChildScrollViewPadding = EdgeInsets.symmetric(horizontal: 10);
 var commonBarRadius = BorderRadius.circular(16);

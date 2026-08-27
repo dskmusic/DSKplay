@@ -21,6 +21,7 @@
 
 import 'package:audio_service/audio_service.dart';
 import 'package:dskplay/services/common_services.dart';
+import 'package:dskplay/utilities/formatter.dart';
 
 Map mediaItemToMap(MediaItem mediaItem) {
   final extras = mediaItem.extras;
@@ -80,9 +81,13 @@ MediaItem mapToMediaItem(Map song) {
           ?.toString();
   final hasArtworkFile = artworkPath != null && artworkPath.isNotEmpty;
 
+  // songArtworkUrl reconstruye la miniatura desde el ytid cuando el mapa
+  // guardado no trae ninguna, asi el reproductor y la notificacion nunca se
+  // quedan sin caratula.
+  final remoteArtwork = songArtworkUrl(song, highRes: true);
   final artUri = hasArtworkFile
       ? Uri.file(artworkPath)
-      : Uri.parse(song['highResImage'].toString());
+      : Uri.parse(remoteArtwork);
 
   return MediaItem(
     id: song['id'].toString(),
@@ -93,15 +98,13 @@ MediaItem mapToMediaItem(Map song) {
         ? Duration(seconds: song['duration'])
         : null,
     extras: {
-      'lowResImage': song['lowResImage'],
+      'lowResImage': songArtworkUrl(song),
       'ytid': song['ytid'],
       'artistId': song['artistId'],
       'videoAuthor': song['videoAuthor'],
       'isLive': song['isLive'],
-      'highResImage': song['highResImage'],
-      'artWorkPath': hasArtworkFile
-          ? artworkPath
-          : (song['highResImage']?.toString() ?? ''),
+      'highResImage': remoteArtwork,
+      'artWorkPath': hasArtworkFile ? artworkPath : remoteArtwork,
       'isPodcastEpisode': song['isPodcastEpisode'] ?? false,
       'description': song['description'],
       'audioPath': song['audioPath'],

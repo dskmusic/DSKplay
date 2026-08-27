@@ -88,6 +88,34 @@ Map<String, dynamic> returnSongLayout(
   };
 }
 
+/// Miniatura de YouTube reconstruida desde el id del video.
+///
+/// Las listas guardadas (sugeridas que se anaden a la biblioteca, importadas,
+/// copias antiguas...) a veces llegan sin `image`/`lowResImage` y la fila se
+/// quedaba con el cubo gris. Estas URLs de `i.ytimg.com` son deterministas y
+/// no caducan, asi que se pueden recomponer con solo el id.
+String? youtubeThumbnailUrl(String? ytid, {bool highRes = false}) {
+  final id = ytid?.trim() ?? '';
+  // Los ids de YouTube son 11 caracteres. Los internos de la app
+  // ('customId-...', episodios de podcast) no sirven aqui.
+  if (id.length != 11 || id.contains('/')) return null;
+  final quality = highRes ? 'hqdefault' : 'mqdefault';
+  return 'https://i.ytimg.com/vi/$id/$quality.jpg';
+}
+
+/// Imagen de una cancion, con reserva a partir del id cuando el mapa guardado
+/// no trae ninguna. Devuelve cadena vacia si no hay nada que pintar.
+String songArtworkUrl(dynamic song, {bool highRes = false}) {
+  if (song is! Map) return '';
+  const lowFirst = ['lowResImage', 'image', 'highResImage'];
+  const highFirst = ['highResImage', 'image', 'lowResImage'];
+  for (final key in highRes ? highFirst : lowFirst) {
+    final value = song[key]?.toString().trim() ?? '';
+    if (value.isNotEmpty && value != 'null') return value;
+  }
+  return youtubeThumbnailUrl(song['ytid']?.toString(), highRes: highRes) ?? '';
+}
+
 String? getSongId(String url) => VideoId.parseVideoId(url);
 
 String formatDuration(int audioDurationInSeconds) {

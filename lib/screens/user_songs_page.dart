@@ -125,19 +125,27 @@ class _UserSongsPageState extends State<UserSongsPage> {
               onDelete: () => _deleteSelected(title),
             )
           : null,
-      body: Padding(
-        padding: commonSingleChildScrollViewPadding,
-        child: ValueListenableBuilder(
-          valueListenable: widget.page == 'liked'
-              ? userLikedSongsList
-              : widget.page == 'offline'
-              ? userOfflineSongs
-              : userRecentlyPlayed,
-          builder: (_, songsList, __) => _buildCustomScrollView(
-            title,
-            icon,
-            _filterLiked(songsList).length,
-            isOfflineSongs,
+      body: PopScope(
+        // El boton del dispositivo tambien deshace la seleccion, no
+        // solo la X de la barra.
+        canPop: !_selectionMode,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) _exitSelection();
+        },
+        child: Padding(
+          padding: commonSingleChildScrollViewPadding,
+          child: ValueListenableBuilder(
+            valueListenable: widget.page == 'liked'
+                ? userLikedSongsList
+                : widget.page == 'offline'
+                ? userOfflineSongs
+                : userRecentlyPlayed,
+            builder: (_, songsList, __) => _buildCustomScrollView(
+              title,
+              icon,
+              _filterLiked(songsList).length,
+              isOfflineSongs,
+            ),
           ),
         ),
       ),
@@ -226,6 +234,9 @@ class _UserSongsPageState extends State<UserSongsPage> {
                         'ytid': '',
                         'title': title,
                         'source': 'user-created',
+                        // No tiene ytid, asi que el enlace del reproductor
+                        // vuelve aqui por la ruta.
+                        'route': '/library/userSongs/${widget.page}',
                         'list': sortedList,
                       };
                       audioHandler.playPlaylistSong(
@@ -339,6 +350,7 @@ class _UserSongsPageState extends State<UserSongsPage> {
           'ytid': '',
           'title': title,
           'source': 'user-created',
+          'route': '/library/userSongs/${widget.page}',
           'list': sortedList,
         };
 
@@ -490,7 +502,7 @@ class _UserSongsPageState extends State<UserSongsPage> {
     }
     if (!mounted) return;
     _exitSelection();
-    showToast(context, '${ids.length} canciones eliminadas');
+    showToast(context, context.l10n!.songsDeleted(ids.length));
   }
 
   // A podcast episode's ytid is its internal key, not a real YouTube video

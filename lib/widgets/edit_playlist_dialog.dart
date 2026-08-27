@@ -4,9 +4,17 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 
 class EditPlaylistDialog extends StatefulWidget {
-  const EditPlaylistDialog({super.key, required this.playlistData});
+  const EditPlaylistDialog({
+    super.key,
+    required this.playlistData,
+    this.isFolder = false,
+  });
 
   final Map playlistData;
+
+  /// Con una carpeta cambian los textos y se devuelve `{name, image}`: la
+  /// caratula se elige igual que en una lista (dispositivo, Pixabay o URL).
+  final bool isFolder;
 
   @override
   State<EditPlaylistDialog> createState() => _EditPlaylistDialogState();
@@ -21,7 +29,9 @@ class _EditPlaylistDialogState extends State<EditPlaylistDialog> {
   void initState() {
     super.initState();
     _titleController = TextEditingController(
-      text: widget.playlistData['title'],
+      text: widget.isFolder
+          ? widget.playlistData['name']
+          : widget.playlistData['title'],
     );
     final image = widget.playlistData['image'] as String?;
     if (image != null && image.startsWith('data:')) {
@@ -39,6 +49,9 @@ class _EditPlaylistDialogState extends State<EditPlaylistDialog> {
     _imageUrlController.dispose();
     super.dispose();
   }
+
+  bool get _hasImage =>
+      _imageBase64 != null || _imageUrlController.text.isNotEmpty;
 
   Future<void> _pickImage() async {
     final result = await pickImage(context);
@@ -65,7 +78,7 @@ class _EditPlaylistDialogState extends State<EditPlaylistDialog> {
 
     return AlertDialog(
       title: Text(
-        context.l10n!.editPlaylist,
+        widget.isFolder ? context.l10n!.editFolder : context.l10n!.editPlaylist,
         style: TextStyle(
           color: colorScheme.onSurface,
           fontWeight: FontWeight.w600,
@@ -78,7 +91,9 @@ class _EditPlaylistDialogState extends State<EditPlaylistDialog> {
             TextField(
               controller: _titleController,
               decoration: InputDecoration(
-                labelText: context.l10n!.customPlaylistName,
+                labelText: widget.isFolder
+                    ? context.l10n!.folderName
+                    : context.l10n!.customPlaylistName,
                 prefixIcon: Icon(
                   FluentIcons.text_field_20_regular,
                   color: colorScheme.onSurfaceVariant,
@@ -114,6 +129,17 @@ class _EditPlaylistDialogState extends State<EditPlaylistDialog> {
               buildImagePickerRow(context, _pickImage, _imageBase64 != null),
               _imagePreview(),
             ],
+            // Sin esto una carpeta con caratula elegida no puede volver al
+            // icono: el campo de URL queda oculto al haber imagen.
+            if (widget.isFolder && _hasImage)
+              TextButton.icon(
+                onPressed: () => setState(() {
+                  _imageBase64 = null;
+                  _imageUrlController.clear();
+                }),
+                icon: const Icon(FluentIcons.arrow_undo_20_regular, size: 18),
+                label: Text(context.l10n!.resetToDefaults),
+              ),
           ],
         ),
       ),
@@ -127,6 +153,14 @@ class _EditPlaylistDialogState extends State<EditPlaylistDialog> {
         ),
         FilledButton.icon(
           onPressed: () {
+            if (widget.isFolder) {
+              Navigator.pop(context, {
+                'name': _titleController.text,
+                'image': _imageBase64 ?? _imageUrlController.text,
+              });
+              return;
+            }
+
             final newPlaylist = {
               'ytid': widget.playlistData['ytid'],
               'title': _titleController.text,

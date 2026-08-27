@@ -25,6 +25,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dskplay/services/local_files_service.dart';
 import 'package:dskplay/utilities/artwork_provider.dart';
+import 'package:dskplay/utilities/formatter.dart';
 import 'package:dskplay/widgets/no_artwork_cube.dart';
 import 'package:dskplay/widgets/spinner.dart';
 import 'package:flutter/material.dart';
@@ -44,6 +45,39 @@ class SongArtworkWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Cadena de reservas: si la portada principal falla (un fichero que ya no
+    // esta, una miniatura caducada...), se prueba la siguiente en vez de dejar
+    // el hueco gris. Asi la caratula que se ve en la lista se ve tambien en el
+    // mini reproductor y en el reproductor completo.
+    final candidates = <String>[];
+    for (final candidate in [
+      if (metadata.artUri?.scheme != 'file') metadata.artUri?.toString(),
+      metadata.extras?['highResImage']?.toString(),
+      metadata.extras?['lowResImage']?.toString(),
+      youtubeThumbnailUrl(metadata.extras?['ytid']?.toString()),
+    ]) {
+      final url = candidate?.trim() ?? '';
+      if (url.isNotEmpty && url != 'null' && !candidates.contains(url)) {
+        candidates.add(url);
+      }
+    }
+
+    // NullArtworkWidget queda como ultimo recurso, y pinned a `size`: sin el
+    // se iria a su propio 220 por defecto y reventaria el hueco que lo aloja
+    // (mini reproductor, fila de la cola...).
+    Widget remoteOrNothing() => candidates.isEmpty
+        ? NullArtworkWidget(
+            size: size,
+            iconSize: errorWidgetIconSize,
+            borderRadius: borderRadius,
+          )
+        : _ArtworkWithFallbacks(
+            candidates: candidates,
+            size: size,
+            borderRadius: borderRadius,
+            errorWidgetIconSize: errorWidgetIconSize,
+          );
+
     if (metadata.artUri?.scheme == 'file') {
       final artworkPath = metadata.extras?['artWorkPath'] as String;
       final audioPath = metadata.extras?['audioPath'] as String?;
@@ -60,24 +94,14 @@ class SongArtworkWidget extends StatelessWidget {
             future: reextractLocalArtwork(audioPath),
             builder: (context, snapshot) {
               final resolvedPath = snapshot.data;
-              if (resolvedPath == null) {
-                return NullArtworkWidget(
-                  size: size,
-                  iconSize: errorWidgetIconSize,
-                  borderRadius: borderRadius,
-                );
-              }
+              if (resolvedPath == null) return remoteOrNothing();
               return ClipRRect(
                 borderRadius: BorderRadius.circular(borderRadius),
                 child: Image.file(
                   File(resolvedPath),
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) =>
-                      NullArtworkWidget(
-                        size: size,
-                        iconSize: errorWidgetIconSize,
-                        borderRadius: borderRadius,
-                      ),
+                      remoteOrNothing(),
                 ),
               );
             },
@@ -93,27 +117,61 @@ class SongArtworkWidget extends StatelessWidget {
           child: Image.file(
             File(artworkPath),
             fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => NullArtworkWidget(
-              size: size,
-              iconSize: errorWidgetIconSize,
-              borderRadius: borderRadius,
-            ),
+            errorBuilder: (context, error, stackTrace) => remoteOrNothing(),
           ),
         ),
       );
     }
 
-    final artwork = metadata.artUri?.toString() ?? '';
-    if (artwork.isEmpty) {
-      // Must stay pinned to `size` like every other branch here - without
-      // it this falls back to NullArtworkWidget's own 220 default, blowing
-      // up whatever fixed-size layout (mini player, queue row...) hosts it.
-      return NullArtworkWidget(
-        size: size,
-        iconSize: errorWidgetIconSize,
-        borderRadius: borderRadius,
-      );
-    }
+    return remoteOrNothing();
+  }
+}
+
+class _ArtworkWithFallbacks extends StatefulWidget {
+  const _ArtworkWithFallbacks({
+    required this.candidates,
+    required this.size,
+    required this.borderRadius,
+    required this.errorWidgetIconSize,
+  });
+
+  final List<String> candidates;
+  final double size;
+  final double borderRadius;
+  final double errorWidgetIconSize;
+
+  @override
+  State<_ArtworkWithFallbacks> createState() => _ArtworkWithFallbacksState();
+}
+
+class _ArtworkWithFallbacksState extends State<_ArtworkWithFallbacks> {
+  int _index = 0;
+
+  @override
+  void didUpdateWidget(_ArtworkWithFallbacks oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Otra cancion: se vuelve a empezar por su portada buena.
+    if (oldWidget.candidates.first != widget.candidates.first) _index = 0;
+  }
+
+  void _nextCandidate() {
+    if (_index >= widget.candidates.length - 1) return;
+    // El errorWidget se pinta durante el build: cambiar de reserva ahi mismo
+    // reventaria el frame en curso.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _index++);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final artwork = widget.candidates[_index];
+    final isLast = _index == widget.candidates.length - 1;
+    final fallback = NullArtworkWidget(
+      size: widget.size,
+      iconSize: widget.errorWidgetIconSize,
+      borderRadius: widget.borderRadius,
+    );
 
     // Non-http art sources (e.g. podcast RSS feeds without a real image,
     // falling back to the bundled asset logo) can't be loaded by
@@ -122,31 +180,35 @@ class SongArtworkWidget extends StatelessWidget {
     // instead of always assuming a network URL.
     if (!artwork.startsWith('http')) {
       return SizedBox(
-        width: size,
-        height: size,
+        width: widget.size,
+        height: widget.size,
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(borderRadius),
+          borderRadius: BorderRadius.circular(widget.borderRadius),
           child: Image(
             image: ArtworkProvider.get(artwork),
             fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) =>
-                NullArtworkWidget(iconSize: errorWidgetIconSize),
+            errorBuilder: (context, error, stackTrace) {
+              _nextCandidate();
+              return isLast ? fallback : const SizedBox.shrink();
+            },
           ),
         ),
       );
     }
 
     return CachedNetworkImage(
-      width: size,
-      height: size,
+      width: widget.size,
+      height: widget.size,
       imageUrl: artwork,
       imageBuilder: (context, imageProvider) => ClipRRect(
-        borderRadius: BorderRadius.circular(borderRadius),
+        borderRadius: BorderRadius.circular(widget.borderRadius),
         child: Image(image: imageProvider, fit: BoxFit.cover),
       ),
       placeholder: (context, url) => const Spinner(),
-      errorWidget: (context, url, error) =>
-          NullArtworkWidget(iconSize: errorWidgetIconSize),
+      errorWidget: (context, url, error) {
+        _nextCandidate();
+        return isLast ? fallback : const Spinner();
+      },
     );
   }
 }

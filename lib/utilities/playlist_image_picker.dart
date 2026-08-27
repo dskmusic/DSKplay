@@ -22,6 +22,7 @@
 import 'dart:convert';
 
 import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/widgets/image_cropper_dialog.dart';
 import 'package:dskplay/widgets/pixabay_search_dialog.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -47,7 +48,7 @@ Future<String?> pickImage(BuildContext context) async {
           ),
           ListTile(
             leading: const Icon(FluentIcons.search_24_regular),
-            title: const Text('Buscar imagen online (Pixabay)'),
+            title: Text(sheetContext.l10n!.searchImageOnline),
             onTap: () => Navigator.of(sheetContext).pop(false),
           ),
         ],
@@ -57,7 +58,15 @@ Future<String?> pickImage(BuildContext context) async {
 
   if (fromDevice == null) return null;
   if (!context.mounted) return null;
-  return fromDevice ? pickImageFromDevice() : showPixabaySearchDialog(context);
+
+  final picked = fromDevice
+      ? await pickImageFromDevice()
+      : await showPixabaySearchDialog(context);
+  if (picked == null || !context.mounted) return picked;
+
+  // Venga de donde venga, la imagen pasa por el recorte 1:1: asi ninguna
+  // caratula queda con proporciones raras.
+  return showSquareCropDialog(context, picked);
 }
 
 Future<String?> pickImageFromDevice() async {
@@ -173,7 +182,9 @@ Widget buildImagePickerRow(
           size: 20,
         ),
       ),
-      label: Text(isImagePicked ? context.l10n!.imagePicked : 'Elegir imagen'),
+      label: Text(
+        isImagePicked ? context.l10n!.imagePicked : context.l10n!.pickImage,
+      ),
     ),
   );
 }

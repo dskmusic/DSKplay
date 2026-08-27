@@ -20,6 +20,7 @@
  */
 
 import 'package:dskplay/widgets/section_title.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 
 class SectionHeader extends StatelessWidget {
@@ -28,22 +29,49 @@ class SectionHeader extends StatelessWidget {
     required this.title,
     this.icon,
     this.actionButton,
+    this.onTap,
+    this.isCollapsed,
   });
   final String title;
   final IconData? icon;
   final Widget? actionButton;
 
+  /// Si se indica, el icono y el titulo son pulsables (plegar la seccion).
+  final VoidCallback? onTap;
+
+  /// Estado del chevron; solo se pinta cuando hay [onTap].
+  final bool? isCollapsed;
+
   @override
   Widget build(BuildContext context) {
+    final titleWidget = SectionTitle(
+      title,
+      Theme.of(context).colorScheme.primary,
+      icon: icon,
+    );
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Expanded(
-          child: SectionTitle(
-            title,
-            Theme.of(context).colorScheme.primary,
-            icon: icon,
-          ),
+          child: onTap == null
+              ? titleWidget
+              : InkWell(
+                  onTap: onTap,
+                  child: Row(
+                    children: [
+                      Flexible(child: titleWidget),
+                      const SizedBox(width: 6),
+                      Icon(
+                        isCollapsed ?? false
+                            ? FluentIcons.chevron_down_20_regular
+                            : FluentIcons.chevron_up_20_regular,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ],
+                  ),
+                ),
         ),
         if (actionButton != null) actionButton!,
       ],

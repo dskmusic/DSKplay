@@ -29,14 +29,15 @@ import 'package:dskplay/services/download_notification_service.dart';
 import 'package:dskplay/services/playlist_download_service.dart';
 import 'package:dskplay/services/playlists_manager.dart';
 import 'package:dskplay/services/router_service.dart';
+import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/services/song_export_service.dart';
 import 'package:dskplay/utilities/artwork_provider.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/offline_playlist_dialogs.dart';
 import 'package:dskplay/utilities/playlist_dialogs.dart';
 import 'package:dskplay/utilities/playlist_utils.dart';
-import 'package:dskplay/widgets/dialog_item.dart';
 import 'package:dskplay/widgets/edit_playlist_dialog.dart';
+import 'package:dskplay/widgets/folder_picker_dialog.dart';
 import 'package:dskplay/widgets/overflow_menu_button.dart';
 import 'package:dskplay/widgets/popup_menu_item.dart';
 import 'package:dskplay/widgets/spinner.dart';
@@ -58,6 +59,7 @@ class PlaylistBar extends StatelessWidget {
     this.isAlbum = false,
     this.borderRadius = BorderRadius.zero,
     this.reorderHandle,
+    this.folderKind = 'custom',
   });
 
   final Map? playlistData;
@@ -70,6 +72,11 @@ class PlaylistBar extends StatelessWidget {
   final bool? isAlbum;
   final bool showBuildActions;
   final BorderRadius borderRadius;
+
+  /// Which set of folders this bar belongs to: 'custom' for the library's own
+  /// playlists and 'liked' for the favourites section. Decides both the
+  /// folders offered by "move to folder" and whether the option shows at all.
+  final String folderKind;
 
   /// Drag handle shown right before the three-dot menu (e.g. a
   /// [ReorderableDragStartListener]-wrapped icon), for lists that support
@@ -98,6 +105,19 @@ class PlaylistBar extends StatelessWidget {
 
   bool get _canAddToPlaylist => !isFolder && _resolvedPlaylistId != null;
 
+  /// True si lo que suena ahora salio de esta lista, o -para una carpeta- de
+  /// alguna de las listas que contiene.
+  bool _isNowPlayingSource(Map? source) {
+    final sourceId = source?['ytid']?.toString();
+    if (sourceId == null || sourceId.isEmpty) return false;
+    if (!isFolder) return sourceId == _resolvedPlaylistId;
+
+    final folderPlaylists = playlistData?['playlists'] as List? ?? const [];
+    return folderPlaylists.any(
+      (p) => p is Map && p['ytid']?.toString() == sourceId,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -105,8 +125,29 @@ class PlaylistBar extends StatelessWidget {
         ? normalizeArtistDisplayTitle(playlistTitle)
         : playlistTitle;
     Map<dynamic, dynamic>? updatedPlaylist;
+    return ValueListenableBuilder<Map?>(
+      valueListenable: nowPlayingSource,
+      builder: (context, source, _) => _buildRow(
+        context,
+        colorScheme,
+        displayTitle,
+        updatedPlaylist,
+        isNowPlayingSource: _isNowPlayingSource(source),
+      ),
+    );
+  }
+
+  Widget _buildRow(
+    BuildContext context,
+    ColorScheme colorScheme,
+    String displayTitle,
+    Map<dynamic, dynamic>? updatedPlaylist, {
+    required bool isNowPlayingSource,
+  }) {
     return Material(
-      color: colorScheme.surfaceContainerLow,
+      color: isNowPlayingSource
+          ? colorScheme.primaryContainer
+          : colorScheme.surfaceContainerLow,
       borderRadius: borderRadius,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -143,6 +184,15 @@ class PlaylistBar extends StatelessWidget {
                                 ),
                               );
                             },
+                          ),
+                        if (isNowPlayingSource)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: Icon(
+                              FluentIcons.speaker_2_24_filled,
+                              size: 14,
+                              color: colorScheme.primary,
+                            ),
                           ),
                         Expanded(
                           child: Text(
@@ -213,7 +263,7 @@ class PlaylistBar extends StatelessWidget {
                         if (onDelete != null) onDelete!();
                         break;
                       case 'moveToFolder':
-                        _showMoveToFolderDialog(context);
+                        unawaited(_showMoveToFolderDialog(context));
                         break;
                       case 'edit':
                         if (isFolder) {
@@ -312,7 +362,8 @@ class PlaylistBar extends StatelessWidget {
                         ),
                       if (playlistData != null &&
                           !isFolder &&
-                          (playlistData!['source'] == 'user-created' ||
+                          (folderKind == 'liked' ||
+                              playlistData!['source'] == 'user-created' ||
                               playlistData!['source'] == 'user-youtube'))
                         buildPopupMenuItem<String>(
                           value: 'moveToFolder',
@@ -389,142 +440,79 @@ class PlaylistBar extends StatelessWidget {
     );
   }
 
-  void _showMoveToFolderDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        final colorScheme = Theme.of(context).colorScheme;
-        return AlertDialog(
-          icon: Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: colorScheme.secondaryContainer,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              FluentIcons.folder_arrow_right_24_regular,
-              color: colorScheme.secondary,
-              size: 28,
-            ),
-          ),
-          title: Text(
-            context.l10n!.moveToFolder,
-            style: TextStyle(
-              color: colorScheme.onSurface,
-              fontWeight: FontWeight.w600,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: ValueListenableBuilder<List>(
-              valueListenable: userPlaylistFolders,
-              builder: (context, folders, _) {
-                // Find the current folder containing this playlist
-                String? currentFolderId;
-                if (playlistData != null) {
-                  for (final folder in folders) {
-                    final folderPlaylists = folder['playlists'] as List? ?? [];
-                    if (folderPlaylists.any(
-                      (p) => p['ytid'] == playlistData!['ytid'],
-                    )) {
-                      currentFolderId = folder['id'];
-                      break;
-                    }
-                  }
-                }
+  Future<void> _showMoveToFolderDialog(BuildContext context) async {
+    final playlist = playlistData;
+    if (playlist == null) return;
 
-                // Filter folders to exclude current one
-                final availableFolders = folders
-                    .where((folder) => folder['id'] != currentFolderId)
-                    .toList();
+    // Carpeta en la que esta ahora, para no ofrecerla como destino.
+    final currentFolderId =
+        findFolderForPlaylist(playlist['ytid']?.toString())?['id'] as String?;
 
-                final hasLibrary = currentFolderId != null;
-                final hasItems = hasLibrary || availableFolders.isNotEmpty;
+    final result = await showFolderPickerDialog(
+      context,
+      folderKind: folderKind,
+      excludeFolderId: currentFolderId,
+      allowLibrary: currentFolderId != null,
+    );
+    if (result == null || !context.mounted) return;
 
-                if (!hasItems) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: Text(
-                      context.l10n!.noFolders,
-                      style: TextStyle(color: colorScheme.onSurfaceVariant),
-                      textAlign: TextAlign.center,
-                    ),
-                  );
-                }
-
-                return ListView(
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  children: [
-                    if (hasLibrary)
-                      DialogItem(
-                        icon: FluentIcons.library_24_regular,
-                        iconColor: colorScheme.primary,
-                        iconBgColor: colorScheme.primaryContainer,
-                        label: context.l10n!.library,
-                        onTap: () {
-                          Navigator.pop(context);
-                          if (playlistData != null) {
-                            movePlaylistToFolder(playlistData!, null, context);
-                          }
-                        },
-                      ),
-                    ...availableFolders.map(
-                      (folder) => DialogItem(
-                        icon: FluentIcons.folder_24_regular,
-                        iconColor: colorScheme.secondary,
-                        iconBgColor: colorScheme.secondaryContainer,
-                        label: folder['name'] as String,
-                        onTap: () {
-                          Navigator.pop(context);
-                          if (playlistData != null) {
-                            movePlaylistToFolder(
-                              playlistData!,
-                              folder['id'],
-                              context,
-                            );
-                          }
-                        },
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-          actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          actions: [
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: () => Navigator.pop(context),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  side: BorderSide(color: colorScheme.outline),
-                ),
-                child: Text(
-                  context.l10n!.cancel,
-                  style: TextStyle(
-                    color: colorScheme.onSurface,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
+    movePlaylistToFolder(
+      playlist,
+      result.folderId,
+      context,
+      liked: folderKind == 'liked',
     );
   }
 
   // Helper methods for folder display
   Widget _buildFolderIcon(ColorScheme colorScheme) {
+    final image = playlistData?['image']?.toString();
+    if (image != null && image.isNotEmpty) {
+      // Con caratula propia una carpeta se confunde con un album, asi que
+      // lleva encima el distintivo de carpeta.
+      return SizedBox(
+        width: 52,
+        height: 52,
+        child: Stack(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image(
+                image: ArtworkProvider.get(image),
+                width: 52,
+                height: 52,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) =>
+                    _buildFolderIconFallback(colorScheme),
+              ),
+            ),
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: colorScheme.secondaryContainer,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(8),
+                    bottomRight: Radius.circular(11),
+                  ),
+                ),
+                child: Icon(
+                  FluentIcons.folder_24_filled,
+                  size: 14,
+                  color: colorScheme.onSecondaryContainer,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return _buildFolderIconFallback(colorScheme);
+  }
+
+  Widget _buildFolderIconFallback(ColorScheme colorScheme) {
     return Container(
       width: 52,
       height: 52,
@@ -746,65 +734,21 @@ class PlaylistBar extends StatelessWidget {
     }
   }
 
-  void _handleEditFolder(BuildContext context) {
+  Future<void> _handleEditFolder(BuildContext context) async {
     if (playlistData == null) return;
-    final folderId = playlistData!['id'];
-    var folderName = playlistTitle;
-    final colorScheme = Theme.of(context).colorScheme;
 
-    showDialog(
+    final result = await showDialog<Map?>(
       context: context,
-      builder: (context) => AlertDialog(
-        icon: Icon(
-          FluentIcons.folder_24_regular,
-          color: colorScheme.primary,
-          size: 32,
-        ),
-        title: Text(
-          context.l10n!.editFolder,
-          style: TextStyle(
-            color: colorScheme.onSurface,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        content: TextFormField(
-          decoration: InputDecoration(
-            labelText: context.l10n!.folderName,
-            prefixIcon: Icon(
-              FluentIcons.text_field_20_regular,
-              color: colorScheme.onSurfaceVariant,
-            ),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            filled: true,
-            fillColor: colorScheme.surfaceContainerLow,
-          ),
-          initialValue: folderName,
-          autofocus: true,
-          onChanged: (value) => folderName = value,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              context.l10n!.cancel,
-              style: TextStyle(color: colorScheme.onSurfaceVariant),
-            ),
-          ),
-          FilledButton.icon(
-            onPressed: () {
-              Navigator.pop(context);
-              final result = renamePlaylistFolder(
-                folderId,
-                folderName,
-                context,
-              );
-              showToast(context, result);
-            },
-            icon: const Icon(FluentIcons.save_20_regular),
-            label: Text(context.l10n!.update),
-          ),
-        ],
-      ),
+      builder: (context) =>
+          EditPlaylistDialog(playlistData: playlistData!, isFolder: true),
+    );
+    if (result == null || !context.mounted) return;
+
+    final folderId = playlistData!['id'].toString();
+    setPlaylistFolderImage(folderId, result['image']?.toString() ?? '');
+    showToast(
+      context,
+      renamePlaylistFolder(folderId, result['name'].toString(), context),
     );
   }
 }

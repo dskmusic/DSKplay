@@ -28,6 +28,7 @@ import 'package:dskplay/screens/bottom_navigation_page.dart';
 import 'package:dskplay/services/data_manager.dart';
 import 'package:dskplay/services/io_service.dart';
 import 'package:dskplay/services/local_files_service.dart';
+import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/utilities/edit_tags_dialog.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/playlist_dialogs.dart';
@@ -879,9 +880,29 @@ class _FolderRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final l10n = context.l10n!;
+    // La carpeta se marca cuando lo que suena sale de ella o de cualquiera de
+    // sus subcarpetas.
+    return ValueListenableBuilder<String?>(
+      valueListenable: nowPlayingYtid,
+      builder: (context, playingId, _) {
+        final isNowPlaying = _folderContains(
+          directory.path,
+          _nowPlayingLocalPath(playingId),
+        );
+        return _buildTile(context, colorScheme, isNowPlaying);
+      },
+    );
+  }
 
+  Widget _buildTile(
+    BuildContext context,
+    ColorScheme colorScheme,
+    bool isNowPlaying,
+  ) {
+    final l10n = context.l10n!;
     return ListTile(
+      selected: isNowPlaying,
+      selectedTileColor: colorScheme.primaryContainer,
       onTap: onTap,
       onLongPress: onLongPress,
       leading: Container(
@@ -1007,6 +1028,16 @@ class _LocalFileRowState extends State<_LocalFileRow> {
 
   @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<String?>(
+      valueListenable: nowPlayingYtid,
+      builder: (context, playingId, _) => _buildRow(
+        context,
+        playingId == '$localFileIdPrefix${widget.file.path}',
+      ),
+    );
+  }
+
+  Widget _buildRow(BuildContext context, bool isNowPlaying) {
     final colorScheme = Theme.of(context).colorScheme;
     final l10n = context.l10n!;
     final title = (_song['title'] as String?)?.trim().isNotEmpty ?? false
@@ -1016,6 +1047,8 @@ class _LocalFileRowState extends State<_LocalFileRow> {
     final artworkPath = _song['artworkPath'] as String?;
 
     final row = ListTile(
+      selected: isNowPlaying,
+      selectedTileColor: colorScheme.primaryContainer,
       onTap: widget.onTap,
       onLongPress: widget.onLongPress,
       leading: Container(
@@ -1046,50 +1079,61 @@ class _LocalFileRowState extends State<_LocalFileRow> {
           : null,
       trailing: widget.selectionMode
           ? Checkbox(value: widget.isSelected, onChanged: (_) => widget.onTap())
-          : OverflowMenuButton<String>(
-              onSelected: _handleMenuAction,
-              itemBuilder: (context) => [
-                buildPopupMenuItem<String>(
-                  value: 'play',
-                  icon: FluentIcons.play_24_regular,
-                  label: l10n.play,
-                  colorScheme: colorScheme,
-                ),
-                buildPopupMenuItem<String>(
-                  value: 'play_next',
-                  icon: FluentIcons.receipt_play_24_regular,
-                  label: l10n.playNext,
-                  colorScheme: colorScheme,
-                ),
-                buildPopupMenuItem<String>(
-                  value: 'add_to_queue',
-                  icon: FluentIcons.text_bullet_list_add_24_regular,
-                  label: l10n.addToQueue,
-                  colorScheme: colorScheme,
-                ),
-                buildPopupMenuItem<String>(
-                  value: 'add_to_playlist',
-                  icon: FluentIcons.album_add_24_regular,
-                  label: l10n.addToPlaylist,
-                  colorScheme: colorScheme,
-                ),
-                buildPopupMenuItem<String>(
-                  value: 'share',
-                  icon: FluentIcons.share_24_regular,
-                  label: l10n.share,
-                  colorScheme: colorScheme,
-                ),
-                buildPopupMenuItem<String>(
-                  value: 'edit_tags',
-                  icon: FluentIcons.edit_24_regular,
-                  label: 'Editar etiquetas',
-                  colorScheme: colorScheme,
-                ),
-                buildPopupMenuItem<String>(
-                  value: 'delete',
-                  icon: FluentIcons.delete_24_regular,
-                  label: l10n.delete,
-                  colorScheme: colorScheme,
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isNowPlaying)
+                  Icon(
+                    FluentIcons.speaker_2_24_filled,
+                    size: 18,
+                    color: colorScheme.primary,
+                  ),
+                OverflowMenuButton<String>(
+                  onSelected: _handleMenuAction,
+                  itemBuilder: (context) => [
+                    buildPopupMenuItem<String>(
+                      value: 'play',
+                      icon: FluentIcons.play_24_regular,
+                      label: l10n.play,
+                      colorScheme: colorScheme,
+                    ),
+                    buildPopupMenuItem<String>(
+                      value: 'play_next',
+                      icon: FluentIcons.receipt_play_24_regular,
+                      label: l10n.playNext,
+                      colorScheme: colorScheme,
+                    ),
+                    buildPopupMenuItem<String>(
+                      value: 'add_to_queue',
+                      icon: FluentIcons.text_bullet_list_add_24_regular,
+                      label: l10n.addToQueue,
+                      colorScheme: colorScheme,
+                    ),
+                    buildPopupMenuItem<String>(
+                      value: 'add_to_playlist',
+                      icon: FluentIcons.album_add_24_regular,
+                      label: l10n.addToPlaylist,
+                      colorScheme: colorScheme,
+                    ),
+                    buildPopupMenuItem<String>(
+                      value: 'share',
+                      icon: FluentIcons.share_24_regular,
+                      label: l10n.share,
+                      colorScheme: colorScheme,
+                    ),
+                    buildPopupMenuItem<String>(
+                      value: 'edit_tags',
+                      icon: FluentIcons.edit_24_regular,
+                      label: 'Editar etiquetas',
+                      colorScheme: colorScheme,
+                    ),
+                    buildPopupMenuItem<String>(
+                      value: 'delete',
+                      icon: FluentIcons.delete_24_regular,
+                      label: l10n.delete,
+                      colorScheme: colorScheme,
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -1209,4 +1253,21 @@ class _LocalFileRowState extends State<_LocalFileRow> {
         await _deleteFile();
     }
   }
+}
+
+/// Ruta del fichero local que suena ahora, o cadena vacia si lo que suena no
+/// es un fichero local.
+String _nowPlayingLocalPath(String? playingId) {
+  final id = playingId ?? '';
+  return id.startsWith(localFileIdPrefix)
+      ? id.substring(localFileIdPrefix.length)
+      : '';
+}
+
+/// Si [filePath] cuelga de [folder], aunque sea a traves de subcarpetas.
+bool _folderContains(String folder, String filePath) {
+  if (filePath.isEmpty) return false;
+  final sep = Platform.pathSeparator;
+  final base = folder.endsWith(sep) ? folder : '$folder$sep';
+  return filePath.startsWith(base);
 }

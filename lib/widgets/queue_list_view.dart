@@ -26,6 +26,8 @@ import 'package:audio_service/audio_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
+import 'package:dskplay/utilities/flutter_toast.dart';
+import 'package:dskplay/utilities/formatter.dart';
 import 'package:dskplay/utilities/playlist_dialogs.dart';
 import 'package:dskplay/widgets/confirmation_dialog.dart';
 import 'package:dskplay/widgets/no_artwork_cube.dart';
@@ -411,12 +413,24 @@ class _QueueWidgetState extends State<QueueWidget> {
             // index computed above against this widget's own (possibly
             // stale) copy of the queue.
             audioHandler.removeQueueEntry(queueEntryId);
+            // La cola es efimera y volver a meter la cancion cuesta un
+            // toque: mejor deshacer que preguntar antes.
+            showToastWithButton(
+              context,
+              context.l10n!.removedFromQueue,
+              context.l10n!.undo,
+              () => audioHandler.insertIntoQueue(
+                song,
+                actualIndex == -1 ? index : actualIndex,
+              ),
+            );
           },
         );
       },
     );
   }
 }
+
 
 class QueueTile extends StatelessWidget {
   const QueueTile({
@@ -569,7 +583,7 @@ class _ArtworkThumbnail extends StatelessWidget {
         ),
       );
     }
-    final imageUrl = song['lowResImage']?.toString() ?? '';
+    final imageUrl = songArtworkUrl(song);
     if (imageUrl.isEmpty) return _fallback();
     // Low-res YouTube 'default.jpg' thumbnails ship with baked-in black
     // letterbox bars, so BoxFit.cover keeps them visible. Detect that case and

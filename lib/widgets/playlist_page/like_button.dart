@@ -25,6 +25,7 @@ import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/playlists_manager.dart';
 import 'package:dskplay/utilities/offline_playlist_dialogs.dart';
+import 'package:dskplay/widgets/playlist_page/playlist_action_buttons.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 
@@ -108,13 +109,15 @@ class _PlaylistLikeButtonState extends State<PlaylistLikeButton> {
         return isLiked
             ? IconButton.filled(
                 icon: icon,
-                iconSize: 24,
+                iconSize: playlistActionIconSize,
+                style: playlistActionButtonStyle,
                 onPressed: _toggleLikeStatus,
                 tooltip: context.l10n!.removeFromLikedSongs,
               )
             : IconButton.filledTonal(
                 icon: icon,
-                iconSize: 24,
+                iconSize: playlistActionIconSize,
+                style: playlistActionButtonStyle,
                 onPressed: _toggleLikeStatus,
                 tooltip: context.l10n!.addToLikedSongs,
               );

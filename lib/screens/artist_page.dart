@@ -329,9 +329,11 @@ class _ArtistPageState extends State<ArtistPage> {
         PlaylistHeader(
           PlaylistCube(
             _artist!,
-            size: isLandscape
-                ? 250
-                : screenSize.width / commonPlaylistArtworkDivision,
+            size:
+                (isLandscape
+                    ? 250
+                    : screenSize.width / commonPlaylistArtworkDivision) *
+                compactHeaderScale,
             cubeIcon: FluentIcons.person_24_filled,
             showTypeLabel: false,
           ),
@@ -342,19 +344,30 @@ class _ArtistPageState extends State<ArtistPage> {
               : null,
           description: _artist!['description']?.toString(),
         ),
-        ValueListenableBuilder<bool>(
-          valueListenable: _isLoadingCatalog,
-          builder: (_, isLoading, __) => PlaylistActionButtons(
-            isLoading: isLoading,
-            onPlay: _playArtist,
-            onShuffle: () => _playArtist(shuffle: true),
+        if (!compactMode.value)
+          ValueListenableBuilder<bool>(
+            valueListenable: _isLoadingCatalog,
+            builder: (_, isLoading, __) => PlaylistActionButtons(
+              isLoading: isLoading,
+              onPlay: _playArtist,
+              onShuffle: () => _playArtist(shuffle: true),
+            ),
           ),
-        ),
         const SizedBox(height: 12),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           spacing: 5,
           children: [
+            if (compactMode.value)
+              ValueListenableBuilder<bool>(
+                valueListenable: _isLoadingCatalog,
+                builder: (_, isLoading, __) => PlaylistActionButtons(
+                  compact: true,
+                  isLoading: isLoading,
+                  onPlay: _playArtist,
+                  onShuffle: () => _playArtist(shuffle: true),
+                ),
+              ),
             PlaylistLikeButton(
               playlistId: _resolvedArtistId,
               playlistData: () => _artist,
@@ -365,7 +378,8 @@ class _ArtistPageState extends State<ArtistPage> {
             ),
             IconButton.filledTonal(
               icon: const Icon(FluentIcons.arrow_sync_24_filled),
-              iconSize: 24,
+              iconSize: playlistActionIconSize,
+              style: playlistActionButtonStyle,
               onPressed: _refresh,
               tooltip: context.l10n!.update,
             ),

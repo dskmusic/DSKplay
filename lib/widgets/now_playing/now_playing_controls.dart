@@ -24,6 +24,7 @@ import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
+import 'package:dskplay/services/playlists_manager.dart';
 import 'package:dskplay/services/router_service.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/utilities/app_utils.dart';
@@ -123,6 +124,7 @@ class NowPlayingControls extends StatelessWidget {
                 ),
               ),
             ),
+            _buildSourceLink(context, colorScheme),
             if (!isCompact) const Spacer(),
             ConstrainedBox(
               constraints: BoxConstraints(
@@ -140,6 +142,77 @@ class NowPlayingControls extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+
+  /// Enlace a la lista, album o artista del que salio lo que suena ahora.
+  /// Se oculta solo cuando la reproduccion no viene de ninguna lista (radio,
+  /// cola manual...), asi que no ocupa sitio cuando no aporta nada.
+  Widget _buildSourceLink(BuildContext context, ColorScheme colorScheme) {
+    return ValueListenableBuilder<Map?>(
+      valueListenable: nowPlayingSource,
+      builder: (context, source, _) {
+        final sourceTitle = source?['title']?.toString().trim() ?? '';
+        final sourceId = source?['ytid']?.toString().trim() ?? '';
+        final sourceRoute = source?['route']?.toString().trim() ?? '';
+        // Las listas de la biblioteca (gustadas, recientes, descargadas) no
+        // tienen ytid, pero si una ruta propia a la que volver.
+        if (sourceTitle.isEmpty || (sourceId.isEmpty && sourceRoute.isEmpty)) {
+          return const SizedBox.shrink();
+        }
+        // Si la lista vive en una carpeta, se enseña tambien: ubica mejor lo
+        // que suena que el titulo solo.
+        final folderName = findFolderForPlaylist(
+          sourceId,
+        )?['name']?.toString().trim();
+        final label = folderName == null || folderName.isEmpty
+            ? sourceTitle
+            : '$folderName › $sourceTitle';
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: TextButton.icon(
+            onPressed: () => _openSource(context, source),
+            icon: Icon(
+              source!['isArtist'] == true
+                  ? FluentIcons.mic_24_regular
+                  : source['isAlbum'] == true
+                  ? FluentIcons.cd_16_regular
+                  : FluentIcons.text_bullet_list_24_regular,
+              size: 16,
+            ),
+            label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+            style: TextButton.styleFrom(
+              foregroundColor: colorScheme.primary,
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _openSource(BuildContext context, Map source) {
+    final id = source['ytid']?.toString() ?? '';
+    final route = source['route']?.toString() ?? '';
+    if (id.isEmpty && route.isEmpty) return;
+    final router = GoRouter.of(context);
+    final basePath = _artistRouteBasePath(context);
+    final isArtist = source['isArtist'] == true;
+
+    if (id.isEmpty) {
+      Navigator.of(context).pop();
+      unawaited(router.push(route));
+      return;
+    }
+
+    Navigator.of(context).pop();
+    unawaited(
+      isArtist
+          ? router.push(
+              '$basePath/artist/${Uri.encodeComponent(id)}',
+              extra: {...source, 'list': []},
+            )
+          : router.push('$basePath/playlist/${Uri.encodeComponent(id)}'),
     );
   }
 
@@ -475,31 +548,34 @@ class _PlaybackControlsRow extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (isPodcastEpisode) _PlaybackControlButton(
-                          icon: FluentIcons.rewind_24_regular,
-                          isEnabled: true,
-                          tooltip: context.l10n!.rewind1Minute,
-                          onPressed: () => _seekPodcastBy(-_podcastSeekStep),
-                          seekDirection: -1,
-                          colorScheme: colorScheme,
-                          buttonConstraints: buttonConstraints,
-                          buttonPadding: buttonPadding,
-                          controlIconSize: controlIconSize,
-                          minButtonSize: minButtonSize,
-                        ) else _PlaybackControlButton(
-                          icon: FluentIcons.previous_24_regular,
-                          isEnabled:
-                              audioHandler.hasPrevious ||
-                              repeatMode != AudioServiceRepeatMode.none,
-                          tooltip: context.l10n!.skipToPrevious,
-                          onPressed: () => audioHandler.skipToPrevious(),
-                          seekDirection: -1,
-                          colorScheme: colorScheme,
-                          buttonConstraints: buttonConstraints,
-                          buttonPadding: buttonPadding,
-                          controlIconSize: controlIconSize,
-                          minButtonSize: minButtonSize,
-                        ),
+                  if (isPodcastEpisode)
+                    _PlaybackControlButton(
+                      icon: FluentIcons.rewind_24_regular,
+                      isEnabled: true,
+                      tooltip: context.l10n!.rewind1Minute,
+                      onPressed: () => _seekPodcastBy(-_podcastSeekStep),
+                      seekDirection: -1,
+                      colorScheme: colorScheme,
+                      buttonConstraints: buttonConstraints,
+                      buttonPadding: buttonPadding,
+                      controlIconSize: controlIconSize,
+                      minButtonSize: minButtonSize,
+                    )
+                  else
+                    _PlaybackControlButton(
+                      icon: FluentIcons.previous_24_regular,
+                      isEnabled:
+                          audioHandler.hasPrevious ||
+                          repeatMode != AudioServiceRepeatMode.none,
+                      tooltip: context.l10n!.skipToPrevious,
+                      onPressed: () => audioHandler.skipToPrevious(),
+                      seekDirection: -1,
+                      colorScheme: colorScheme,
+                      buttonConstraints: buttonConstraints,
+                      buttonPadding: buttonPadding,
+                      controlIconSize: controlIconSize,
+                      minButtonSize: minButtonSize,
+                    ),
                   SizedBox(width: buttonSpacing),
                   PlaybackIconButton(
                     iconColor: colorScheme.onPrimary,
@@ -508,34 +584,36 @@ class _PlaybackControlsRow extends StatelessWidget {
                     padding: playPadding,
                   ),
                   SizedBox(width: buttonSpacing),
-                  if (isPodcastEpisode) _PlaybackControlButton(
-                          icon: FluentIcons.fast_forward_24_regular,
-                          isEnabled: true,
-                          tooltip: context.l10n!.fastForward1Minute,
-                          onPressed: () => _seekPodcastBy(_podcastSeekStep),
-                          seekDirection: 1,
-                          colorScheme: colorScheme,
-                          buttonConstraints: buttonConstraints,
-                          buttonPadding: buttonPadding,
-                          controlIconSize: controlIconSize,
-                          minButtonSize: minButtonSize,
-                        ) else _PlaybackControlButton(
-                          icon: FluentIcons.next_24_regular,
-                          isEnabled:
-                              audioHandler.hasNext ||
-                              repeatMode == AudioServiceRepeatMode.one,
-                          tooltip: context.l10n!.skipToNext,
-                          onPressed: () =>
-                              repeatMode == AudioServiceRepeatMode.one
-                              ? audioHandler.playAgain()
-                              : audioHandler.skipToNext(),
-                          seekDirection: 1,
-                          colorScheme: colorScheme,
-                          buttonConstraints: buttonConstraints,
-                          buttonPadding: buttonPadding,
-                          controlIconSize: controlIconSize,
-                          minButtonSize: minButtonSize,
-                        ),
+                  if (isPodcastEpisode)
+                    _PlaybackControlButton(
+                      icon: FluentIcons.fast_forward_24_regular,
+                      isEnabled: true,
+                      tooltip: context.l10n!.fastForward1Minute,
+                      onPressed: () => _seekPodcastBy(_podcastSeekStep),
+                      seekDirection: 1,
+                      colorScheme: colorScheme,
+                      buttonConstraints: buttonConstraints,
+                      buttonPadding: buttonPadding,
+                      controlIconSize: controlIconSize,
+                      minButtonSize: minButtonSize,
+                    )
+                  else
+                    _PlaybackControlButton(
+                      icon: FluentIcons.next_24_regular,
+                      isEnabled:
+                          audioHandler.hasNext ||
+                          repeatMode == AudioServiceRepeatMode.one,
+                      tooltip: context.l10n!.skipToNext,
+                      onPressed: () => repeatMode == AudioServiceRepeatMode.one
+                          ? audioHandler.playAgain()
+                          : audioHandler.skipToNext(),
+                      seekDirection: 1,
+                      colorScheme: colorScheme,
+                      buttonConstraints: buttonConstraints,
+                      buttonPadding: buttonPadding,
+                      controlIconSize: controlIconSize,
+                      minButtonSize: minButtonSize,
+                    ),
                 ],
               ),
             );

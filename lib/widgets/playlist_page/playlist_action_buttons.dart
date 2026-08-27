@@ -23,15 +23,44 @@ import 'package:dskplay/extensions/l10n.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 
+/// Tamano comun de los botones redondos de la fila de acciones (reproducir,
+/// mezclar, me gusta, descargar...). Con el tamano por defecto los siete que
+/// puede haber no caben de largo en pantallas normales.
+const playlistActionIconSize = 22.0;
+
+/// Tamano fijo y forma explicita: con `visualDensity` el alto encogia mas que
+/// el ancho y los botones salian ovalados.
+const playlistActionButtonStyle = ButtonStyle(
+  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  padding: WidgetStatePropertyAll(EdgeInsets.zero),
+  minimumSize: WidgetStatePropertyAll(Size.square(42)),
+  fixedSize: WidgetStatePropertyAll(Size.square(42)),
+  shape: WidgetStatePropertyAll(CircleBorder()),
+);
+
+/// El de reproducir va un pelin mas grande para que destaque del resto.
+const _playButtonStyle = ButtonStyle(
+  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  padding: WidgetStatePropertyAll(EdgeInsets.zero),
+  minimumSize: WidgetStatePropertyAll(Size.square(46)),
+  fixedSize: WidgetStatePropertyAll(Size.square(46)),
+  shape: WidgetStatePropertyAll(CircleBorder()),
+);
+
 /// Play and shuffle whatever the page is about, shared by the playlist and
 /// the artist pages. While [isLoading] the songs are still being read, so
 /// both buttons wait instead of playing an incomplete list.
+///
+/// With [compact] the pair shrinks to two round icon buttons meant to sit at
+/// the start of the row of secondary actions (like, download...), which is
+/// what the app's compact mode uses to save a whole row of height.
 class PlaylistActionButtons extends StatelessWidget {
   const PlaylistActionButtons({
     super.key,
     required this.onPlay,
     required this.onShuffle,
     this.isLoading = false,
+    this.compact = false,
   });
 
   final VoidCallback onPlay;
@@ -40,9 +69,38 @@ class PlaylistActionButtons extends StatelessWidget {
 
   final bool isLoading;
 
+  final bool compact;
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+
+    if (compact) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        spacing: 5,
+        children: [
+          IconButton.filled(
+            icon: isLoading
+                ? const _Spinner()
+                : const Icon(FluentIcons.play_24_filled),
+            iconSize: 24,
+            style: _playButtonStyle,
+            onPressed: isLoading ? null : onPlay,
+            tooltip: context.l10n!.play,
+          ),
+          IconButton.filledTonal(
+            icon: isLoading
+                ? const _Spinner()
+                : const Icon(FluentIcons.arrow_shuffle_24_filled),
+            iconSize: playlistActionIconSize,
+            style: playlistActionButtonStyle,
+            onPressed: isLoading ? null : onShuffle,
+            tooltip: context.l10n!.shuffle,
+          ),
+        ],
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),

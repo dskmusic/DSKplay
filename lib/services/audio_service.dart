@@ -32,6 +32,7 @@ import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/data_manager.dart';
 import 'package:dskplay/services/download_foreground_service.dart';
 import 'package:dskplay/services/listening_stats_service.dart';
+import 'package:dskplay/services/playlists_manager.dart';
 import 'package:dskplay/services/podcast_manager.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/utilities/map_utils.dart';
@@ -93,6 +94,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   DateTime _equalizerRetryNotBefore = DateTime.fromMillisecondsSinceEpoch(0);
 
   Timer? _sleepTimer;
+  int _sleepTimerGeneration = 0;
   Timer? _debounceTimer;
   bool sleepTimerExpired = false;
   bool sleepTimerEndOfSong = false;
@@ -327,6 +329,27 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         _logStreamError('Processing state stream error', error, stackTrace);
       },
     );
+
+    // Un unico punto de verdad para la marca de "sonando": todos los caminos
+    // de reproduccion acaban publicando en mediaItem.
+    // El origen se guarda igual que la cola: al volver a abrir la app, el
+    // enlace del reproductor y la marca de la lista siguen ahi.
+    nowPlayingSource.addListener(() {
+      unawaited(
+        addOrUpdateData('user', 'nowPlayingSource', nowPlayingSource.value),
+      );
+    });
+
+    mediaItem.listen((item) {
+      final ytid = item?.extras?['ytid']?.toString() ?? item?.id ?? '';
+      nowPlayingYtid.value = ytid;
+      // Aqui pasan tambien los saltos de cancion, no solo el primer play:
+      // asi la lista recuerda por donde iba de verdad.
+      rememberPlaylistProgress(
+        nowPlayingSource.value?['ytid']?.toString(),
+        ytid,
+      );
+    });
 
     audioPlayer.durationStream.listen(
       (duration) {
@@ -1330,6 +1353,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     List<Map> songs, {
     bool replace = false,
     int? startIndex,
+    Map? source,
     bool keepManuallyAddedSongs = true,
   }) async {
     try {
@@ -1337,6 +1361,10 @@ class DskPlayAudioHandler extends BaseAudioHandler {
           ? _getUnplayedManualSongs()
           : <Map>[];
       if (replace) {
+        // El origen se fija aqui, antes de que empiece a sonar nada: si se
+        // dejaba para despues del await, la marca de "sonando" en listas y
+        // carpetas se quedaba un paso por detras.
+        nowPlayingSource.value = source;
         _queueList.clear();
         _originalQueueList.clear();
         _currentQueueIndex = 0;
@@ -1441,6 +1469,26 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       _updateQueueMediaItems();
     } catch (e, stackTrace) {
       logger.log('Error removing from queue', error: e, stackTrace: stackTrace);
+    }
+  }
+
+  /// Devuelve una cancion a la cola en su sitio: lo usa el "deshacer" del
+  /// borrado por deslizamiento.
+  Future<void> insertIntoQueue(Map song, int index) async {
+    try {
+      final target = index.clamp(0, _queueList.length);
+      _queueList.insert(target, _queueEntryIds.createSong(song));
+      if (target <= _currentQueueIndex) _currentQueueIndex++;
+      if (_currentQueueIndex < 0) _currentQueueIndex = 0;
+
+      _hydrateQueueEntryIds();
+      _updateQueueMediaItems();
+    } catch (e, stackTrace) {
+      logger.log(
+        'Error inserting into queue',
+        error: e,
+        stackTrace: stackTrace,
+      );
     }
   }
 
@@ -1908,8 +1956,10 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       // ponytail: a multi-episode podcast queue itself isn't restored across
       // app restarts (only the currently-playing episode+position is, same
       // as before this queue existed) - add if users ask for it.
-      if (_queueList[_currentQueueIndex.clamp(0, _queueList.length - 1)]
-              ['isPodcastEpisode'] ==
+      if (_queueList[_currentQueueIndex.clamp(
+            0,
+            _queueList.length - 1,
+          )]['isPodcastEpisode'] ==
           true) {
         return;
       }
@@ -2081,7 +2131,12 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   /// persisted podcast state - a plain `??` between the two doesn't type
   /// check, since _loadPersistedPodcastState()'s record also carries a
   /// `savedAt` field _pendingPodcastResume doesn't.
-  ({PodcastEpisode episode, String podcastTitle, String? localPath, Duration position})?
+  ({
+    PodcastEpisode episode,
+    String podcastTitle,
+    String? localPath,
+    Duration position,
+  })?
   _resolvePendingPodcast() {
     final pending = _pendingPodcastResume;
     if (pending != null) return pending;
@@ -2659,6 +2714,11 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     mediaItem.add(null);
     _pendingPodcastResume = null;
     _currentPlayingPodcast = null;
+    // Detener y cerrar deja la app como si no hubiera sonado nada: fuera
+    // tambien las marcas de "sonando" de canciones, listas, carpetas y
+    // ficheros locales.
+    nowPlayingYtid.value = null;
+    nowPlayingSource.value = null;
     // Awaited (unlike the fire-and-forget pattern elsewhere in this file):
     // this is a deliberate, final user action, and a common follow-up is
     // closing/killing the app right away - a pending unawaited write can
@@ -2668,6 +2728,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     await Future.wait([
       userBox.delete(_lastQueueStateKey),
       userBox.delete(_lastPodcastStateKey),
+      userBox.delete('nowPlayingSource'),
     ]);
     await userBox.flush();
   }
@@ -3098,6 +3159,14 @@ class DskPlayAudioHandler extends BaseAudioHandler {
           replace: true,
           startIndex: songIndex,
           keepManuallyAddedSongs: keepManuallyAddedSongs,
+          source: {
+            'ytid': playlist['ytid'],
+            'title': playlist['title'],
+            'source': playlist['source'],
+            'isAlbum': playlist['isAlbum'],
+            'isArtist': playlist['isArtist'],
+            if (playlist['route'] != null) 'route': playlist['route'],
+          },
         );
       }
     } catch (e, stackTrace) {
@@ -3129,6 +3198,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       // A different source is now playing - stop the throttled position
       // listener from overwriting the podcast episode's saved resume point.
       _currentPlayingPodcast = null;
+      nowPlayingSource.value = null;
 
       _lastError = null;
       if (audioPlayer.playing) {
@@ -3264,7 +3334,10 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     // button would find nothing during that window.
     _updateQueueMediaItems();
 
-    return _playPodcastQueueEntry(episodeSong, initialPosition: initialPosition);
+    return _playPodcastQueueEntry(
+      episodeSong,
+      initialPosition: initialPosition,
+    );
   }
 
   /// Replaces the queue with [episodes] and starts playing at [startIndex] -
@@ -3744,12 +3817,26 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       sleepTimerExpired = false;
       sleepTimerNotifier.value = duration;
 
-      _sleepTimer = Timer(duration, () async {
+      final fade = sleepTimerFadeEnabled.value
+          ? Duration(seconds: sleepTimerFadeSeconds.value)
+          : Duration.zero;
+      // Si el temporizador es mas corto que el desvanecido, se desvanece
+      // durante todo el tiempo que queda en vez de no desvanecer nada.
+      final untilFade = duration > fade ? duration - fade : Duration.zero;
+
+      // El desvanecido corre ya fuera del Timer, asi que cancelarlo no basta:
+      // esta marca dice si el apagado en curso sigue siendo el vigente.
+      final generation = ++_sleepTimerGeneration;
+
+      _sleepTimer = Timer(untilFade, () async {
+        await _fadeOutVolume(fade, generation);
+        if (generation != _sleepTimerGeneration) return;
         sleepTimerExpired = true;
         // stop() itself now ends the listening session and closes the app
         // outright, whether it's foregrounded or only alive via the
         // notification in the background.
         await stop();
+        await audioPlayer.setVolume(1);
         sleepTimerNotifier.value = null;
       });
     } catch (e, stackTrace) {
@@ -3757,9 +3844,24 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     }
   }
 
+  /// Baja el volumen poco a poco antes de parar. Vuelve a 1 en `cancel` y
+  /// tras el `stop`, para no dejar la app muda en la siguiente reproduccion.
+  Future<void> _fadeOutVolume(Duration fade, int generation) async {
+    if (fade <= Duration.zero) return;
+    const steps = 20;
+    final stepDelay = fade ~/ steps;
+    for (var i = steps - 1; i >= 0; i--) {
+      if (!audioPlayer.playing || generation != _sleepTimerGeneration) break;
+      await audioPlayer.setVolume(i / steps);
+      await Future<void>.delayed(stepDelay);
+    }
+  }
+
   void cancelSleepTimer() {
     try {
       _sleepTimer?.cancel();
+      _sleepTimerGeneration++;
+      unawaited(audioPlayer.setVolume(1));
       _sleepTimer = null;
       sleepTimerExpired = false;
       sleepTimerEndOfSong = false;

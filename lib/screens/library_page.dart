@@ -38,6 +38,7 @@ import 'package:dskplay/utilities/playlist_dialogs.dart';
 import 'package:dskplay/utilities/playlist_utils.dart';
 import 'package:dskplay/widgets/confirmation_dialog.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
+import 'package:dskplay/widgets/folder_picker_dialog.dart';
 import 'package:dskplay/widgets/multi_select.dart';
 import 'package:dskplay/widgets/playlist_bar.dart';
 import 'package:dskplay/widgets/section_header.dart';
@@ -54,6 +55,12 @@ class LibraryPage extends StatefulWidget {
 /// Secciones de la biblioteca con selección múltiple para borrar.
 enum _SelectableSection { customPlaylists, likedPlaylists, likedArtists }
 
+// Claves de las cabeceras plegables. Se guardan tal cual en `settings`, así
+// que no se renombran sin migrar.
+const _kCustomPlaylistsSection = 'customPlaylists';
+const _kLikedPlaylistsSection = 'likedPlaylists';
+const _kLikedArtistsSection = 'likedArtists';
+
 class _LibraryPageState extends State<LibraryPage> {
   /// Sección en modo selección (null: ninguna). Sólo una a la vez: mezclar
   /// listas y artistas en el mismo borrado no significa nada.
@@ -63,6 +70,11 @@ class _LibraryPageState extends State<LibraryPage> {
   /// Lo que se está mostrando en cada sección seleccionable, para poder
   /// resolver "seleccionar todo" y el borrado sin recalcular los filtros.
   final _sectionItems = <_SelectableSection, List>{};
+
+  void _toggleSection(String sectionId) {
+    toggleLibrarySectionCollapsed(sectionId);
+    setState(() {});
+  }
 
   void _startSelection(_SelectableSection section, String ytid) {
     if (ytid.isEmpty) return;
@@ -98,6 +110,36 @@ class _LibraryPageState extends State<LibraryPage> {
     });
   }
 
+  /// Mueve lo seleccionado a una carpeta. Solo tiene sentido para listas:
+  /// los artistas favoritos no viven en carpetas.
+  Future<void> _moveSelected() async {
+    final section = _selectionSection;
+    final ids = _selectedIds.toList();
+    if (section == null || ids.isEmpty) return;
+
+    final liked = section == _SelectableSection.likedPlaylists;
+    final result = await showFolderPickerDialog(
+      context,
+      folderKind: liked ? 'liked' : 'custom',
+      // Ya están fuera de toda carpeta: "Biblioteca" no movería nada.
+      allowLibrary: false,
+    );
+    if (result?.folderId == null || !mounted) return;
+
+    final items = _sectionItems[section] ?? const [];
+    for (final id in ids) {
+      final playlist = items.firstWhere(
+        (p) => p['ytid']?.toString() == id,
+        orElse: () => null,
+      );
+      if (playlist == null) continue;
+      movePlaylistToFolder(playlist, result!.folderId, context, liked: liked);
+    }
+    if (!mounted) return;
+    _exitSelection();
+    showToast(context, context.l10n!.playlistsMoved(ids.length));
+  }
+
   Future<void> _deleteSelected() async {
     final section = _selectionSection;
     final ids = _selectedIds.toList();
@@ -105,11 +147,11 @@ class _LibraryPageState extends State<LibraryPage> {
 
     final message = switch (section) {
       _SelectableSection.customPlaylists =>
-        '¿Eliminar ${ids.length} listas de reproducción?',
+        context.l10n!.deletePlaylistsQuestion(ids.length),
       _SelectableSection.likedPlaylists =>
-        '¿Quitar ${ids.length} listas de tus favoritas?',
+        context.l10n!.removeLikedPlaylistsQuestion(ids.length),
       _SelectableSection.likedArtists =>
-        '¿Quitar ${ids.length} artistas de tus favoritos?',
+        context.l10n!.removeLikedArtistsQuestion(ids.length),
     };
     if (!await confirmMultiDelete(context, message)) return;
 
@@ -131,7 +173,7 @@ class _LibraryPageState extends State<LibraryPage> {
     }
     if (!mounted) return;
     _exitSelection();
-    showToast(context, '${ids.length} elementos eliminados');
+    showToast(context, context.l10n!.itemsDeleted(ids.length));
   }
 
   @override
@@ -139,7 +181,14 @@ class _LibraryPageState extends State<LibraryPage> {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) BottomNavigationPage.handleBackPress(context);
+        if (didPop) return;
+        // El boton del dispositivo deshace primero la seleccion; solo si no
+        // hay ninguna se va a la pestana de inicio.
+        if (_selectionSection != null) {
+          _exitSelection();
+          return;
+        }
+        BottomNavigationPage.handleBackPress(context);
       },
       child: _buildScaffold(context),
     );
@@ -219,6 +268,9 @@ class _LibraryPageState extends State<LibraryPage> {
               onClose: _exitSelection,
               onSelectAll: _selectAll,
               onDelete: _deleteSelected,
+              onMove: _selectionSection == _SelectableSection.likedArtists
+                  ? null
+                  : _moveSelected,
             )
           : AppBar(
               title: Text(context.l10n!.library),
@@ -235,6 +287,7 @@ class _LibraryPageState extends State<LibraryPage> {
         animation: Listenable.merge([
           pinnedPlaylistIds,
           offlineMode,
+          compactMode,
           userCustomPlaylists,
           userPlaylistFolders,
           offlinePlaylistService.offlinePlaylists,
@@ -294,11 +347,10 @@ class _LibraryPageState extends State<LibraryPage> {
     final visibleOfflinePlaylists = rawOfflinePlaylists
         .where((p) => p is Map && !PlaylistUtils.isArtistPlaylist(p))
         .toList();
+    final customFolders = playlistFoldersOfKind('custom');
     final folders = isOffline
-        ? userPlaylistFolders.value
-              .where(PlaylistUtils.folderHasOfflinePlaylists)
-              .toList()
-        : userPlaylistFolders.value;
+        ? customFolders.where(PlaylistUtils.folderHasOfflinePlaylists).toList()
+        : customFolders;
 
     final offlinePlaylistsNotInFolders =
         PlaylistUtils.filterOfflinePlaylistsNotInFolders(
@@ -324,85 +376,53 @@ class _LibraryPageState extends State<LibraryPage> {
     final slivers = <Widget>[];
 
     if (hasLibraryContent) {
+      if (!isOffline) {
+        slivers.add(SliverToBoxAdapter(child: _buildQuickAccessBlock()));
+      }
+      final collapsed = isLibrarySectionCollapsed(_kCustomPlaylistsSection);
       slivers.add(
         SliverToBoxAdapter(
-          child: Column(
-            children: [
-              SectionHeader(
-                title: context.l10n!.customPlaylists,
-                icon: FluentIcons.library_24_filled,
-                actionButton: isOffline
-                    ? null
-                    : Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            padding: const EdgeInsets.symmetric(horizontal: 2),
-                            onPressed: _showCreateFolderDialog,
-                            icon: Icon(
-                              FluentIcons.folder_add_24_regular,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                            tooltip: context.l10n!.createFolder,
-                          ),
-                          IconButton(
-                            padding: const EdgeInsets.symmetric(horizontal: 2),
-                            onPressed: () => showCreatePlaylistDialog(context),
-                            icon: Icon(
-                              FluentIcons.add_24_regular,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
+          child: SectionHeader(
+            title: context.l10n!.customPlaylists,
+            icon: FluentIcons.library_24_filled,
+            onTap: () => _toggleSection(_kCustomPlaylistsSection),
+            isCollapsed: collapsed,
+            actionButton: isOffline
+                ? null
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        onPressed: _showCreateFolderDialog,
+                        icon: Icon(
+                          FluentIcons.folder_add_24_regular,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                        tooltip: context.l10n!.createFolder,
                       ),
-              ),
-              if (!isOffline) ...[
-                PlaylistBar(
-                  context.l10n!.recentlyPlayed,
-                  onPressed: () =>
-                      NavigationManager.router.go('/library/userSongs/recents'),
-                  cubeIcon: FluentIcons.history_24_regular,
-                  borderRadius: commonCustomBarRadiusFirst,
-                  showBuildActions: false,
-                ),
-                PlaylistBar(
-                  context.l10n!.likedSongs,
-                  onPressed: () =>
-                      NavigationManager.router.go('/library/userSongs/liked'),
-                  cubeIcon: FluentIcons.heart_24_regular,
-                  showBuildActions: false,
-                ),
-                PlaylistBar(
-                  context.l10n!.offlineSongs,
-                  onPressed: () =>
-                      NavigationManager.router.go('/library/userSongs/offline'),
-                  cubeIcon: FluentIcons.cloud_off_24_regular,
-                  showBuildActions: false,
-                ),
-                PlaylistBar(
-                  context.l10n!.radioStations,
-                  onPressed: () =>
-                      NavigationManager.router.go('/library/radioStations'),
-                  cubeIcon: FluentIcons.sound_source_24_regular,
-                  borderRadius: hasCustomPlaylists || hasFolders
-                      ? BorderRadius.zero
-                      : commonCustomBarRadiusLast,
-                  showBuildActions: false,
-                ),
-              ],
-            ],
+                      IconButton(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        onPressed: () => showCreatePlaylistDialog(context),
+                        icon: Icon(
+                          FluentIcons.add_24_regular,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
           ),
         ),
       );
 
-      if (hasFolders) {
+      if (hasFolders && !collapsed) {
         slivers.add(_buildFolderSliverList(folders, hasCustomPlaylists));
       }
-      if (hasCustomPlaylists) {
+      if (hasCustomPlaylists && !collapsed) {
         slivers.add(
           _buildSliverPlaylistList(
             playlistsNotInFolders,
-            hasItemsBefore: true,
+            hasItemsBefore: hasFolders,
             selectionSection: _SelectableSection.customPlaylists,
             // Sin conexión la sección muestra sólo una parte de las listas,
             // así que el índice del arrastre no cuadraría con el guardado.
@@ -470,40 +490,177 @@ class _LibraryPageState extends State<LibraryPage> {
   }
 
   List<Widget> _buildLikedPlaylistsSlivers(Color primaryColor) {
+    final folders = playlistFoldersOfKind('liked');
     final likedPlaylists = getLikedPlaylistItems();
-    if (likedPlaylists.isEmpty) return [];
+    if (likedPlaylists.isEmpty && folders.isEmpty) return [];
+    final colorScheme = Theme.of(context).colorScheme;
+    final likedCollapsed = isLibrarySectionCollapsed(_kLikedPlaylistsSection);
+
     return [
       SliverToBoxAdapter(
         child: SectionHeader(
           title: context.l10n!.likedPlaylists,
           icon: FluentIcons.heart_24_filled,
+          onTap: () => _toggleSection(_kLikedPlaylistsSection),
+          isCollapsed: likedCollapsed,
+          actionButton: IconButton(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            onPressed: () => _showCreateFolderDialog(kind: 'liked'),
+            icon: Icon(
+              FluentIcons.folder_add_24_regular,
+              color: colorScheme.onSurfaceVariant,
+            ),
+            tooltip: context.l10n!.createFolder,
+          ),
         ),
       ),
-      _buildSliverPlaylistList(
-        likedPlaylists,
-        selectionSection: _SelectableSection.likedPlaylists,
-        onReorder: (ytid, newIndex) =>
-            reorderLikedLibraryItem(ytid, newIndex, isArtist: false),
+      if (folders.isNotEmpty && !likedCollapsed)
+        _buildFolderSliverList(
+          folders,
+          likedPlaylists.isNotEmpty,
+          kind: 'liked',
+        ),
+      if (likedPlaylists.isNotEmpty && !likedCollapsed)
+        _buildSliverPlaylistList(
+          likedPlaylists,
+          hasItemsBefore: folders.isNotEmpty,
+          selectionSection: _SelectableSection.likedPlaylists,
+          folderKind: 'liked',
+          onReorder: (ytid, newIndex) =>
+              reorderLikedLibraryItem(ytid, newIndex, isArtist: false),
+        ),
+    ];
+  }
+
+  /// Accesos rapidos (recientes, favoritas, sin conexion, radio) como bloque
+  /// propio encima de todo: colgando de la cabecera de "listas propias", que
+  /// en realidad titula lo de abajo, pasaban desapercibidos.
+  Widget _buildQuickAccessBlock() {
+    final colorScheme = Theme.of(context).colorScheme;
+    // El tercer campo es la etiqueta corta de la fila compacta: bajo el icono
+    // no cabe el nombre completo, que se sigue usando en el tooltip y en las
+    // barras del modo normal.
+    final entries = <(IconData, String, String, String)>[
+      (
+        FluentIcons.history_24_regular,
+        context.l10n!.recentlyPlayed,
+        'Recientes',
+        '/library/userSongs/recents',
+      ),
+      (
+        FluentIcons.heart_24_regular,
+        context.l10n!.likedSongs,
+        'Te gustan',
+        '/library/userSongs/liked',
+      ),
+      (
+        FluentIcons.cloud_off_24_regular,
+        context.l10n!.offlineSongs,
+        'Sin conexión',
+        '/library/userSongs/offline',
+      ),
+      (
+        FluentIcons.sound_source_24_regular,
+        context.l10n!.radioStations,
+        'Radio',
+        '/library/radioStations',
       ),
     ];
+
+    if (!compactMode.value) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Column(
+          children: [
+            for (final (index, entry) in entries.indexed)
+              PlaylistBar(
+                entry.$2,
+                onPressed: () => NavigationManager.router.go(entry.$4),
+                cubeIcon: entry.$1,
+                borderRadius: getItemBorderRadius(index, entries.length),
+                showBuildActions: false,
+              ),
+          ],
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Material(
+        color: colorScheme.surfaceContainerHigh,
+        borderRadius: commonCustomBarRadius,
+        clipBehavior: Clip.antiAlias,
+        child: Row(
+          children: [
+            for (final (icon, label, shortLabel, route) in entries)
+              Expanded(
+                child: Tooltip(
+                  message: label,
+                  child: InkWell(
+                    onTap: () => NavigationManager.router.go(route),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 12, 4, 10),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(9),
+                            decoration: BoxDecoration(
+                              color: colorScheme.primaryContainer,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              icon,
+                              size: 20,
+                              color: colorScheme.onPrimaryContainer,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            shortLabel,
+                            maxLines: 2,
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 10,
+                              height: 1.15,
+                              fontWeight: FontWeight.w600,
+                              color: colorScheme.onSurface,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   List<Widget> _buildLikedArtistsSlivers(Color primaryColor) {
     final likedArtists = getLikedArtistItems(offlineOnly: offlineMode.value);
     if (likedArtists.isEmpty) return [];
+    final collapsed = isLibrarySectionCollapsed(_kLikedArtistsSection);
     return [
       SliverToBoxAdapter(
         child: SectionHeader(
           title: context.l10n!.artist,
           icon: FluentIcons.person_24_filled,
+          onTap: () => _toggleSection(_kLikedArtistsSection),
+          isCollapsed: collapsed,
         ),
       ),
-      _buildSliverPlaylistList(
-        likedArtists,
-        selectionSection: _SelectableSection.likedArtists,
-        onReorder: (ytid, newIndex) =>
-            reorderLikedLibraryItem(ytid, newIndex, isArtist: true),
-      ),
+      if (!collapsed)
+        _buildSliverPlaylistList(
+          likedArtists,
+          selectionSection: _SelectableSection.likedArtists,
+          onReorder: (ytid, newIndex) =>
+              reorderLikedLibraryItem(ytid, newIndex, isArtist: true),
+        ),
     ];
   }
 
@@ -514,6 +671,7 @@ class _LibraryPageState extends State<LibraryPage> {
     bool hasItemsBefore = false,
     void Function(String ytid, int newIndex)? onReorder,
     _SelectableSection? selectionSection,
+    String folderKind = 'custom',
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     if (selectionSection != null) _sectionItems[selectionSection] = playlists;
@@ -538,8 +696,12 @@ class _LibraryPageState extends State<LibraryPage> {
             ? FluentIcons.person_24_filled
             : FluentIcons.text_bullet_list_24_filled,
         isAlbum: isArtist ? false : playlist['isAlbum'],
+        folderKind: folderKind,
+        // Las favoritas tambien necesitan el mapa: es lo que lee el menu para
+        // moverlas a una carpeta.
         playlistData:
             isArtist ||
+                folderKind == 'liked' ||
                 playlist['source'] == 'user-created' ||
                 playlist['source'] == 'user-youtube' ||
                 isOfflinePlaylists
@@ -613,22 +775,67 @@ class _LibraryPageState extends State<LibraryPage> {
     );
   }
 
-  Widget _buildFolderSliverList(List folders, bool hasPlaylistsAfter) {
-    return SliverList.builder(
+  Widget _buildFolderSliverList(
+    List folders,
+    bool hasPlaylistsAfter, {
+    String kind = 'custom',
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    // Sin conexión la seccion muestra solo parte de las carpetas, asi que el
+    // indice del arrastre no cuadraria con el guardado.
+    final canReorder = !offlineMode.value;
+
+    Widget buildTile(int index) {
+      final folder = folders[index];
+      final borderRadius = getItemBorderRadius(
+        index,
+        folders.length,
+        hasItemsAfter: hasPlaylistsAfter,
+      );
+      return PlaylistBar(
+        key: ValueKey('folder_${folder['id']}'),
+        folder['name'],
+        playlistData: folder,
+        folderKind: kind,
+        borderRadius: borderRadius,
+        onDelete: () => _showDeleteFolderDialog(folder),
+        reorderHandle: canReorder
+            ? ReorderableDragStartListener(
+                index: index,
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: Icon(FluentIcons.re_order_24_regular),
+                ),
+              )
+            : null,
+      );
+    }
+
+    if (!canReorder) {
+      return SliverList.builder(
+        itemCount: folders.length,
+        itemBuilder: (context, index) => buildTile(index),
+      );
+    }
+
+    return SliverReorderableList(
       itemCount: folders.length,
-      itemBuilder: (BuildContext context, index) {
-        final folder = folders[index];
-        final isLastFolder = index == folders.length - 1;
-        final borderRadius = isLastFolder && !hasPlaylistsAfter
-            ? commonCustomBarRadiusLast
-            : BorderRadius.zero;
-        return PlaylistBar(
-          folder['name'],
-          playlistData: folder,
-          borderRadius: borderRadius,
-          onDelete: () => _showDeleteFolderDialog(folder),
-        );
+      onReorderItem: (oldIndex, newIndex) {
+        final folderId = folders[oldIndex]['id']?.toString();
+        if (folderId == null) return;
+        reorderPlaylistFolder(folderId, newIndex, kind: kind);
       },
+      proxyDecorator: (child, index, animation) => Material(
+        elevation: 8,
+        color: colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
+        shadowColor: colorScheme.shadow.withValues(alpha: 0.35),
+        child: child,
+      ),
+      itemBuilder: (context, index) => KeyedSubtree(
+        key: ValueKey('folder_${folders[index]['id']}'),
+        child: buildTile(index),
+      ),
     );
   }
 
@@ -713,7 +920,7 @@ class _LibraryPageState extends State<LibraryPage> {
     },
   );
 
-  void _showCreateFolderDialog() => showDialog(
+  void _showCreateFolderDialog({String kind = 'custom'}) => showDialog(
     context: context,
     builder: (BuildContext context) {
       var folderName = '';
@@ -771,7 +978,11 @@ class _LibraryPageState extends State<LibraryPage> {
           FilledButton.icon(
             onPressed: () {
               if (folderName.trim().isNotEmpty) {
-                final result = createPlaylistFolder(folderName.trim(), context);
+                final result = createPlaylistFolder(
+                  folderName.trim(),
+                  context,
+                  kind,
+                );
                 showToast(context, result);
               } else {
                 showToast(context, context.l10n!.enterFolderName);

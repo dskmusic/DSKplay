@@ -356,5 +356,108 @@
   "userPlaylists": "User playlists",
   "viewOnGithub": "View on GitHub",
   "yes": "Yes",
-  "youtubePlaylistLinkOrId": "YouTube playlist link or ID"
+  "youtubePlaylistLinkOrId": "YouTube playlist link or ID",
+  "adjustImage": "Adjust image",
+  "adjustImageHint": "Drag and pinch to frame it",
+  "pickImage": "Choose image",
+  "searchImageOnline": "Search image online (Pixabay)",
+  "noPreviousSuggestions": "There are no previous suggestions",
+  "refreshSuggestionsTooltip": "Refresh suggestions (hold to bring back the previous ones)",
+  "deletePlaylistsQuestion": "Delete {count} playlists?",
+  "@deletePlaylistsQuestion": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "removeLikedPlaylistsQuestion": "Remove {count} playlists from your favourites?",
+  "@removeLikedPlaylistsQuestion": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "removeLikedArtistsQuestion": "Remove {count} artists from your favourites?",
+  "@removeLikedArtistsQuestion": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "removeFromFolderQuestion": "Take {count} playlists out of the folder?",
+  "@removeFromFolderQuestion": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "playlistsMoved": "{count} playlists moved",
+  "@playlistsMoved": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "removeSongFromPlaylistQuestion": "Remove \"{title}\" from this playlist?",
+  "@removeSongFromPlaylistQuestion": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "removeDownloadQuestion": "Delete the download of \"{title}\"?",
+  "@removeDownloadQuestion": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "thisSong": "this song",
+  "removedFromQueue": "Removed from the queue",
+  "removedFromRecents": "Removed from recently played",
+  "includePodcastsInSuggestions": "Include podcasts in suggestions",
+  "includePodcastsInSuggestionsDescription": "Shows or hides podcast episodes in the home screen recommendations",
+  "sleepTimerFade": "Fade out on sleep timer",
+  "sleepTimerFadeDescription": "Lowers the volume gradually before the sleep timer stops playback",
+  "sleepTimerFadeDuration": "Fade duration",
+  "selectedItems": "{count} selected",
+  "@selectedItems": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "selectAll": "Select all",
+  "itemsDeleted": "{count} items deleted",
+  "@itemsDeleted": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "songsDeleted": "{count} songs deleted",
+  "@songsDeleted": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "playlistsRemovedFromFolder": "{count} playlists removed from the folder",
+  "@playlistsRemovedFromFolder": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

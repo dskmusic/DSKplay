@@ -397,9 +397,15 @@ Future<List> getRecommendedSongs() async {
         ? await _getRecommendationsFromRecentlyPlayed()
         : await _getRecommendationsFromMixedSources();
 
-    if (userHiddenRecommendationIds.value.isEmpty) return recommendations;
+    // Un unico filtro para todas las fuentes de recomendacion: los podcasts
+    // pueden colarse desde recientes o desde "me gusta".
+    final keepPodcasts = includePodcastsInSuggestions.value;
     return recommendations
-        .where((s) => !userHiddenRecommendationIds.value.contains(s['ytid']))
+        .where(
+          (s) =>
+              !userHiddenRecommendationIds.value.contains(s['ytid']) &&
+              (keepPodcasts || s['isPodcastEpisode'] != true),
+        )
         .toList();
   } catch (e, stackTrace) {
     logger.log(
@@ -1369,6 +1375,16 @@ Future<void> updateRecentlyPlayed(dynamic songId, {Map? songFallback}) async {
       stackTrace: stackTrace,
     );
   }
+}
+
+/// Devuelve una cancion al historial reciente en su sitio: lo usa el
+/// "deshacer" del borrado.
+Future<void> restoreToRecentlyPlayed(Map song, int index) async {
+  final list = List.from(userRecentlyPlayed.value);
+  if (list.any((s) => s['ytid'] == song['ytid'])) return;
+  list.insert(index.clamp(0, list.length), song);
+  userRecentlyPlayed.value = list;
+  unawaited(addOrUpdateData<List>('user', 'recentlyPlayedSongs', list));
 }
 
 Future<void> removeFromRecentlyPlayed(dynamic songId) async {
