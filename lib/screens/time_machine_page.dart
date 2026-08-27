@@ -83,7 +83,7 @@ class _TimeMachinePageState extends State<TimeMachinePage> {
         return ListenableBuilder(
           listenable: Listenable.merge([
             wrappedEnabled,
-            includePodcastsInTimeMachine,
+            includePodcasts,
           ]),
           builder: (context, _) {
             if (!wrappedEnabled.value || !listeningStatsService.hasStats) {

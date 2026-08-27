@@ -68,13 +68,13 @@ class _HomePageState extends State<HomePage> {
     );
     _recommendedSongsFuture = getRecommendedSongs();
     externalRecommendations.addListener(_refreshRecommendedSongs);
-    includePodcastsInSuggestions.addListener(_refreshRecommendedSongs);
+    includePodcasts.addListener(_refreshRecommendedSongs);
   }
 
   @override
   void dispose() {
     externalRecommendations.removeListener(_refreshRecommendedSongs);
-    includePodcastsInSuggestions.removeListener(_refreshRecommendedSongs);
+    includePodcasts.removeListener(_refreshRecommendedSongs);
     super.dispose();
   }
 
@@ -316,7 +316,7 @@ class _HomePageState extends State<HomePage> {
     return ListenableBuilder(
       listenable: Listenable.merge([
         wrappedEnabled,
-        includePodcastsInTimeMachine,
+        includePodcasts,
       ]),
       builder: (context, __) {
         if (!wrappedEnabled.value) return const SizedBox.shrink();

@@ -399,7 +399,7 @@ Future<List> getRecommendedSongs() async {
 
     // Un unico filtro para todas las fuentes de recomendacion: los podcasts
     // pueden colarse desde recientes o desde "me gusta".
-    final keepPodcasts = includePodcastsInSuggestions.value;
+    final keepPodcasts = includePodcasts.value;
     return recommendations
         .where(
           (s) =>

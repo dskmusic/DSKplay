@@ -481,7 +481,7 @@ class ListeningStatsService {
   /// data is shown, without duplicating the filter at each call site.
   Map<String, dynamic> _filteredStats([DateTime? now]) {
     final stats = _readStats(now);
-    if (includePodcastsInTimeMachine.value) return stats;
+    if (includePodcasts.value) return stats;
 
     final filtered = Map<String, dynamic>.from(stats);
     filtered['currentMonth'] = _stripPodcastsFromMonth(stats['currentMonth']);

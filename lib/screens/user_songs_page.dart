@@ -66,15 +66,17 @@ class _UserSongsPageState extends State<UserSongsPage> {
   // songs (see mediaItemToMap), but have their own dedicated screen
   // (FavoritePodcastEpisodesPage) - hidden here so "liked songs" only shows
   // songs, matching what the header count/play/shuffle buttons operate on.
-  List _filterLiked(List list) {
-    if (widget.page != 'liked') return list;
+  // En recientes se ocultan solo si el ajuste único de podcasts está apagado.
+  List _filterPodcasts(List list) {
+    if (widget.page == 'offline') return list;
+    if (widget.page != 'liked' && includePodcasts.value) return list;
     return list
         .where((s) => s is! Map || s['isPodcastEpisode'] != true)
         .toList();
   }
 
   /// La lista que toca según la pestaña, sin buscar ni ordenar.
-  List _rawList() => _filterLiked(
+  List _rawList() => _filterPodcasts(
     widget.page == 'liked'
         ? userLikedSongsList.value
         : widget.page == 'offline'
@@ -99,10 +101,18 @@ class _UserSongsPageState extends State<UserSongsPage> {
     super.initState();
     _searchController = TextEditingController();
     _searchFocusNode = FocusNode();
+    // El ajuste se cambia en otra pestaña: sin esto la lista de recientes se
+    // quedaría con los podcasts que se acaban de ocultar.
+    includePodcasts.addListener(_onIncludePodcastsChanged);
+  }
+
+  void _onIncludePodcastsChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    includePodcasts.removeListener(_onIncludePodcastsChanged);
     _searchController.dispose();
     _searchFocusNode.dispose();
     _searchQueryNotifier.dispose();
@@ -143,7 +153,7 @@ class _UserSongsPageState extends State<UserSongsPage> {
             builder: (_, songsList, __) => _buildCustomScrollView(
               title,
               icon,
-              _filterLiked(songsList).length,
+              _filterPodcasts(songsList).length,
               isOfflineSongs,
             ),
           ),

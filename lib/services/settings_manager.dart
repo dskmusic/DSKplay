@@ -48,12 +48,21 @@ final wrappedEnabled = ValueNotifier<bool>(
   Hive.box('settings').get('wrappedEnabled', defaultValue: true),
 );
 
-final includePodcastsInTimeMachine = ValueNotifier<bool>(
-  Hive.box('settings').get('includePodcastsInTimeMachine', defaultValue: true),
-);
-
-final includePodcastsInSuggestions = ValueNotifier<bool>(
-  Hive.box('settings').get('includePodcastsInSuggestions', defaultValue: true),
+/// Un unico interruptor para los tres sitios donde los podcasts se mezclan
+/// con la musica: sugerencias, recientes y maquina del tiempo. Hereda su
+/// valor de los dos ajustes separados que habia antes: si alguno estaba
+/// apagado, se queda apagado.
+final includePodcasts = ValueNotifier<bool>(
+  Hive.box('settings').get(
+    'includePodcasts',
+    defaultValue:
+        Hive.box(
+          'settings',
+        ).get('includePodcastsInTimeMachine', defaultValue: true) &&
+        Hive.box(
+          'settings',
+        ).get('includePodcastsInSuggestions', defaultValue: true),
+  ),
 );
 
 final rememberLastPlayback = ValueNotifier<bool>(
