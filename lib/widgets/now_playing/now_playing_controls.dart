@@ -24,6 +24,7 @@ import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
+import 'package:dskplay/services/io_service.dart';
 import 'package:dskplay/services/playlists_manager.dart';
 import 'package:dskplay/services/router_service.dart';
 import 'package:dskplay/services/settings_manager.dart';
@@ -168,12 +169,17 @@ class NowPlayingControls extends StatelessWidget {
         final label = folderName == null || folderName.isEmpty
             ? sourceTitle
             : '$folderName › $sourceTitle';
+        final isLocalFolder = sourceRoute.startsWith(
+          NavigationManager.localFilesPath,
+        );
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: TextButton.icon(
-            onPressed: () => _openSource(context, source),
+            onPressed: () => _openSource(context, source!),
             icon: Icon(
-              source!['isArtist'] == true
+              isLocalFolder
+                  ? FluentIcons.folder_24_regular
+                  : source!['isArtist'] == true
                   ? FluentIcons.mic_24_regular
                   : source['isAlbum'] == true
                   ? FluentIcons.cd_16_regular
@@ -201,6 +207,14 @@ class NowPlayingControls extends StatelessWidget {
 
     if (id.isEmpty) {
       Navigator.of(context).pop();
+      // Los archivos locales viven en su propia pestana: se cambia de rama y
+      // la pagina abre la carpeta guardada en la ruta.
+      final uri = Uri.parse(route);
+      if (uri.path == NavigationManager.localFilesPath) {
+        localFilesPendingFolder.value = uri.queryParameters['path'];
+        router.go(NavigationManager.localFilesPath);
+        return;
+      }
       unawaited(router.push(route));
       return;
     }

@@ -28,6 +28,7 @@ import 'package:dskplay/screens/bottom_navigation_page.dart';
 import 'package:dskplay/services/data_manager.dart';
 import 'package:dskplay/services/io_service.dart';
 import 'package:dskplay/services/local_files_service.dart';
+import 'package:dskplay/services/router_service.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/utilities/edit_tags_dialog.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
@@ -80,11 +81,13 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
     _checkPermission();
     _loadFavorites();
     localFilesRefreshTick.addListener(_onExternalFilesChanged);
+    localFilesPendingFolder.addListener(_onPendingFolderRequested);
   }
 
   @override
   void dispose() {
     localFilesRefreshTick.removeListener(_onExternalFilesChanged);
+    localFilesPendingFolder.removeListener(_onPendingFolderRequested);
     _searchController.dispose();
     super.dispose();
   }
@@ -95,6 +98,14 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
   void _onExternalFilesChanged() {
     if (!mounted || _hasPermission != true || _isSearching) return;
     _loadCurrentDirectory();
+  }
+
+  /// El enlace al origen del reproductor pide abrir una carpeta concreta.
+  void _onPendingFolderRequested() {
+    final path = localFilesPendingFolder.value;
+    if (path == null || !mounted) return;
+    localFilesPendingFolder.value = null;
+    _jumpToFolder(path);
   }
 
   Future<void> _loadFavorites() async {
@@ -200,7 +211,7 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
     final index = siblings.indexWhere((f) => f.path == file.path);
     final songs = await buildLocalSongMaps(siblings);
     await audioHandler.playPlaylistSong(
-      playlist: {'list': songs},
+      playlist: {'list': songs, ..._localFolderSource(file.parent.path)},
       songIndex: index == -1 ? 0 : index,
     );
     if (mounted) {
@@ -232,8 +243,10 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
   /// Reopens whatever folder the user was last browsing, so the explorer
   /// doesn't reset to the root every time this tab is left and revisited.
   Future<void> _restoreLastPath() async {
+    final pending = localFilesPendingFolder.value;
+    localFilesPendingFolder.value = null;
     final saved =
-        await getData('userNoBackup', 'lastLocalFilesPath') as String?;
+        pending ?? await getData('userNoBackup', 'lastLocalFilesPath') as String?;
     if (saved == null ||
         saved == defaultLocalFilesRoot ||
         !await Directory(saved).exists()) {
@@ -282,6 +295,22 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
     setState(() {
       _folderStack.add(_currentPath);
       _currentPath = path;
+      _exitSelectionModeSilently();
+    });
+    _loadCurrentDirectory();
+    _persistCurrentPath();
+  }
+
+  /// Va directo a [path] (venga de donde venga) dejando la pila de carpetas
+  /// como si se hubiera llegado navegando desde la raiz.
+  void _jumpToFolder(String path) {
+    if (_isSearching) _stopSearch();
+    setState(() {
+      _showingFavorites = false;
+      _currentPath = path;
+      _folderStack
+        ..clear()
+        ..addAll(_ancestorPathsOf(path));
       _exitSelectionModeSilently();
     });
     _loadCurrentDirectory();
@@ -420,7 +449,7 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
     final index = siblings.indexWhere((f) => f.path == file.path);
     final songs = await buildLocalSongMaps(siblings);
     await audioHandler.playPlaylistSong(
-      playlist: {'list': songs},
+      playlist: {'list': songs, ..._localFolderSource(file.parent.path)},
       songIndex: index == -1 ? 0 : index,
     );
   }
@@ -432,8 +461,17 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
       await buildLocalSongMaps(files),
       replace: true,
       startIndex: 0,
+      source: _localFolderSource(dir.path),
     );
   }
+
+  /// Origen que enseña el reproductor completo: la carpeta de la que salio lo
+  /// que suena, con la ruta para volver a ella.
+  Map<String, dynamic> _localFolderSource(String path) => {
+    'title': fileNameFromPath(path),
+    'route':
+        '${NavigationManager.localFilesPath}?path=${Uri.encodeComponent(path)}',
+  };
 
   Future<void> _addFolderToQueue(Directory dir) async {
     final files = await collectAudioFilesRecursively(dir);

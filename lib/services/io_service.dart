@@ -40,6 +40,12 @@ void notifyLocalFilesChanged() {
   localFilesRefreshTick.value++;
 }
 
+/// Carpeta que el explorador de archivos locales debe abrir en cuanto se
+/// muestre; la usa el enlace al origen del reproductor completo.
+final ValueNotifier<String?> localFilesPendingFolder = ValueNotifier<String?>(
+  null,
+);
+
 /// Tells Android's MediaStore to (re)index [path]. Files written directly
 /// to disk (as every download/export/tag-edit here does) don't show up —
 /// or keep showing stale cover art — in other apps (file managers, other
