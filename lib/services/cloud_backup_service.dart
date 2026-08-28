@@ -21,6 +21,8 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show gzip;
+import 'dart:typed_data' show Uint8List;
 
 import 'package:dskplay/main.dart' show logger;
 import 'package:dskplay/services/audio_service.dart' show DskPlayAudioHandler;
@@ -165,10 +167,16 @@ class CloudBackupService {
 
     try {
       final snapshot = await buildBackupSnapshot();
-      final bytes = utf8.encode(jsonEncode(snapshot));
+      // Gzipped, not raw JSON: this file is mostly repetitive keys and
+      // URLs, which compress to roughly a fifth of their size - that's a
+      // fifth of the Storage quota, and a fifth of the mobile data spent
+      // on every automatic upload.
+      final bytes = Uint8List.fromList(
+        gzip.encode(utf8.encode(jsonEncode(snapshot))),
+      );
 
       await reference
-          .putData(bytes, SettableMetadata(contentType: 'application/json'))
+          .putData(bytes, SettableMetadata(contentType: 'application/gzip'))
           .timeout(
             _uploadTimeout,
             onTimeout: () => throw TimeoutException('uploading backup'),
@@ -190,6 +198,18 @@ class CloudBackupService {
 
   /// Downloads a backup. Defaults to this device's own backup; pass [code]
   /// (another device's recovery code) to restore from a different install.
+  /// Only ever hit by a corrupt/hostile file - a real backup is a few
+  /// hundred KB gzipped - but keeps a runaway download from filling memory.
+  static const _maxDownloadBytes = 100 * 1024 * 1024;
+
+  /// Backups uploaded before compression was added are plain JSON, so this
+  /// checks the gzip magic bytes instead of assuming: restoring from an
+  /// older device's recovery code has to keep working.
+  static List<int> _maybeGunzip(List<int> bytes) =>
+      bytes.length > 1 && bytes[0] == 0x1f && bytes[1] == 0x8b
+          ? gzip.decode(bytes)
+          : bytes;
+
   Future<({Map<String, dynamic>? data, DateTime? updatedAt})> downloadBackup({
     String? code,
   }) async {
@@ -198,9 +218,10 @@ class CloudBackupService {
     if (reference == null) return (data: null, updatedAt: null);
 
     try {
-      final bytes = await reference.getData(20 * 1024 * 1024);
+      final bytes = await reference.getData(_maxDownloadBytes);
       if (bytes == null) return (data: null, updatedAt: null);
-      final data = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
+      final data =
+          jsonDecode(utf8.decode(_maybeGunzip(bytes))) as Map<String, dynamic>;
       final metadata = await reference.getMetadata();
       return (data: data, updatedAt: metadata.updated);
     } catch (e, stackTrace) {
@@ -213,24 +234,28 @@ class CloudBackupService {
     }
   }
 
-  Future<DateTime?> getCloudBackupTimestamp() async {
+  /// When the cloud backup was last written and how big it is, both read
+  /// from the same Storage metadata call.
+  Future<({DateTime? updatedAt, int? sizeInBytes})> getCloudBackupInfo() async {
     await init();
     final reference = _reference;
-    if (reference == null) return null;
+    if (reference == null) return (updatedAt: null, sizeInBytes: null);
 
     try {
       final metadata = await reference.getMetadata().timeout(_networkTimeout);
-      return metadata.updated;
+      return (updatedAt: metadata.updated, sizeInBytes: metadata.size);
     } catch (e, stackTrace) {
       // Also the expected path for "no backup yet" (object-not-found), so
       // this stays quiet instead of logging every first-run check.
-      if (e is FirebaseException && e.code == 'object-not-found') return null;
+      if (e is FirebaseException && e.code == 'object-not-found') {
+        return (updatedAt: null, sizeInBytes: null);
+      }
       logger.log(
-        'Failed to read cloud backup timestamp',
+        'Failed to read cloud backup metadata',
         error: e,
         stackTrace: stackTrace,
       );
-      return null;
+      return (updatedAt: null, sizeInBytes: null);
     }
   }
 }

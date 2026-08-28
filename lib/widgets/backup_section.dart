@@ -48,6 +48,7 @@ class BackupSection extends StatefulWidget {
 class _BackupSectionState extends State<BackupSection> {
   DateTime? _localBackupAt;
   DateTime? _cloudBackupAt;
+  int? _cloudBackupSize;
   bool _busy = false;
   // Which action is running, so only that row shows a spinner instead of
   // the whole section just going quietly unresponsive - that silence was
@@ -69,11 +70,12 @@ class _BackupSectionState extends State<BackupSection> {
 
   Future<void> _loadTimestamps() async {
     final local = await getData('userNoBackup', 'lastLocalBackupAt');
-    final cloud = await cloudBackupService.getCloudBackupTimestamp();
+    final cloud = await cloudBackupService.getCloudBackupInfo();
     if (!mounted) return;
     setState(() {
       _localBackupAt = local as DateTime?;
-      _cloudBackupAt = cloud;
+      _cloudBackupAt = cloud.updatedAt;
+      _cloudBackupSize = cloud.sizeInBytes;
     });
   }
 
@@ -83,6 +85,20 @@ class _BackupSectionState extends State<BackupSection> {
     String two(int n) => n.toString().padLeft(2, '0');
     return '${two(local.day)}/${two(local.month)}/${local.year} '
         '${two(local.hour)}:${two(local.minute)}';
+  }
+
+  String _formatSize(int? bytes) {
+    if (bytes == null) return '';
+    if (bytes < 1024) return '$bytes B';
+    final kb = bytes / 1024;
+    if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
+    return '${(kb / 1024).toStringAsFixed(1)} MB';
+  }
+
+  String _formatCloudDescription() {
+    final timestamp = _formatTimestamp(_cloudBackupAt);
+    final size = _formatSize(_cloudBackupSize);
+    return size.isEmpty ? timestamp : '$timestamp  -  $size';
   }
 
   Future<void> _showFolderRestrictionsNotice() async {
@@ -117,42 +133,26 @@ class _BackupSectionState extends State<BackupSection> {
     reloadSearchHistoryFromStorage();
     reloadRadioStationsStateFromStorage();
     podcastManager.reloadFromStorage();
-    // The restored settings box may carry a different wrappedEnabled value
-    // than the one already loaded into this ValueNotifier; without resyncing
-    // it here, recording silently keeps following the pre-restore value
-    // until the next cold start, when it would suddenly flip without
-    // explanation.
-    wrappedEnabled.value =
-        await getData('settings', 'wrappedEnabled', defaultValue: true)
-            as bool;
+    // Every preference in the restored 'settings' box at once, instead of
+    // the handful this used to resync by hand - each setting that wasn't on
+    // that list stayed on its pre-restore value until a cold start, which
+    // looked like the backup had never contained it.
+    reloadSettingsFromStorage();
     listeningStatsService.reload();
 
-    // Same reasoning for the theme/accent settings added alongside backups:
-    // they live in the restored 'settings' box, but the live app state
-    // (ThemeMode, pure-black flag, seed color) is cached in module-level
-    // vars/notifiers that a restore doesn't touch on its own.
+    // Theme, accent and language aren't just values: the widget tree has to
+    // be told to rebuild with them, which reloadSettingsFromStorage() can't
+    // do without a BuildContext.
     final restoredThemeIndex =
         await getData('settings', 'themeIndex', defaultValue: 0) as int;
-    final restoredAmoled =
-        await getData('settings', 'usePureBlackColor', defaultValue: false)
-            as bool;
-    final restoredUseSystemColor =
-        await getData('settings', 'useSystemColor', defaultValue: true)
-            as bool;
-    final restoredAccent =
-        await getData('settings', 'accentColor', defaultValue: 0xff91cef4)
-            as int;
-
-    usePureBlackColor.value = restoredAmoled;
-    useSystemColor.value = restoredUseSystemColor;
-    primaryColorSetting = Color(restoredAccent);
 
     if (mounted) {
       DskPlay.updateAppState(
         context,
         newThemeMode: getThemeMode(restoredThemeIndex),
         newAccentColor: primaryColorSetting,
-        useSystemColor: restoredUseSystemColor,
+        newLocale: languageSetting,
+        useSystemColor: useSystemColor.value,
       );
     }
   }
@@ -280,7 +280,7 @@ class _BackupSectionState extends State<BackupSection> {
         CustomBar(
           'Respaldo en la nube',
           FluentIcons.cloud_sync_24_regular,
-          description: _formatTimestamp(_cloudBackupAt),
+          description: _formatCloudDescription(),
           onTap: _busy ? null : _backupCloud,
           trailing: _spinnerFor('cloud_backup'),
         ),

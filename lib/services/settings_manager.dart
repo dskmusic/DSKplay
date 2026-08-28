@@ -278,6 +278,76 @@ final repeatNotifier = ValueNotifier<AudioServiceRepeatMode>(
   ).get('repeatMode', defaultValue: 0)],
 );
 
+/// Re-reads every persisted preference back out of the `settings` box.
+///
+/// A restore (local file or cloud) rewrites that box on disk, but each
+/// setting above also lives in a module-level notifier/variable that was
+/// read once at startup - without this, restored preferences like
+/// [includePodcasts] silently keep their pre-restore value until the next
+/// cold start, which reads as "that setting wasn't in the backup".
+void reloadSettingsFromStorage() {
+  final box = Hive.box('settings');
+  T read<T>(String key, T defaultValue) =>
+      box.get(key, defaultValue: defaultValue) as T;
+
+  playNextSongAutomatically.value = read('playNextSongAutomatically', false);
+  useSystemColor.value = read('useSystemColor', true);
+  usePureBlackColor.value = read('usePureBlackColor', false);
+  offlineMode.value = read('offlineMode', false);
+  wrappedEnabled.value = read('wrappedEnabled', true);
+  includePodcasts.value = read('includePodcasts', true);
+  rememberLastPlayback.value = read('rememberLastPlayback', true);
+  showArtistExtras.value = read('showArtistExtras', true);
+  startScreenSetting.value = read('startScreen', '/home');
+  autoCloseAfterPauseMinutes.value = read('autoCloseAfterPauseMinutes', 10);
+  sleepTimerFadeEnabled.value = read('sleepTimerFadeEnabled', true);
+  sleepTimerFadeSeconds.value = read('sleepTimerFadeSeconds', 20);
+  nativeIdleCloseBackupEnabled.value = read(
+    'nativeIdleCloseBackupEnabled',
+    true,
+  );
+  compactMode.value = read('compactMode', true);
+  predictiveBack.value = read('predictiveBack', true);
+  sponsorBlockSupport.value = read('sponsorBlockSupport', false);
+  externalRecommendations.value = read('externalRecommendations', false);
+  useProxy.value = read('useProxy', false);
+  audioQualitySetting.value = read('audioQuality', 'high');
+  equalizerEnabled.value = read('equalizerEnabled', false);
+  equalizerBandGains.value = _readEqualizerGains();
+  volumeNormalizationEnabled.value = read('volumeNormalizationEnabled', false);
+  karaokeBackgroundColor.value = Color(
+    read('karaokeBackgroundColor', karaokeDefaultBackgroundColor.toARGB32()),
+  );
+  karaokeActiveLyricColor.value = Color(
+    read('karaokeActiveLyricColor', karaokeDefaultActiveLyricColor.toARGB32()),
+  );
+  karaokeInactiveLyricColor.value = Color(
+    read(
+      'karaokeInactiveLyricColor',
+      karaokeDefaultInactiveLyricColor.toARGB32(),
+    ),
+  );
+  collapsedLibrarySections.value = List<String>.from(
+    box.get('collapsedLibrarySections', defaultValue: <String>[]) as List,
+  );
+
+  // Plain globals rather than notifiers: nothing rebuilds off them, the
+  // next screen that reads them picks up the new value on its own.
+  playlistSortSetting = read('playlistSortType', PlaylistSortType.default_.name);
+  playlistSortAscending = read('playlistSortAscending', true);
+  offlineSortSetting = read('offlineSortType', OfflineSortType.default_.name);
+  offlineSortAscending = read('offlineSortAscending', true);
+  primaryColorSetting = Color(read('accentColor', 0xff91cef4));
+  languageSetting = getLocaleFromLanguageCode(
+    read('languageCode', detectSystemLanguageCode()),
+  );
+
+  // ponytail: shuffle/repeat deliberately left alone - they mirror the live
+  // AudioHandler queue state, and moving the notifier without telling the
+  // handler would just show the user a switch that lies about what's
+  // playing. They re-sync on the next cold start anyway.
+}
+
 // Non-storage notifiers
 
 /// `ytid` de lo que suena ahora mismo. Lo alimenta el AudioHandler desde el
