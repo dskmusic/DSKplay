@@ -1179,13 +1179,26 @@ class DskPlayAudioHandler extends BaseAudioHandler {
             return;
           }
 
+          // Sin lo que ya esta en la cola ni lo que acaba de sonar: los
+          // relacionados de un tema se repiten mucho entre si y la autoplay
+          // acababa dando vueltas sobre las mismas dos o tres canciones.
+          final exclude = <String>{
+            for (final song in [..._queueList, ..._historyList])
+              if (song['ytid'] != null) song['ytid'].toString(),
+          };
+
           // Fetch similar songs silently in the background
-          await getSimilarSong(baseSong['ytid']).timeout(
-            const Duration(seconds: 10),
-            onTimeout: () {
-              logger.log('Background song fetch timed out');
-            },
-          );
+          final songToAdd =
+              await getSimilarSong(
+                baseSong['ytid'],
+                exclude: exclude,
+              ).timeout(
+                const Duration(seconds: 10),
+                onTimeout: () {
+                  logger.log('Background song fetch timed out');
+                  return null;
+                },
+              );
 
           // If we got a recommendation, add it to the queue
           // But only if still playing (user might have paused during fetch)
@@ -1193,9 +1206,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
             return;
           }
 
-          if (nextRecommendedSong != null) {
-            final songToAdd = nextRecommendedSong;
-            nextRecommendedSong = null;
+          if (songToAdd != null) {
             await _insertRecommendedSong(songToAdd);
           }
         } catch (e, stackTrace) {

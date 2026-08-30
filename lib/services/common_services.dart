@@ -273,8 +273,6 @@ void reorderOfflineSong(String ytid, int newIndex) {
   unawaited(addOrUpdateData<List>('userNoBackup', 'offlineSongs', list));
 }
 
-dynamic nextRecommendedSong;
-
 var _songLikeUpdateToken = 0;
 final _latestSongLikeUpdateTokens = <String, int>{};
 
@@ -392,21 +390,23 @@ Future<List> fetchSongsList(String searchQuery) async {
 
 Future<List> getRecommendedSongs() async {
   try {
-    final recommendations =
-        externalRecommendations.value && userRecentlyPlayed.value.isNotEmpty
-        ? await _getRecommendationsFromRecentlyPlayed()
-        : await _getRecommendationsFromMixedSources();
+    final useExternal =
+        externalRecommendations.value && userRecentlyPlayed.value.isNotEmpty;
+    final recommendations = _filterRecommendations(
+      useExternal
+          ? await _getRecommendationsFromRecentlyPlayed()
+          : await _getRecommendationsFromMixedSources(),
+    );
 
-    // Un unico filtro para todas las fuentes de recomendacion: los podcasts
-    // pueden colarse desde recientes o desde "me gusta".
-    final keepPodcasts = includePodcasts.value;
-    return recommendations
-        .where(
-          (s) =>
-              !userHiddenRecommendationIds.value.contains(s['ytid']) &&
-              (keepPodcasts || s['isPodcastEpisode'] != true),
-        )
-        .toList();
+    // Los relacionados pueden no dar nada (sin red, video sin relacionados,
+    // todo filtrado): mejor la mezcla propia que una portada vacia.
+    if (recommendations.isEmpty && useExternal) {
+      return _filterRecommendations(
+        await _getRecommendationsFromMixedSources(),
+      );
+    }
+
+    return recommendations;
   } catch (e, stackTrace) {
     logger.log(
       'Error in getRecommendedSongs',
@@ -415,6 +415,44 @@ Future<List> getRecommendedSongs() async {
     );
     return [];
   }
+}
+
+/// Un unico filtro para todas las fuentes de recomendacion: los podcasts
+/// pueden colarse desde recientes o desde "me gusta".
+List _filterRecommendations(List songs) {
+  final keepPodcasts = includePodcasts.value;
+  return songs
+      .where(
+        (s) =>
+            !userHiddenRecommendationIds.value.contains(s['ytid']) &&
+            (keepPodcasts || s['isPodcastEpisode'] != true),
+      )
+      .toList();
+}
+
+// Los relacionados de YouTube traen mixes de horas, discos enteros, directos
+// y shorts. Aqui solo queremos canciones sueltas.
+const _minSongDuration = Duration(seconds: 45);
+const _maxSongDuration = Duration(minutes: 8);
+
+/// Relacionados de [ytid] ya limpios: solo canciones, sin lo que el usuario
+/// oculto y sin lo que [exclude] descarte (cola actual, historial...).
+Future<List<Map<String, dynamic>>> _relatedSongs(
+  String ytid, {
+  Set<String> exclude = const {},
+}) async {
+  final hidden = userHiddenRecommendationIds.value;
+  return [
+    for (final video in await NewPipe.related(ytid))
+      if (!video.isLive &&
+          video.duration != null &&
+          video.duration! >= _minSongDuration &&
+          video.duration! <= _maxSongDuration &&
+          video.id != ytid &&
+          !exclude.contains(video.id) &&
+          !hidden.contains(video.id))
+        returnSongLayout(0, video),
+  ];
 }
 
 Future<List> _getRecommendationsFromRecentlyPlayed() async {
@@ -429,9 +467,9 @@ Future<List> _getRecommendationsFromRecentlyPlayed() async {
     final seedIndex = entry.key;
     final songData = entry.value;
     try {
-      final related = await NewPipe.related(songData['ytid']);
+      final related = await _relatedSongs(songData['ytid']);
       for (var i = 0; i < related.length && i < 8; i++) {
-        final s = returnSongLayout(0, related[i]);
+        final s = related[i];
         final id = s['ytid'];
         final positionWeight = 1.0 - (i / 8);
         final recencyWeight = 1.0 - (seedIndex / recent.length);
@@ -775,21 +813,27 @@ Future<List<Map<String, int>>> getSkipSegments(String id) async {
   }
 }
 
-Future<void> getSimilarSong(String songYtId) async {
+/// Siguiente cancion parecida a [songYtId], o null si no hay ninguna usable.
+/// [exclude] son ids que no deben repetirse: cola actual, historial reciente.
+Future<Map<String, dynamic>?> getSimilarSong(
+  String songYtId, {
+  Set<String> exclude = const {},
+}) async {
   try {
-    final relatedSongs = await NewPipe.related(songYtId);
+    final relatedSongs = await _relatedSongs(songYtId, exclude: exclude);
 
-    if (relatedSongs.isNotEmpty) {
-      nextRecommendedSong = returnSongLayout(0, relatedSongs[0]);
-    } else {
+    if (relatedSongs.isEmpty) {
       logger.log('No related songs found for $songYtId');
+      return null;
     }
+    return relatedSongs.first;
   } catch (e, stackTrace) {
     logger.log(
       'Error while fetching next similar song:',
       error: e,
       stackTrace: stackTrace,
     );
+    return null;
   }
 }
 
