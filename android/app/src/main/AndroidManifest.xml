@@ -6,6 +6,12 @@
     <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Cast: descubrir Chromecast (MediaRouter) y Smart TV por SSDP/DLNA, que
+         es multicast UDP y no llega sin el multicast lock. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"  />
 
@@ -136,6 +142,11 @@
             </intent-filter>
 
         </activity>
+
+        <!-- Cast SDK: sin este meta-data CastContext.getSharedInstance() peta. -->
+        <meta-data
+            android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
+            android:value="com.dskmusic.dskplay.cast.CastOptionsProvider" />
 
         <!-- Flutter embedding meta-data -->
         <meta-data

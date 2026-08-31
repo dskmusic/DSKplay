@@ -238,6 +238,7 @@
   "episodes": "episodios",
   "copyEpisodeInfo": "Copiar información del episodio",
   "episodeInfoCopied": "Información del episodio copiada",
+  "copiedToClipboard": "Copiado al portapapeles",
   "nextUnlistenedEpisode": "Ir al siguiente episodio no reproducido",
   "allEpisodesListened": "No hay episodios sin reproducir",
   "noPodcastsFound": "No se encontraron podcasts",
@@ -382,5 +383,9 @@
   "selectAll": "Seleccionar todo",
   "itemsDeleted": "{count} elementos eliminados",
   "songsDeleted": "{count} canciones eliminadas",
-  "playlistsRemovedFromFolder": "{count} listas sacadas de la carpeta"
+  "playlistsRemovedFromFolder": "{count} listas sacadas de la carpeta",
+  "castTo": "Enviar a",
+  "searchingDevices": "Buscando dispositivos…",
+  "noCastDevicesFound": "No se ha encontrado ningún dispositivo",
+  "stopCasting": "Dejar de enviar"
 }

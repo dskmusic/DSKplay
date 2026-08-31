@@ -128,7 +128,11 @@ List<String> applyRadioStationOrder(List<String> naturalIds) {
 /// the list is showing right now (liked stations bubbled to the top); since
 /// that partition is reapplied on every rebuild, dropping an item across the
 /// liked/unliked boundary just settles back into the correct group.
-void reorderRadioStation(String stationId, int newIndex, List<String> displayedOrderIds) {
+void reorderRadioStation(
+  String stationId,
+  int newIndex,
+  List<String> displayedOrderIds,
+) {
   final list = List<String>.from(displayedOrderIds);
   final oldIndex = list.indexOf(stationId);
   if (oldIndex == -1) return;
@@ -242,9 +246,7 @@ void _reorderLikedSubsequence(
     }
   }
 
-  final oldIndex = subsequence.indexWhere(
-    (s) => s['ytid']?.toString() == ytid,
-  );
+  final oldIndex = subsequence.indexWhere((s) => s['ytid']?.toString() == ytid);
   if (oldIndex == -1) return;
 
   final target = newIndex.clamp(0, subsequence.length - 1);
@@ -864,6 +866,325 @@ Future<AudioStreamInfo?> fetchBestAudioStream(String? songId) async {
   }
 }
 
+/// Resolves a stream URL to send to a Chromecast / DLNA TV.
+///
+/// Deliberately not [fetchSongStreamUrl]: that one can hand back an Opus/WebM
+/// stream when it has the higher bitrate, and Smart TVs (Samsung in
+/// particular) simply refuse it. AAC/m4a is the one container every receiver
+/// plays, and the audible difference at these bitrates is nil.
+/// Con [preferSmall] se coge el AAC de menor bitrate: para DLNA hay que
+/// descargar la pista entera antes de mandarla, y ahi pesar menos se nota.
+Future<String?> fetchCastStreamUrl(
+  String songId,
+  bool isLive, {
+  bool preferSmall = false,
+}) async {
+  try {
+    if (songId.isEmpty) return null;
+    if (isLive) {
+      final hlsUrl = (await NewPipe.streams(songId)).hlsUrl;
+      return hlsUrl.isEmpty ? null : hlsUrl;
+    }
+
+    final audioStreams = await _fetchAudioStreams(songId);
+    if (audioStreams == null || audioStreams.isEmpty) {
+      logger.log('fetchCastStreamUrl: no audio streams for $songId');
+      return null;
+    }
+
+    final sorted = audioStreams.sortByBitrate();
+    final aac = sorted
+        .where(
+          (s) =>
+              s.codec.toLowerCase().contains('mp4a') ||
+              s.codec.toLowerCase().contains('aac'),
+        )
+        .toList();
+    if (aac.isNotEmpty) return (preferSmall ? aac.last : aac.first).url;
+
+    // Sin AAC disponible, mejor mandar algo que no mandar nada.
+    return selectAudioOnlyStreamForQuality(sorted).url;
+  } catch (e, stackTrace) {
+    logger.log(
+      'Error in fetchCastStreamUrl for $songId:',
+      error: e,
+      stackTrace: stackTrace,
+    );
+    return null;
+  }
+}
+
+final Set<http.Client> _castRemuxClients = {};
+int _castRemuxGeneration = 0;
+
+/// Corta la descarga de cast que hubiera a medias. La llaman [remuxForCast] al
+/// empezar otra y el propio handler al conectar o soltar un receptor: cerrar los
+/// clientes aborta las peticiones en curso y el contador le dice al trabajo
+/// viejo que ya no pinta nada (si no, se pondria a reintentar contra el nuevo).
+void cancelCastRemux() {
+  _castRemuxGeneration++;
+  for (final client in _castRemuxClients.toList()) {
+    client.close();
+  }
+  _castRemuxClients.clear();
+}
+
+/// Saca el tamano total de un `Content-Range: bytes a-b/total`.
+int? _totalFromContentRange(String? header) {
+  final slash = header?.lastIndexOf('/') ?? -1;
+  if (header == null || slash < 0) return null;
+  return int.tryParse(header.substring(slash + 1));
+}
+
+/// Un trozo `[start, end]` con reintentos. Devuelve los bytes y el tamano total
+/// del archivo, o null si no hay manera de traerlo.
+Future<(List<int>, int)?> _fetchCastRange(
+  String url,
+  int start,
+  int end,
+  String cacheKey,
+) async {
+  for (var attempt = 0; attempt < 3; attempt++) {
+    final client = http.Client();
+    _castRemuxClients.add(client);
+    try {
+      final response = await client.send(
+        http.Request('GET', Uri.parse(url))
+          ..headers['User-Agent'] = _streamUserAgent
+          ..headers['Range'] = 'bytes=$start-$end',
+      );
+      // Un 200 es que el servidor pasa del rango: solo vale si se estaba
+      // pidiendo desde el principio, porque llega el archivo entero.
+      if (response.statusCode != 206 &&
+          !(response.statusCode == 200 && start == 0)) {
+        logger.log('remuxForCast: HTTP ${response.statusCode} para $cacheKey');
+        return null;
+      }
+      final bytes = await response.stream.toBytes();
+      return (
+        bytes,
+        _totalFromContentRange(response.headers['content-range']) ??
+            bytes.length,
+      );
+    } on http.ClientException catch (e) {
+      logger.log('remuxForCast: corte de $cacheKey en $start (${e.message})');
+    } finally {
+      _castRemuxClients.remove(client);
+      client.close();
+    }
+  }
+  return null;
+}
+
+/// Descarga [url] a [target] pidiendo trozos de 1 MiB de tres en tres.
+/// googlevideo estrangula cada conexion por separado, asi que varias a la vez
+/// van bastante mas rapido; ademas, con rangos cortos un corte solo cuesta el
+/// trozo en curso en vez de la descarga entera.
+Future<bool> _downloadCastSource(
+  String url,
+  File target,
+  String cacheKey, {
+  bool Function()? isCancelled,
+}) async {
+  const chunkSize = 1 << 20;
+  const parallel = 3;
+  final generation = _castRemuxGeneration;
+  var have = 0;
+  var total = 0;
+
+  if (await target.exists()) await target.delete();
+  final sink = target.openWrite();
+  try {
+    while (total == 0 || have < total) {
+      if (_castRemuxGeneration != generation) {
+        logger.log('remuxForCast: $cacheKey cancelado, hay otro envio');
+        return false;
+      }
+      if (isCancelled?.call() ?? false) {
+        logger.log('remuxForCast: $cacheKey cancelado, receptor cambiado');
+        return false;
+      }
+
+      // La primera vuelta va de una en una: hasta que el servidor no dice el
+      // tamano no se sabe cuantos trozos quedan por pedir.
+      var count = 1;
+      if (total > 0) {
+        count = (total - have + chunkSize - 1) ~/ chunkSize;
+        if (count > parallel) count = parallel;
+      }
+
+      final batch = await Future.wait([
+        for (var i = 0; i < count; i++)
+          _fetchCastRange(
+            url,
+            have + i * chunkSize,
+            have + (i + 1) * chunkSize - 1,
+            cacheKey,
+          ),
+      ]);
+
+      var written = 0;
+      for (final result in batch) {
+        if (result == null) break;
+        final (bytes, size) = result;
+        total = size;
+        sink.add(bytes);
+        have += bytes.length;
+        written += bytes.length;
+        // Trozo corto: lo que venia detras ya no encaja donde se pidio, se
+        // vuelve a pedir desde aqui en la siguiente vuelta.
+        if (bytes.length < chunkSize && have < total) break;
+      }
+      if (written == 0) break;
+    }
+  } finally {
+    await sink.close();
+  }
+
+  if (total > 0 && have >= total) return true;
+  logger.log('remuxForCast: $cacheKey se quedo en $have de $total');
+  return false;
+}
+
+/// Rehace el contenedor de [url] en un MP4 normal en disco para poder mandarlo
+/// por DLNA. El m4a adaptativo de YouTube es un MP4 fragmentado y hay Smart TV
+/// que sacan de el una duracion de 10 s, tocan eso y paran (el audio en si les
+/// vale: el AAC lo reproducen sin problema). Con `-c:a copy` no hay
+/// recodificacion, solo se reescribe el indice. Devuelve la ruta, o null para
+/// que quien llama siga mandando la URL tal cual.
+Future<String?> remuxForCast(
+  String url,
+  String cacheKey, {
+  bool Function()? isCancelled,
+}) {
+  // Si esa misma pista ya se esta preparando (la adelantada mientras sonaba la
+  // anterior, por ejemplo), se espera a ese trabajo: empezar otro solo serviria
+  // para cancelarlo y volver a descargar desde cero.
+  final running = _castRemuxJob;
+  if (running != null && _castRemuxKey == cacheKey) return running;
+
+  final job = _remuxForCast(url, cacheKey, isCancelled: isCancelled);
+  _castRemuxKey = cacheKey;
+  _castRemuxJob = job;
+  return job.whenComplete(() {
+    if (identical(_castRemuxJob, job)) {
+      _castRemuxJob = null;
+      _castRemuxKey = null;
+    }
+  });
+}
+
+String? _castRemuxKey;
+Future<String?>? _castRemuxJob;
+
+Future<String?> _remuxForCast(
+  String url,
+  String cacheKey, {
+  bool Function()? isCancelled,
+}) async {
+  try {
+    final dir = await getTemporaryDirectory();
+    final out = File('${dir.path}/cast_$cacheKey.m4a');
+
+    // Dos descargas a la vez se roban el ancho de banda, asi que lo que hubiera
+    // a medias se corta. Los .part y .raw sueltos son basura de trabajos
+    // muertos; de las pistas ya preparadas se guardan las ultimas, para que
+    // volver a una recien escuchada (o el "anterior") salga gratis.
+    cancelCastRemux();
+    const keepReady = 3;
+    final ready = <File>[];
+    for (final entry in dir.listSync()) {
+      if (entry is! File || entry.path == out.path) continue;
+      final name = entry.uri.pathSegments.last;
+      if (!name.startsWith('cast_')) continue;
+      if (name.endsWith('.m4a')) {
+        ready.add(entry);
+      } else {
+        try {
+          entry.deleteSync();
+        } catch (_) {}
+      }
+    }
+    ready.sort(
+      (a, b) => b.statSync().modified.compareTo(a.statSync().modified),
+    );
+    for (final stale in ready.skip(keepReady)) {
+      try {
+        stale.deleteSync();
+      } catch (_) {}
+    }
+
+    if (await out.exists() && await out.length() > 0) {
+      // Marcarla como recien usada: la caducidad de arriba va por fecha de uso.
+      try {
+        out.setLastModifiedSync(DateTime.now());
+      } catch (_) {}
+      return out.path;
+    }
+
+    // Salida a .part y rename al final: si el usuario cambia de cancion a
+    // media conversion, nadie llega a servir un archivo incompleto.
+    final part = File('${out.path}.part');
+    final raw = File('${out.path}.raw');
+    final started = DateTime.now();
+
+    // La descarga la hace Dart y no ffmpeg: esta build es la variante de solo
+    // audio de ffmpeg-kit, que viene sin https, asi que una URL de googlevideo
+    // ni la abre (es tambien lo que hace _downloadAndTagAudioFile).
+    logger.log('remuxForCast: descargando $cacheKey');
+    final downloaded = await _downloadCastSource(
+      url,
+      raw,
+      cacheKey,
+      isCancelled: isCancelled,
+    );
+    if (!downloaded || (isCancelled?.call() ?? false)) {
+      try {
+        if (await raw.exists()) await raw.delete();
+      } catch (_) {}
+      return null;
+    }
+
+    final session = await FFmpegKit.executeWithArguments([
+      '-y',
+      '-i',
+      raw.path,
+      '-map',
+      '0:a',
+      '-c:a',
+      'copy',
+      '-movflags',
+      '+faststart',
+      '-f',
+      'mp4',
+      part.path,
+    ]);
+    try {
+      if (await raw.exists()) await raw.delete();
+    } catch (_) {}
+
+    if (!ReturnCode.isSuccess(await session.getReturnCode())) {
+      final output = await session.getOutput() ?? '';
+      logger.log(
+        'remuxForCast: ffmpeg fallo para $cacheKey: '
+        '${output.length > 300 ? output.substring(output.length - 300) : output}',
+      );
+      if (await part.exists()) await part.delete();
+      return null;
+    }
+    await part.rename(out.path);
+    logger.log(
+      'remuxForCast: $cacheKey listo en '
+      '${DateTime.now().difference(started).inMilliseconds} ms',
+    );
+
+    return out.path;
+  } catch (e, stackTrace) {
+    logger.log('Error in remuxForCast', error: e, stackTrace: stackTrace);
+    return null;
+  }
+}
+
 /// Resolves a playable stream URL for a song (cached when possible).
 Future<String?> fetchSongStreamUrl(String songId, bool isLive) async {
   try {
@@ -1334,7 +1655,9 @@ Future<Uint8List?> _fetchArtworkBytes(String url) async {
     if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
       return response.bodyBytes;
     }
-    logger.log('Failed to download artwork. Status code: ${response.statusCode}');
+    logger.log(
+      'Failed to download artwork. Status code: ${response.statusCode}',
+    );
   } catch (e, stackTrace) {
     logger.log('Error downloading artwork', error: e, stackTrace: stackTrace);
   }

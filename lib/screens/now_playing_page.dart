@@ -22,14 +22,17 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
+import 'package:dskplay/services/cast_service.dart';
 import 'package:dskplay/services/router_service.dart';
 import 'package:dskplay/utilities/mediaitem.dart';
 import 'package:dskplay/widgets/now_playing/bottom_actions_row.dart';
+import 'package:dskplay/widgets/now_playing/cast_devices_sheet.dart';
 import 'package:dskplay/widgets/now_playing/now_playing_artwork.dart';
 import 'package:dskplay/widgets/now_playing/now_playing_controls.dart';
 import 'package:dskplay/widgets/queue_list_view.dart';
 import 'package:dskplay/widgets/song_bar.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_flip_card/flutter_flip_card.dart';
 import 'package:go_router/go_router.dart';
@@ -168,6 +171,36 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
                   ? shareCurrentPodcastEpisode()
                   : shareSongFlow(context, mediaItemToMap(metadata), ytid!),
               tooltip: context.l10n!.share,
+            ),
+          // El cast lo resuelve el lado nativo de Android (Chromecast + DLNA):
+          // en cualquier otra plataforma el boton no llevaria a ningun sitio.
+          if (defaultTargetPlatform == TargetPlatform.android)
+            ValueListenableBuilder<CastDevice?>(
+              valueListenable: castService.activeDevice,
+              builder: (context, device, _) {
+                final casting = device != null;
+                return IconButton(
+                  iconSize: 26,
+                  icon: Icon(
+                    casting
+                        ? FluentIcons.cast_24_filled
+                        : FluentIcons.cast_24_regular,
+                  ),
+                  style: IconButton.styleFrom(
+                    backgroundColor: casting
+                        ? colorScheme.primaryContainer
+                        : colorScheme.surfaceContainerHighest,
+                    foregroundColor: casting
+                        ? colorScheme.onPrimaryContainer
+                        : null,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () => showCastDevicesSheet(context),
+                  tooltip: casting ? device.name : context.l10n!.castTo,
+                );
+              },
             ),
           IconButton(
             iconSize: 26,

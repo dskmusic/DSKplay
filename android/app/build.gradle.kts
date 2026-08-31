@@ -122,6 +122,11 @@ dependencies {
     implementation("com.github.TeamNewPipe:NewPipeExtractor:$newpipeVersion")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
+    // Cast a Chromecast (SDK de Google) y servidor HTTP local para servir a la
+    // tele el audio descargado o el stream ya resuelto - ver cast/MediaServer.
+    implementation("com.google.android.gms:play-services-cast-framework:21.5.0")
+    implementation("org.nanohttpd:nanohttpd:2.3.1")
+
     // Sonda de extraccion contra YouTube de verdad (NewPipeSmokeTest).
     testImplementation("junit:junit:4.13.2")
 }

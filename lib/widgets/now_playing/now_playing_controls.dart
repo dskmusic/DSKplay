@@ -29,12 +29,14 @@ import 'package:dskplay/services/playlists_manager.dart';
 import 'package:dskplay/services/router_service.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/utilities/app_utils.dart';
+import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/widgets/now_playing/marquee_text_widget.dart';
 import 'package:dskplay/widgets/now_playing/now_playing_artwork.dart';
 import 'package:dskplay/widgets/playback_icon_button.dart';
 import 'package:dskplay/widgets/position_slider.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 class NowPlayingControls extends StatelessWidget {
@@ -93,7 +95,7 @@ class NowPlayingControls extends StatelessWidget {
               ),
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: isPodcastEpisode
+                onLongPress: isPodcastEpisode
                     ? () => openCurrentPodcastEpisodeList(context)
                     : canOpenArtist
                     ? () => _openArtistPage(context, metadata)
@@ -106,19 +108,26 @@ class NowPlayingControls extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      MarqueeTextWidget(
-                        text: metadata.title,
-                        fontColor: colorScheme.secondary,
-                        fontSize: titleFontSize * fontScale,
-                        fontWeight: FontWeight.bold,
+                      GestureDetector(
+                        onTap: () => _copyToClipboard(context, metadata.title),
+                        child: MarqueeTextWidget(
+                          text: metadata.title,
+                          fontColor: colorScheme.secondary,
+                          fontSize: titleFontSize * fontScale,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       SizedBox(height: spacing),
                       if (metadata.artist != null)
-                        MarqueeTextWidget(
-                          text: metadata.artist!,
-                          fontColor: colorScheme.onSurfaceVariant,
-                          fontSize: artistFontSize * fontScale,
-                          fontWeight: FontWeight.w500,
+                        GestureDetector(
+                          onTap: () =>
+                              _copyToClipboard(context, metadata.artist!),
+                          child: MarqueeTextWidget(
+                            text: metadata.artist!,
+                            fontColor: colorScheme.onSurfaceVariant,
+                            fontSize: artistFontSize * fontScale,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                     ],
                   ),
@@ -144,6 +153,11 @@ class NowPlayingControls extends StatelessWidget {
         );
       },
     );
+  }
+
+  Future<void> _copyToClipboard(BuildContext context, String text) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    if (context.mounted) showToast(context, context.l10n!.copiedToClipboard);
   }
 
   /// Enlace a la lista, album o artista del que salio lo que suena ahora.

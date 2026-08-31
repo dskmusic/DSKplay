@@ -82,9 +82,8 @@ Future<void> playPodcastEpisode(
   final localPath = downloaded?['audioPath'] as String?;
 
   final somethingIsPlaying =
-      audioHandler.mediaItem.valueOrNull?.extras?['isPodcastEpisode'] ==
-          true &&
-      audioHandler.audioPlayer.playing;
+      audioHandler.mediaItem.valueOrNull?.extras?['isPodcastEpisode'] == true &&
+      audioHandler.isPlaying;
   if (somethingIsPlaying) {
     final addToQueue = await _confirmAddToQueueOrPlayNow(context);
     if (addToQueue == null || !context.mounted) return;
@@ -193,7 +192,8 @@ Future<void> showPodcastEpisodeOptions(
           children: [
             IconButton(
               tooltip: context.l10n!.copyEpisodeInfo,
-              onPressed: () => _copyEpisodeInfo(dialogContext, podcast, episode),
+              onPressed: () =>
+                  _copyEpisodeInfo(dialogContext, podcast, episode),
               icon: const Icon(FluentIcons.copy_24_regular),
             ),
             IconButton(

@@ -17,6 +17,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import com.ryanheise.audioservice.AudioService
 import com.ryanheise.audioservice.AudioServicePlugin
+import com.dskmusic.dskplay.cast.CastBridge
 import com.dskmusic.dskplay.youtube.NewPipeBridge
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -164,6 +165,9 @@ class App : Application() {
 
       // Extraccion de YouTube (busqueda/streams/listas) con NewPipeExtractor.
       NewPipeBridge.register(engine.dartExecutor.binaryMessenger)
+
+      // Reproduccion en Chromecast y Smart TV (DLNA).
+      CastBridge.register(engine.dartExecutor.binaryMessenger, this)
 
       MethodChannel(engine.dartExecutor.binaryMessenger, "dskplay/media_scanner")
         .setMethodCallHandler { call, result ->

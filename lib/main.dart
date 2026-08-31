@@ -349,7 +349,7 @@ class _DskPlayState extends State<DskPlay> with WidgetsBindingObserver {
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached) {
       listeningStatsService.recordListeningSessionProgress(
-        wasPlaying: audioHandler.audioPlayer.playing,
+        wasPlaying: audioHandler.isPlaying,
       );
       unawaited(listeningStatsService.flush());
       unawaited(cloudBackupService.uploadBackup());
@@ -369,7 +369,7 @@ class _DskPlayState extends State<DskPlay> with WidgetsBindingObserver {
     // otherwise catch this moment to free the idle process. The backup for
     // anything that changed already went out above, so this only kills it.
     if (state == AppLifecycleState.detached &&
-        !audioHandler.audioPlayer.playing &&
+        !audioHandler.isPlaying &&
         !DownloadForegroundService.isActive) {
       exit(0);
     }

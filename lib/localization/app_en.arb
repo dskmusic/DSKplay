@@ -238,6 +238,7 @@
   "episodes": "episodes",
   "copyEpisodeInfo": "Copy episode info",
   "episodeInfoCopied": "Episode info copied to clipboard",
+  "copiedToClipboard": "Copied to clipboard",
   "nextUnlistenedEpisode": "Jump to next unlistened episode",
   "allEpisodesListened": "No unlistened episodes",
   "noPodcastsFound": "No podcasts found",
@@ -459,5 +460,9 @@
         "type": "int"
       }
     }
-  }
+  },
+  "castTo": "Cast to",
+  "searchingDevices": "Searching for devices…",
+  "noCastDevicesFound": "No devices found",
+  "stopCasting": "Stop casting"
 }

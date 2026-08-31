@@ -334,7 +334,7 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
     final somethingIsPlaying =
         audioHandler.mediaItem.valueOrNull?.extras?['isPodcastEpisode'] ==
             true &&
-        audioHandler.audioPlayer.playing;
+        audioHandler.isPlaying;
     if (somethingIsPlaying) {
       final addToQueue = await _confirmAddToQueueOrPlayNow();
       if (addToQueue == null || !mounted) return;

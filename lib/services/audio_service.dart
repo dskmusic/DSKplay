@@ -27,6 +27,7 @@ import 'package:audio_session/audio_session.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/models/podcast_model.dart';
 import 'package:dskplay/models/position_data.dart';
+import 'package:dskplay/services/cast_service.dart';
 import 'package:dskplay/services/cloud_backup_service.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/data_manager.dart';
@@ -69,6 +70,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     );
 
     _setupEventSubscriptions();
+    _setupCastCallbacks();
     _updatePlaybackState();
 
     audioPlayer.setAndroidAudioAttributes(
@@ -248,17 +250,27 @@ class DskPlayAudioHandler extends BaseAudioHandler {
 
   late final Stream<PositionData> _positionDataStream =
       Rx.combineLatest3<Duration, Duration, Duration?, PositionData>(
-        audioPlayer.positionStream,
-        audioPlayer.bufferedPositionStream,
-        audioPlayer.durationStream,
-        (position, bufferedPosition, duration) =>
-            PositionData(position, bufferedPosition, duration ?? Duration.zero),
-      ).distinct((prev, curr) {
-        return (prev.position - curr.position).abs() < _positionDataThreshold &&
-            prev.duration == curr.duration &&
-            (prev.bufferedPosition - curr.bufferedPosition).abs() <
-                _positionDataThreshold;
-      }).asBroadcastStream();
+            audioPlayer.positionStream,
+            audioPlayer.bufferedPositionStream,
+            audioPlayer.durationStream,
+            (position, bufferedPosition, duration) => PositionData(
+              position,
+              bufferedPosition,
+              duration ?? Duration.zero,
+            ),
+          )
+          .distinct((prev, curr) {
+            return (prev.position - curr.position).abs() <
+                    _positionDataThreshold &&
+                prev.duration == curr.duration &&
+                (prev.bufferedPosition - curr.bufferedPosition).abs() <
+                    _positionDataThreshold;
+          })
+          // Mientras suena en la tele el reloj lo lleva el receptor: el reproductor
+          // local esta parado y lo que emita aqui solo estorbaria.
+          .where((_) => !castService.isCasting)
+          .mergeWith([castService.positionStream])
+          .asBroadcastStream();
 
   Stream<PositionData> get positionDataStream => _positionDataStream;
 
@@ -908,6 +920,10 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   }
 
   void _updatePlaybackState() {
+    if (castService.isCasting) {
+      _updateCastPlaybackState();
+      return;
+    }
     if (_isUpdatingState) {
       _pendingPlaybackStateUpdate = true;
       return;
@@ -1189,10 +1205,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
 
           // Fetch similar songs silently in the background
           final songToAdd =
-              await getSimilarSong(
-                baseSong['ytid'],
-                exclude: exclude,
-              ).timeout(
+              await getSimilarSong(baseSong['ytid'], exclude: exclude).timeout(
                 const Duration(seconds: 10),
                 onTimeout: () {
                   logger.log('Background song fetch timed out');
@@ -2595,6 +2608,12 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   @override
   Future<void> play() async {
     try {
+      if (castService.isCasting) {
+        await castService.play();
+        listeningStatsService.resumeListeningSession(currentSong: currentSong);
+        _updatePlaybackState();
+        return;
+      }
       if (audioPlayer.audioSource == null) {
         if (_pendingPodcastResume != null) {
           await resumePendingPodcast();
@@ -2630,6 +2649,18 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   @override
   Future<void> pause() async {
     try {
+      if (castService.isCasting) {
+        listeningStatsService.recordListeningSessionProgress(
+          wasPlaying: castService.remotePlaying,
+        );
+        unawaited(listeningStatsService.flush());
+        await castService.pause();
+        await _persistPodcastPositionIfNeeded(
+          castService.lastPosition.position,
+        );
+        _updatePlaybackState();
+        return;
+      }
       listeningStatsService.recordListeningSessionProgress(
         wasPlaying: audioPlayer.playing,
       );
@@ -2655,6 +2686,9 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     // caller's intent leak into this one. Each invocation now acts strictly
     // on the intent that was current when it started.
     final keepAppOpen = _keepAppOpenOnStop;
+    // Parar es parar del todo: la tele se queda libre en vez de con la ultima
+    // cancion congelada en pantalla.
+    if (castService.isCasting) await castService.disconnect();
     _debounceTimer?.cancel();
     _idleAutoCloseTimer?.cancel();
     _completionEventPending = false;
@@ -2764,6 +2798,15 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   @override
   Future<void> seek(Duration position) async {
     try {
+      if (castService.isCasting) {
+        listeningStatsService.recordListeningSessionProgress(
+          wasPlaying: castService.remotePlaying,
+        );
+        await castService.seek(position);
+        unawaited(listeningStatsService.flush());
+        _updatePlaybackState();
+        return;
+      }
       listeningStatsService.recordListeningSessionProgress(
         wasPlaying: audioPlayer.playing,
       );
@@ -2776,6 +2819,11 @@ class DskPlayAudioHandler extends BaseAudioHandler {
 
   @override
   Future<void> fastForward() {
+    if (castService.isCasting) {
+      final remote = castService.lastPosition;
+      final target = remote.position + const Duration(seconds: 15);
+      return seek(target > remote.duration ? remote.duration : target);
+    }
     final target = audioPlayer.position + const Duration(seconds: 15);
     final trackDuration = audioPlayer.duration;
     final clamped = (trackDuration != null && target > trackDuration)
@@ -2786,6 +2834,11 @@ class DskPlayAudioHandler extends BaseAudioHandler {
 
   @override
   Future<void> rewind() {
+    if (castService.isCasting) {
+      final target =
+          castService.lastPosition.position - const Duration(seconds: 15);
+      return seek(target < Duration.zero ? Duration.zero : target);
+    }
     final target = audioPlayer.position - const Duration(seconds: 15);
     final clamped = target < Duration.zero ? Duration.zero : target;
     return seek(clamped);
@@ -3010,10 +3063,23 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         return false;
       }
 
+      // Sonando en una tele, quien reproduce es ella: la cola, el orden y el
+      // paso a la siguiente siguen siendo exactamente los de arriba.
+      if (castService.isCasting) {
+        return _castPlayResolved(
+          song,
+          songUrl,
+          isOffline,
+          transitionId: transitionId,
+        );
+      }
+
       // Snapshot the pre-swap playing state now: by the time we're committed
       // to this transition (below), audioPlayer.playing reflects the new
       // source, not whatever session we're about to finish.
       final wasPlayingBeforeSwap = audioPlayer.playing;
+
+      _lastResolvedSource = (url: songUrl, isOffline: isOffline, isLive: false);
 
       await audioPlayer
           .setAudioSource(audioSource)
@@ -3223,6 +3289,12 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       final mediaItem = mapToMediaItem(radioSong);
       this.mediaItem.add(mediaItem);
       queue.add([mediaItem]);
+
+      if (castService.isCasting) {
+        return _castPlayResolved(radioSong, streamUrl, false, isLive: true);
+      }
+
+      _lastResolvedSource = (url: streamUrl, isOffline: false, isLive: true);
 
       // Build audio source from stream URL
       final audioSource = await buildAudioSource(
@@ -3448,9 +3520,26 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         localPath: localPath,
       );
 
+      final episodeUrl = isOffline ? (localPath ?? '') : (audioUrl ?? '');
+
+      if (castService.isCasting) {
+        return _castPlayResolved(
+          episodeSong,
+          episodeUrl,
+          isOffline,
+          startAt: initialPosition ?? Duration.zero,
+        );
+      }
+
+      _lastResolvedSource = (
+        url: episodeUrl,
+        isOffline: isOffline,
+        isLive: false,
+      );
+
       final audioSource = await buildAudioSource(
         episodeSong,
-        isOffline ? (localPath ?? '') : (audioUrl ?? ''),
+        episodeUrl,
         isOffline,
       );
 
@@ -3519,6 +3608,326 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       _lastError = e.toString();
       return false;
     }
+  }
+
+  // =======================================================================
+  // Cast (Chromecast / Smart TV DLNA)
+  //
+  // El receptor sustituye al reproductor local, nada mas. La cola, el orden
+  // aleatorio, la repeticion, el paso a la siguiente y el temporizador siguen
+  // siendo los de siempre: solo cambia quien suena.
+  // =======================================================================
+
+  /// Lo ultimo que se mando a reproducir. Se guarda para poder llevarselo a la
+  /// tele (o traerlo de vuelta al movil) sin volver a resolver la fuente.
+  ({String url, bool isOffline, bool isLive})? _lastResolvedSource;
+
+  bool get isCasting => castService.isCasting;
+
+  /// Suena algo ahora mismo, aqui o en la tele. Lo que hay que mirar
+  /// desde fuera: audioPlayer.playing esta a false mientras se castea.
+  bool get isPlaying =>
+      castService.isCasting ? castService.remotePlaying : audioPlayer.playing;
+
+  void _setupCastCallbacks() {
+    castService
+      ..onTrackFinished = () {
+        unawaited(_handleSongCompletion());
+      }
+      ..onRemoteStateChanged = _updatePlaybackState
+      // La sesion se ha caido sola (tele apagada, desconexion desde el mando,
+      // wifi perdido): se retoma en el movil donde iba y en pausa, en vez de
+      // dejar la app muda y sin explicacion.
+      ..onDisconnected = () {
+        unawaited(_resumeLocallyAfterCast(autoplay: false));
+      };
+  }
+
+  void _updateCastPlaybackState() {
+    final remote = castService.lastPosition;
+    final playing = castService.remotePlaying;
+
+    if (playing) {
+      _idleAutoCloseTimer?.cancel();
+      _cancelNativeIdleClose();
+    }
+
+    playbackState.add(
+      PlaybackState(
+        controls: _controls(playing),
+        systemActions: const {
+          MediaAction.seek,
+          MediaAction.seekForward,
+          MediaAction.seekBackward,
+        },
+        androidCompactActionIndices: const [0, 1, 2],
+        // El receptor no distingue entre bufferear y estar listo; darlo por
+        // listo evita que la notificacion parpadee en cada sondeo. Lo unico que
+        // se marca como carga es la preparacion del envio, que en DLNA se hace
+        // esperar.
+        processingState: castService.preparing
+            ? AudioProcessingState.loading
+            : AudioProcessingState.ready,
+        playing: playing,
+        updatePosition: remote.position,
+        bufferedPosition: remote.bufferedPosition,
+        speed: 1,
+        queueIndex:
+            _currentQueueIndex >= 0 && _currentQueueIndex < _queueList.length
+            ? _currentQueueIndex
+            : null,
+        updateTime: DateTime.now(),
+      ),
+    );
+  }
+
+  /// Manda al receptor una pista cuya fuente ya esta resuelta. Es el sustituto
+  /// de setAudioSource + play mientras se castea.
+  Future<bool> _castPlayResolved(
+    Map song,
+    String url,
+    bool isOffline, {
+    Duration startAt = Duration.zero,
+    bool isLive = false,
+    int? transitionId,
+  }) async {
+    final device = castService.activeDevice.value;
+    if (device == null) return false;
+
+    // Rueda de carga desde ya: resolver, descargar y remuxar puede tardar, y
+    // sin senal en pantalla el usuario cree que no va y se pone a pulsar.
+    castService.preparing = true;
+    _updatePlaybackState();
+
+    var streamUrl = url;
+    var localSource = isOffline ? url : null;
+    final ytid = song['ytid']?.toString();
+    final isSong = !isLive && song['isPodcastEpisode'] != true;
+
+    if (!isOffline && isSong && ytid != null && ytid.isNotEmpty) {
+      // La URL que suena en el movil puede ser Opus/WebM, que una Smart TV no
+      // toca: se vuelve a resolver prefiriendo AAC (ver fetchCastStreamUrl).
+      streamUrl =
+          await fetchCastStreamUrl(
+            ytid,
+            false,
+            preferSmall: !device.isChromecast,
+          ) ??
+          url;
+      // Ese AAC viene en un MP4 fragmentado que las teles DLNA leen como si
+      // durase 10 s. Se les manda ya remuxado; el Chromecast lo entiende de
+      // serie y remuxar para el seria hacerle esperar por gusto.
+      if (!device.isChromecast) {
+        localSource = await remuxForCast(
+          streamUrl,
+          ytid,
+          isCancelled: () => castService.activeDevice.value != device,
+        );
+        // Mandarle a la tele el m4a fragmentado es garantia de diez segundos y
+        // a otra cosa: si no hay remux, no hay envio.
+        if (localSource == null) {
+          _lastError = 'No se pudo preparar la cancion para la tele';
+          logger.log('Cast: sin remux para $ytid, no se envia');
+          return _castPreparationFailed();
+        }
+      }
+    }
+
+    final rawDuration = song['duration'];
+    final duration = rawDuration is int
+        ? Duration(seconds: rawDuration)
+        : Duration.zero;
+
+    final wasPlayingBeforeSwap = castService.remotePlaying;
+
+    // Los archivos del movil no tienen imagen en red: su portada se extrae de
+    // las etiquetas a disco, y highResImage se queda en cadena vacia (no null,
+    // asi que ?? no salta).
+    final artwork =
+        [song['highResImage'], song['lowResImage'], song['artworkPath']]
+            .map((value) => value?.toString() ?? '')
+            .firstWhere((value) => value.isNotEmpty, orElse: () => '');
+
+    // Resolver y remuxar lleva su rato: si mientras tanto se ha pedido otra
+    // cancion, esta ya no pinta nada (si no, la tele recibe dos cargas y se
+    // queda con trozos de la que perdio la carrera).
+    if (_isStaleTransition(transitionId)) {
+      logger.log('Cast load superseded, aborting: $ytid');
+      return _castPreparationFailed();
+    }
+
+    // Y si mientras tanto se ha soltado el receptor, tampoco: asi la tele no
+    // arranca la cancion despues de haber pulsado desconectar.
+    if (castService.activeDevice.value != device) {
+      logger.log('Cast load cancelado: el receptor ya no esta activo');
+      return _castPreparationFailed();
+    }
+
+    final error = await castService.load(
+      device: device,
+      url: localSource == null ? streamUrl : null,
+      localPath: localSource,
+      title: song['title']?.toString() ?? '',
+      artist: song['artist']?.toString() ?? '',
+      artwork: artwork.isEmpty ? null : artwork,
+      isLive: isLive,
+      startAt: startAt,
+      duration: duration,
+    );
+
+    if (error != null) {
+      logger.log('Cast load failed: $error');
+      _lastError = error;
+      return _castPreparationFailed();
+    }
+
+    _lastResolvedSource = (url: url, isOffline: isOffline, isLive: isLive);
+
+    if (duration > Duration.zero) {
+      _updateCurrentMediaItemWithDuration(duration);
+    }
+
+    listeningStatsService
+      ..finishListeningSession(
+        countCurrentTick: true,
+        wasPlaying: wasPlayingBeforeSwap,
+      )
+      ..startListeningSession(song, duration: duration);
+
+    if (isSong && ytid != null && ytid.isNotEmpty) {
+      unawaited(updateRecentlyPlayed(ytid, songFallback: song));
+    }
+
+    _updatePlaybackState();
+    _prefetchNextCastTrack();
+    return true;
+  }
+
+  /// Quita la rueda de carga cuando el envio se queda por el camino.
+  bool _castPreparationFailed() {
+    castService.preparing = false;
+    _updatePlaybackState();
+    return false;
+  }
+
+  /// Deja lista la siguiente pista de la cola mientras suena la actual. A una
+  /// tele DLNA hay que descargarle y remuxarle la cancion entera antes de poder
+  /// mandarsela, y hacerlo al pulsar "siguiente" es justo lo que se nota; el
+  /// Chromecast se baja la URL el solito y no necesita nada de esto.
+  void _prefetchNextCastTrack() {
+    final device = castService.activeDevice.value;
+    if (device == null || device.isChromecast || offlineMode.value) return;
+
+    final nextIndex = _currentQueueIndex + 1;
+    if (nextIndex <= 0 || nextIndex >= _queueList.length) return;
+
+    final next = _queueList[nextIndex];
+    final ytid = next['ytid']?.toString();
+    if (ytid == null ||
+        ytid.isEmpty ||
+        next['isPodcastEpisode'] == true ||
+        isSongAlreadyOffline(ytid)) {
+      return;
+    }
+
+    unawaited(
+      Future.microtask(() async {
+        final url = await fetchCastStreamUrl(ytid, false, preferSmall: true);
+        if (url == null) return;
+        await remuxForCast(
+          url,
+          ytid,
+          isCancelled: () => castService.activeDevice.value != device,
+        );
+      }),
+    );
+  }
+
+  /// Pasa la reproduccion a [device]. Devuelve null si fue bien, o el mensaje
+  /// de error para ensenarlo.
+  Future<String?> startCasting(CastDevice device) async {
+    final song = currentSong;
+    final position = audioPlayer.position;
+    final source = _lastResolvedSource;
+
+    // El reproductor local se para del todo: dejarlo en pausa mantendria el
+    // foco de audio y el decodificador ocupados para nada.
+    try {
+      await audioPlayer.stop().timeout(const Duration(seconds: 3));
+    } catch (_) {}
+
+    castService.activeDevice.value = device;
+    cancelCastRemux();
+
+    if (song == null || source == null) {
+      // No habia nada sonando: el receptor queda elegido y la siguiente
+      // cancion que se lance ya sale por ahi.
+      _updatePlaybackState();
+      return null;
+    }
+
+    final ok = await _castPlayResolved(
+      song,
+      source.url,
+      source.isOffline,
+      startAt: source.isLive ? Duration.zero : position,
+      isLive: source.isLive,
+    );
+
+    if (!ok) {
+      castService.activeDevice.value = null;
+      await _resumeLocallyAfterCast(autoplay: true, position: position);
+      return _lastError ?? 'No se pudo conectar con el dispositivo';
+    }
+    return null;
+  }
+
+  /// Devuelve el sonido al movil, desde donde iba la tele.
+  Future<void> stopCasting() async {
+    final position = castService.lastPosition.position;
+    final wasPlaying = castService.remotePlaying;
+    cancelCastRemux();
+    await castService.disconnect();
+    await _resumeLocallyAfterCast(autoplay: wasPlaying, position: position);
+  }
+
+  Future<void> _resumeLocallyAfterCast({
+    required bool autoplay,
+    Duration? position,
+  }) async {
+    final resumeAt = position ?? castService.lastPosition.position;
+    castService.activeDevice.value = null;
+    castService.preparing = false;
+
+    final song = currentSong;
+    final source = _lastResolvedSource;
+    if (song == null || source == null) {
+      _updatePlaybackState();
+      return;
+    }
+
+    try {
+      final audioSource = await buildAudioSource(
+        song,
+        source.url,
+        source.isOffline,
+      );
+      if (audioSource != null) {
+        await audioPlayer.setAudioSource(
+          audioSource,
+          // Un directo no tiene "por donde iba": siempre arranca en vivo.
+          initialPosition: source.isLive ? Duration.zero : resumeAt,
+        );
+        if (autoplay) unawaited(audioPlayer.play());
+      }
+    } catch (e, stackTrace) {
+      logger.log(
+        'Error resuming locally after cast',
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
+    _updatePlaybackState();
   }
 
   Future<AudioSource?> buildAudioSource(
@@ -3681,9 +4090,16 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     try {
       listeningStatsService.finishListeningSession(
         countCurrentTick: true,
-        wasPlaying: audioPlayer.playing,
+        wasPlaying: castService.isCasting
+            ? castService.remotePlaying
+            : audioPlayer.playing,
       );
-      await audioPlayer.seek(Duration.zero);
+      if (castService.isCasting) {
+        await castService.seek(Duration.zero);
+        await castService.play();
+      } else {
+        await audioPlayer.seek(Duration.zero);
+      }
       final song = currentSong;
       if (song != null) {
         listeningStatsService.startListeningSession(
