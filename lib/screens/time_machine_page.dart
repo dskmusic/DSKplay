@@ -171,11 +171,9 @@ class _TimeMachinePageState extends State<TimeMachinePage> {
       sections.add(const _TimeMachineSection.annual());
     }
 
-    for (final monthKey in monthKeys) {
-      if (monthKey == currentMonthKey) {
-        sections.add(_TimeMachineSection.month(monthKey));
-      }
-    }
+    // The current month is always listed, even before it has any data, so the
+    // month in progress doesn't vanish right after the rollover.
+    sections.add(_TimeMachineSection.month(currentMonthKey));
 
     if (showAnnualRecap && !showAnnualBeforeMonths) {
       sections.add(const _TimeMachineSection.annual());
@@ -193,7 +191,8 @@ class _TimeMachinePageState extends State<TimeMachinePage> {
 
   Widget _buildMonthSection(BuildContext context, String monthKey) {
     final monthStats = listeningStatsService.monthStats(monthKey);
-    if (!hasDisplayableListeningStats(monthStats)) {
+    final isCurrentMonth = monthKey == listeningStatsMonthKey(DateTime.now());
+    if (!isCurrentMonth && !hasDisplayableListeningStats(monthStats)) {
       return const SizedBox.shrink();
     }
 

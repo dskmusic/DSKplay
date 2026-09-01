@@ -164,7 +164,7 @@ class _HomePageState extends State<HomePage> {
               ),
               _buildSuggestedPlaylists(playlistHeight),
               _buildSuggestedPlaylists(playlistHeight, showOnlyLiked: true),
-              _buildCurrentMonthRecapSection(),
+              _buildLatestMonthRecapSection(),
               _buildRecommendedSongsSection(),
               const MiniPlayerBottomSpace(),
             ],
@@ -312,7 +312,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildCurrentMonthRecapSection() {
+  Widget _buildLatestMonthRecapSection() {
     return ListenableBuilder(
       listenable: Listenable.merge([
         wrappedEnabled,
@@ -321,9 +321,15 @@ class _HomePageState extends State<HomePage> {
       builder: (context, __) {
         if (!wrappedEnabled.value) return const SizedBox.shrink();
 
-        final currentMonthKey = listeningStatsMonthKey(DateTime.now());
-        final monthStats = listeningStatsService.monthStats(currentMonthKey);
-        final songs = listeningStatsService.monthTopSongs(currentMonthKey);
+        // The current month starts empty (e.g. on the 1st), so fall back to the
+        // most recent month with data instead of hiding the whole section: this
+        // card is the only entry point to the time machine page.
+        final monthKeys = listeningStatsService.availableMonthKeys;
+        if (monthKeys.isEmpty) return const SizedBox.shrink();
+
+        final monthKey = monthKeys.first;
+        final monthStats = listeningStatsService.monthStats(monthKey);
+        final songs = listeningStatsService.monthTopSongs(monthKey);
         final displayMinutes = monthDisplayMinutes(monthStats);
         if (displayMinutes <= 0 && songs.isEmpty) {
           return const SizedBox.shrink();
@@ -332,7 +338,7 @@ class _HomePageState extends State<HomePage> {
         final previewSongs = songs.take(wrappedShareSongsLimit).toList();
         final periodLabel = formatMonthPeriodLabel(
           Localizations.localeOf(context),
-          currentMonthKey,
+          monthKey,
         );
 
         return Column(
