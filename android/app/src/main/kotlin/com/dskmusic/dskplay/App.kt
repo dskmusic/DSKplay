@@ -257,6 +257,7 @@ class App : Application() {
                 this,
                 call.argument<String>("title") ?: "DSK Play",
                 call.argument<String>("text") ?: "",
+                call.argument<Int>("autoDismissMs") ?: 0,
               )
               result.success(null)
             }

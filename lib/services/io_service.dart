@@ -22,8 +22,10 @@
 import 'dart:io';
 
 import 'package:dskplay/main.dart' show logger;
+import 'package:dskplay/services/download_foreground_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -157,4 +159,93 @@ class FilePaths {
 String sanitizeFileName(String name) {
   final sanitized = name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
   return sanitized.isEmpty ? 'DSKplay' : sanitized;
+}
+
+/// Sin datos durante este tiempo se da el intento por muerto y se reintenta.
+/// Un socket que se queda a medias -- lo que pasa justo al cerrar la app
+/// desde recientes, cuando el Wi-Fi entra en ahorro de energia -- no emite ni
+/// un byte ni un error: sin esto el `await for` esperaba indefinidamente, la
+/// notificacion se quedaba clavada en el mismo % y la descarga solo revivia
+/// al volver a abrir la app.
+const Duration _downloadIdleTimeout = Duration(seconds: 30);
+const int _downloadMaxAttempts = 4;
+const Duration _downloadRetryDelay = Duration(seconds: 2);
+
+/// Descarga [uri] en [file], reanudando desde donde se cortara.
+///
+/// Unico camino de descarga de la app (canciones, exportaciones y episodios
+/// de podcast): el corte se detecta con [_downloadIdleTimeout] y el reintento
+/// pide `Range: bytes=N-` para continuar el fichero que ya esta en disco en
+/// vez de perder lo descargado y empezar de cero.
+///
+/// Devuelve false al agotar los reintentos, si el servidor responde algo que
+/// no sea 200/206, o si el usuario cancela desde la notificacion; en todos
+/// esos casos el fichero parcial se queda en disco y lo borra quien llama.
+Future<bool> downloadUriToFile(
+  Uri uri,
+  File file, {
+  Map<String, String> headers = const {},
+  void Function(double progress)? onProgress,
+}) async {
+  await file.parent.create(recursive: true);
+  if (await file.exists()) await file.delete();
+
+  var received = 0;
+
+  for (var attempt = 1; attempt <= _downloadMaxAttempts; attempt++) {
+    if (DownloadForegroundService.cancelAllRequested) return false;
+
+    // El IOSink bufferiza, asi que tras un corte parte de lo contado en
+    // memoria puede no haber llegado al disco: lo unico fiable para saber
+    // desde que byte reanudar es el tamano real del fichero.
+    received = await file.exists() ? await file.length() : 0;
+
+    final client = http.Client();
+    IOSink? sink;
+    try {
+      final request = http.Request('GET', uri)..headers.addAll(headers);
+      if (received > 0) request.headers['Range'] = 'bytes=$received-';
+      final response = await client.send(request).timeout(_downloadIdleTimeout);
+
+      if (response.statusCode != 200 && response.statusCode != 206) {
+        logger.log('downloadUriToFile: HTTP ${response.statusCode} for $uri');
+        return false;
+      }
+      // Un servidor que ignora Range contesta 200 con el fichero entero, no
+      // 206: hay que truncar y empezar de cero en lugar de pegar bytes
+      // duplicados al final de lo ya descargado.
+      final resuming = response.statusCode == 206 && received > 0;
+      if (!resuming) received = 0;
+      final total = (response.contentLength ?? 0) + received;
+
+      sink = file.openWrite(mode: resuming ? FileMode.append : FileMode.write);
+      await for (final chunk in response.stream.timeout(_downloadIdleTimeout)) {
+        if (DownloadForegroundService.cancelAllRequested) return false;
+        sink.add(chunk);
+        received += chunk.length;
+        if (total > 0) onProgress?.call(received / total);
+      }
+      await sink.flush();
+      await sink.close();
+      sink = null;
+
+      // Un socket cerrado limpiamente a mitad de fichero no lanza error: sin
+      // esta comprobacion se daba por buena una descarga truncada (que luego
+      // ffmpeg convertia en un mp3 cortado).
+      if (total == 0 || received >= total) return true;
+      logger.log('downloadUriToFile: truncado en $received/$total, reintento');
+    } catch (e) {
+      logger.log('downloadUriToFile: intento $attempt fallido para $uri: $e');
+    } finally {
+      try {
+        await sink?.close();
+      } catch (_) {}
+      client.close();
+    }
+
+    if (attempt < _downloadMaxAttempts) {
+      await Future<void>.delayed(_downloadRetryDelay);
+    }
+  }
+  return false;
 }

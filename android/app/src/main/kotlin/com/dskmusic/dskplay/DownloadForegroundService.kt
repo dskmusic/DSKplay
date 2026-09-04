@@ -7,8 +7,11 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.net.wifi.WifiManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -37,6 +40,12 @@ class DownloadForegroundService : Service() {
     private const val ACTION_CANCEL = "com.dskmusic.dskplay.CANCEL_DOWNLOADS"
     private const val WAKE_LOCK_TIMEOUT_MS = 4L * 60 * 60 * 1000 // 4h safety cap
 
+    // Cuánto se espera sin noticias de Dart antes de dar la descarga por
+    // muerta y limpiar. Holgado a propósito: entre el último byte y el aviso
+    // final hay un transcode de ffmpeg y el etiquetado, que en un móvil lento
+    // tardan lo suyo, y en una lista también pasa un rato entre canciones.
+    private const val IDLE_TIMEOUT_MS = 2L * 60 * 1000
+
     @Volatile
     private var instance: DownloadForegroundService? = null
 
@@ -48,6 +57,7 @@ class DownloadForegroundService : Service() {
     private var progress = 0
     private var indeterminate = true
     private var ongoing = true
+    private var timeoutMs = 0
 
     fun showProgress(context: Context, newTitle: String, newProgress: Int?) {
       title = newTitle
@@ -56,14 +66,21 @@ class DownloadForegroundService : Service() {
       text = if (indeterminate) "" else "$progress%"
       ongoing = true
       notifyNow(context)
+      instance?.armIdleWatchdog()
     }
 
-    fun showResult(context: Context, newTitle: String, newText: String) {
+    fun showResult(
+      context: Context,
+      newTitle: String,
+      newText: String,
+      autoDismissMs: Int,
+    ) {
       title = newTitle
       text = newText
       progress = 100
       indeterminate = false
       ongoing = false
+      timeoutMs = autoDismissMs
       // A foreground service's notification can't be dismissed and is wiped
       // when the service stops, so it has to be detached first for the final
       // "Completado"/"Ha fallado" to survive on its own and be swipeable.
@@ -71,10 +88,16 @@ class DownloadForegroundService : Service() {
         ServiceCompat.stopForeground(it, ServiceCompat.STOP_FOREGROUND_DETACH)
       }
       notifyNow(context)
+      instance?.cancelIdleWatchdog()
+      // Nothing is going to rebuild this notification any more (it belongs to
+      // the system now), so leave the state clean for the next download
+      // instead of having its first onStartCommand repaint "Completado".
+      reset()
     }
 
     fun cancelNotification(context: Context) {
       instance?.let {
+        it.cancelIdleWatchdog()
         ServiceCompat.stopForeground(it, ServiceCompat.STOP_FOREGROUND_REMOVE)
       }
       NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
@@ -87,6 +110,7 @@ class DownloadForegroundService : Service() {
       progress = 0
       indeterminate = true
       ongoing = true
+      timeoutMs = 0
     }
 
     private fun notifyNow(context: Context) {
@@ -120,6 +144,13 @@ class DownloadForegroundService : Service() {
         .setOngoing(ongoing)
         .setAutoCancel(!ongoing)
 
+      // The "Completado" used to be dismissed by a 3s Future on the Dart
+      // side, which never ran once audio_service tore the engine down with
+      // the download that had just released it - leaving the finished
+      // notification sitting in the shade at 100% forever. The system honours
+      // this regardless of whether this process is still alive.
+      if (!ongoing && timeoutMs > 0) builder.setTimeoutAfter(timeoutMs.toLong())
+
       if (ongoing) {
         builder.setProgress(100, progress, indeterminate)
         val cancelIntent = Intent(context, DownloadForegroundService::class.java)
@@ -141,6 +172,31 @@ class DownloadForegroundService : Service() {
   }
 
   private var wakeLock: PowerManager.WakeLock? = null
+  private var wifiLock: WifiManager.WifiLock? = null
+
+  private val idleHandler = Handler(Looper.getMainLooper())
+
+  /**
+   * Limpieza de último recurso: Dart es quien avisa de que una descarga ha
+   * terminado (showResult, y el "stop" que para este servicio), pero su
+   * engine puede haber muerto ya - audio_service lo destruye al quedarse sin
+   * Activity - mientras ffmpeg termina de escribir el fichero en un hilo
+   * nativo. El resultado era una notificación clavada en "Descargando... 100%"
+   * que nadie iba a retirar, con el wake lock y el wifi lock cogidos detrás.
+   */
+  private val idleWatchdog = Runnable {
+    cancelNotification(applicationContext)
+    stopSelf()
+  }
+
+  private fun armIdleWatchdog() {
+    idleHandler.removeCallbacks(idleWatchdog)
+    idleHandler.postDelayed(idleWatchdog, IDLE_TIMEOUT_MS)
+  }
+
+  private fun cancelIdleWatchdog() {
+    idleHandler.removeCallbacks(idleWatchdog)
+  }
 
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -162,6 +218,7 @@ class DownloadForegroundService : Service() {
     }
 
     startForeground(NOTIFICATION_ID, build(this))
+    armIdleWatchdog()
 
     if (cancelRequested) {
       // Downloads notice this and unwind on their own (finishing the current
@@ -184,12 +241,35 @@ class DownloadForegroundService : Service() {
         }
     }
 
+    // The wake lock above keeps the CPU running but does nothing to stop the
+    // Wi-Fi radio from dropping into power save as soon as the app leaves the
+    // foreground - the socket then stalls half-open without ever closing, so
+    // the download receives neither bytes nor an error and only "resumes"
+    // when the user reopens the app. FULL_HIGH_PERF is deprecated since API
+    // 29 but still the only mode that actually prevents that; LOW_LATENCY
+    // only applies while the app is in the foreground, which is precisely
+    // when this isn't needed.
+    if (wifiLock == null) {
+      val wifiManager =
+        applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+      @Suppress("DEPRECATION")
+      wifiLock = wifiManager
+        .createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "dskplay:download")
+        .apply {
+          setReferenceCounted(false)
+          acquire()
+        }
+    }
+
     return START_STICKY
   }
 
   override fun onDestroy() {
+    cancelIdleWatchdog()
     wakeLock?.let { if (it.isHeld) it.release() }
     wakeLock = null
+    wifiLock?.let { if (it.isHeld) it.release() }
+    wifiLock = null
     instance = null
     super.onDestroy()
   }

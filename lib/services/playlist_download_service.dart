@@ -170,18 +170,17 @@ class OfflinePlaylistService {
           ? songsList.length
           : maxConcurrent;
 
+      // Sin timeout global a propósito: el que había (2 min por canción,
+      // para la lista entera) daba por cancelada la lista completa por un
+      // solo estancamiento y, peor, no detenía a los workers - seguían
+      // descargando después de que el finally soltara la protección del
+      // servicio en primer plano, que es justo cuando el sistema podía
+      // matarlos. Cada canción ya trae su propio timeout de inactividad y
+      // sus reintentos dentro de downloadUriToFile.
       await Future.wait([
         for (var i = 0; i < workerCount; i++)
           _processDownloadQueue(songQueue, progressNotifier, folderName),
-      ]).timeout(
-        Duration(minutes: songsList.length * 2),
-        onTimeout: () {
-          logger.log('Download timeout for playlist $playlistId');
-          progressNotifier.value.isCancelled = true;
-          progressNotifier.notifyListeners();
-          return <void>[];
-        },
-      );
+      ]);
       // cleanupProgressNotifier (called below) resets progressNotifier, so
       // the outcome for the notification has to be captured now.
       finalProgress = progressNotifier.value;

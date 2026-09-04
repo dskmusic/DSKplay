@@ -54,11 +54,6 @@ class DownloadNotificationService {
   int _lastPercent = -1;
   DateTime? _lastSentAt;
 
-  // Invalidates the pending auto-dismiss of a finished download when a new
-  // one starts within its 3s grace period, so it can't wipe the new one's
-  // notification out from under it.
-  int _resultToken = 0;
-
   /// Shows/updates the ongoing progress notification.
   ///
   /// Nothing is awaited before the channel send on purpose, and callers may
@@ -77,7 +72,6 @@ class DownloadNotificationService {
       _lastTitle = title;
       _lastPercent = -1;
       _lastSentAt = null;
-      _resultToken++;
     } else if (percent <= _lastPercent) {
       // Unchanged, or a stale report from a slower parallel worker:
       // progress only ever moves forward within one operation.
@@ -107,7 +101,6 @@ class DownloadNotificationService {
     _lastTitle = null;
     _lastPercent = -1;
     _lastSentAt = null;
-    final token = ++_resultToken;
 
     if (DownloadForegroundService.cancelAllRequested) {
       // The user cancelled this on the notification itself - a lingering
@@ -120,19 +113,15 @@ class DownloadNotificationService {
       await _channel.invokeMethod('showResult', {
         'title': title,
         'text': success ? 'Completado' : 'Ha fallado',
+        // Confirma brevemente y se quita de en medio; un fallo se queda
+        // (descartable a mano) porque el usuario puede necesitar enterarse.
+        // Lo descarta el sistema y no un Future de aquí: ese no llegaba a
+        // correr cuando audio_service se llevaba por delante el engine junto
+        // con la descarga que acababa de soltar el servicio, y el
+        // "Completado" se quedaba clavado en la barra para siempre.
+        'autoDismissMs': success ? 3000 : 0,
       });
     } catch (_) {}
-
-    if (success) {
-      // Confirms briefly, then gets out of the way - a failure stays put
-      // (dismissible) since the user may need to notice and act on it.
-      unawaited(
-        Future.delayed(const Duration(seconds: 3), () {
-          if (token == _resultToken) return cancel();
-          return null;
-        }),
-      );
-    }
   }
 
   Future<void> cancel() async {
@@ -140,7 +129,6 @@ class DownloadNotificationService {
     _lastTitle = null;
     _lastPercent = -1;
     _lastSentAt = null;
-    _resultToken++;
     try {
       await _channel.invokeMethod('cancelNotification');
     } catch (_) {}

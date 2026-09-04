@@ -1308,52 +1308,35 @@ Future<bool> _downloadAndTagAudioFile(
   final rawFile = File('${audioFile.path}.raw');
   await audioFile.parent.create(recursive: true);
 
-  IOSink? fileStream;
-  final httpClient = http.Client();
+  var downloaded = false;
   try {
     final audioManifest = await fetchBestAudioStream(ytid);
     if (audioManifest == null) {
       logger.log('_downloadAndTagAudioFile: audioManifest is null for $ytid');
-      return false;
+    } else {
+      // NewPipeExtractor sólo resuelve la URL; la descarga es un GET normal
+      // con reintentos por rangos (ver downloadUriToFile). La UA es la misma
+      // que usa YtDownloader al extraer: googlevideo responde 403 si la
+      // petición no se parece a la que generó la URL.
+      downloaded = await downloadUriToFile(
+        Uri.parse(audioManifest.url),
+        rawFile,
+        headers: const {'User-Agent': _streamUserAgent},
+        onProgress: onProgress,
+      );
     }
-
-    // NewPipeExtractor sólo resuelve la URL; la descarga es un GET normal.
-    // El Content-Length hace de tamaño total (la API nativa no lo trae).
-    // La UA es la misma que usa YtDownloader al extraer: googlevideo responde
-    // 403 si la petición no se parece a la que generó la URL.
-    final response = await httpClient.send(
-      http.Request('GET', Uri.parse(audioManifest.url))
-        ..headers['User-Agent'] = _streamUserAgent,
-    );
-    fileStream = rawFile.openWrite();
-    final totalBytes = response.contentLength ?? 0;
-    var receivedBytes = 0;
-    await for (final chunk in response.stream) {
-      if (DownloadForegroundService.cancelAllRequested) {
-        throw Exception('Download cancelled by user');
-      }
-      fileStream.add(chunk);
-      receivedBytes += chunk.length;
-      if (totalBytes > 0) onProgress?.call(receivedBytes / totalBytes);
-    }
-    await fileStream.flush();
-    await fileStream.close();
-    fileStream = null;
   } catch (e, stackTrace) {
     logger.log(
       'Error downloading audio file',
       error: e,
       stackTrace: stackTrace,
     );
+  }
+  if (!downloaded) {
     try {
-      await fileStream?.close();
+      if (await rawFile.exists()) await rawFile.delete();
     } catch (_) {}
-    if (await rawFile.exists()) {
-      await rawFile.delete();
-    }
     return false;
-  } finally {
-    httpClient.close();
   }
 
   // Always transcode to MP3 with libmp3lame, regardless of the source

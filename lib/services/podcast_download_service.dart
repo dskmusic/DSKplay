@@ -28,7 +28,6 @@ import 'package:dskplay/services/download_foreground_service.dart';
 import 'package:dskplay/services/download_notification_service.dart';
 import 'package:dskplay/services/io_service.dart';
 import 'package:dskplay/services/podcast_manager.dart';
-import 'package:http/http.dart' as http;
 
 // Episode audio is already a direct, ready-to-play file (mp3/m4a/ogg served
 // by the podcast host) - unlike YouTube songs there's no extraction or
@@ -167,47 +166,19 @@ Future<bool> _downloadToFile(
   File destination, {
   void Function(double progress)? onProgress,
 }) async {
-  final client = http.Client();
   final tempFile = File('${destination.path}.part');
-  IOSink? sink;
-  try {
-    final request = http.Request('GET', uri)
-      ..headers['User-Agent'] = 'DSKPlay/1.0';
-    final response = await client.send(request).timeout(
-      const Duration(seconds: 20),
-    );
-    if (response.statusCode != 200) return false;
-
-    await destination.parent.create(recursive: true);
-    sink = tempFile.openWrite();
-    final totalBytes = response.contentLength ?? 0;
-    var receivedBytes = 0;
-    await for (final chunk in response.stream) {
-      if (DownloadForegroundService.cancelAllRequested) {
-        throw Exception('Download cancelled by user');
-      }
-      sink.add(chunk);
-      receivedBytes += chunk.length;
-      if (totalBytes > 0) onProgress?.call(receivedBytes / totalBytes);
-    }
-    await sink.flush();
-    await sink.close();
-    sink = null;
-
-    await tempFile.rename(destination.path);
-    return true;
-  } catch (e, stackTrace) {
-    logger.log(
-      'Error downloading podcast episode file: $uri',
-      error: e,
-      stackTrace: stackTrace,
-    );
+  final downloaded = await downloadUriToFile(
+    uri,
+    tempFile,
+    headers: const {'User-Agent': 'DSKPlay/1.0'},
+    onProgress: onProgress,
+  );
+  if (!downloaded) {
     try {
-      await sink?.close();
+      if (await tempFile.exists()) await tempFile.delete();
     } catch (_) {}
-    if (await tempFile.exists()) await tempFile.delete();
     return false;
-  } finally {
-    client.close();
   }
+  await tempFile.rename(destination.path);
+  return true;
 }
