@@ -241,6 +241,16 @@ Future<void> _handleSongMenuAction({
       break;
     case 'like':
       final newValue = !songLikeStatus.value;
+      // Quitar de favoritos siempre pregunta: el corazón vive pegado al
+      // resto de acciones y un toque de más lo borraba sin avisar y sin
+      // forma de deshacerlo.
+      if (!newValue &&
+          !await _confirmRemoval(
+            context,
+            context.l10n!.removeFromFavoritesConfirm,
+          )) {
+        break;
+      }
       songLikeStatus.value = newValue;
       showToast(
         context,

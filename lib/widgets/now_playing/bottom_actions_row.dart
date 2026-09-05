@@ -180,21 +180,19 @@ class _BottomActionsRowState extends State<BottomActionsRow> {
                 if (id == null) return;
 
                 final originalValue = _songLikeStatus.value;
-                final isPodcastEpisode =
-                    !isRadioStation &&
-                    widget.metadata.extras?['isPodcastEpisode'] == true;
 
-                // Unliking a podcast episode is easy to hit by accident from
-                // this quick full-player button (unlike a deliberate "remove"
-                // in the favorites list menu), so confirm before it
-                // disappears from there.
-                if (originalValue && isPodcastEpisode) {
+                // Este corazón es de los botones más fáciles de rozar sin
+                // querer, así que cualquier quitado -- canción, episodio o
+                // emisora -- pasa por la confirmación. Antes sólo preguntaba
+                // en los episodios de podcast, y con el texto a pelo en
+                // castellano.
+                if (originalValue) {
                   final confirmed = await showDialog<bool>(
                     context: context,
                     builder: (dialogContext) => ConfirmationDialog(
                       confirmationMessage:
-                          '¿Quitar este episodio de podcasts favoritos?',
-                      submitMessage: 'Quitar',
+                          dialogContext.l10n!.removeFromFavoritesConfirm,
+                      submitMessage: dialogContext.l10n!.remove,
                       isDangerous: true,
                       onCancel: () => Navigator.of(dialogContext).pop(false),
                       onSubmit: () => Navigator.of(dialogContext).pop(true),

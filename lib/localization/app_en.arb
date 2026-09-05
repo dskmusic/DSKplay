@@ -261,6 +261,7 @@
   "rememberLastPlaybackDescription": "Show the last song you were playing when reopening the app, ignoring files opened or shared from other apps.",
   "remove": "Remove",
   "removeFromFolder": "Remove from folder",
+  "removeFromFavoritesConfirm": "Remove this from your favorites?",
   "removeFromLikedPlaylists": "Remove from liked playlists",
   "removeFromLikedPlaylistsConfirm": "Are you sure you want to remove this from your liked playlists?",
   "removeFromLikedSongs": "Remove from liked songs",

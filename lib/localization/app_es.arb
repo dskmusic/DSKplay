@@ -261,6 +261,7 @@
   "rememberLastPlaybackDescription": "Muestra la última canción que estabas reproduciendo al volver a abrir la app, ignorando los archivos abiertos o compartidos desde otras apps.",
   "remove": "Eliminar",
   "removeFromFolder": "Eliminar de la carpeta",
+  "removeFromFavoritesConfirm": "¿Quitar esto de tus favoritos?",
   "removeFromLikedPlaylists": "Eliminar de las listas favoritas",
   "removeFromLikedPlaylistsConfirm": "¿Seguro que quieres quitar esto de tus favoritos?",
   "removeFromLikedSongs": "Eliminar de las canciones favoritas",
