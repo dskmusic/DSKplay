@@ -1467,6 +1467,105 @@ Future<String?> downloadAndTagAudioFile(
   return success ? audioFile.path : null;
 }
 
+/// Descargas cuyo registro se quedó a medias. [makeSongOffline] anota aquí la
+/// canción *antes* de bajarla y la borra al registrarla: entre el último byte
+/// y ese registro hay un transcode de ffmpeg y el etiquetado, y si el engine
+/// de Dart muere durante ese rato -- audio_service lo destruye en cuanto se
+/// queda sin Activity -- el mp3 quedaba en disco sin que la app volviera a
+/// saber de él nunca. [recoverPendingOfflineDownloads] los reclama al
+/// arrancar.
+const _pendingOfflineKey = 'pendingOfflineSongs';
+
+Map<String, dynamic> _readPendingOfflineSongs() => Map<String, dynamic>.from(
+  Hive.box(
+        'userNoBackup',
+      ).get(_pendingOfflineKey, defaultValue: <String, dynamic>{})
+      as Map,
+);
+
+Future<void> _setPendingOfflineSong(String ytid, Map<String, dynamic> song) =>
+    Hive.box(
+      'userNoBackup',
+    ).put(_pendingOfflineKey, {..._readPendingOfflineSongs(), ytid: song});
+
+Future<void> _clearPendingOfflineSong(String ytid) async {
+  final pending = _readPendingOfflineSongs()..remove(ytid);
+  final box = Hive.box('userNoBackup');
+  await (pending.isEmpty
+      ? box.delete(_pendingOfflineKey)
+      : box.put(_pendingOfflineKey, pending));
+}
+
+/// Mete [song] en la biblioteca offline y da la descarga por cerrada.
+///
+/// El guardado va con await a propósito: era `unawaited` y el proceso podía
+/// morir con la escritura de Hive todavía en el aire, que es justo lo que
+/// esta función existe para evitar.
+Future<void> _registerOfflineSong(String ytid, Map<String, dynamic> song) async {
+  final cachedArtworkPath = await offlineArtworkCachePath(ytid);
+  song['artworkPath'] = await File(cachedArtworkPath).exists()
+      ? cachedArtworkPath
+      : null;
+  song['dateAdded'] ??= DateTime.now().millisecondsSinceEpoch;
+
+  try {
+    final updatedOfflineSongs = List.from(userOfflineSongs.value);
+    final existingIndex = updatedOfflineSongs.indexWhere(
+      (s) => s['ytid'] == ytid,
+    );
+    if (existingIndex != -1) {
+      updatedOfflineSongs[existingIndex] = song;
+    } else {
+      updatedOfflineSongs.add(song);
+    }
+    userOfflineSongs.value = updatedOfflineSongs;
+    await addOrUpdateData<List>(
+      'userNoBackup',
+      'offlineSongs',
+      updatedOfflineSongs,
+    );
+  } catch (e, st) {
+    logger.log(
+      'Error updating global offline songs list',
+      error: e,
+      stackTrace: st,
+    );
+  }
+
+  await _clearPendingOfflineSong(ytid);
+  notifyLocalFilesChanged();
+}
+
+/// Reclama las descargas que llegaron al disco pero nunca llegaron a
+/// registrarse. Espejo de `validateOfflineLibrary`, que hace lo contrario
+/// (tirar entradas cuyo fichero ya no está); se llama una vez al arrancar.
+Future<void> recoverPendingOfflineDownloads() async {
+  try {
+    final pending = _readPendingOfflineSongs();
+    if (pending.isEmpty) return;
+    for (final entry in pending.entries) {
+      final song = Map<String, dynamic>.from(entry.value as Map);
+      final path = song['audioPath']?.toString();
+      // Sin fichero no hay nada que reclamar: esa descarga se quedó a medias
+      // y su .raw ya lo borró downloadUriToFile.
+      if (path == null ||
+          isSongAlreadyOffline(entry.key) ||
+          !await File(path).exists()) {
+        continue;
+      }
+      await _registerOfflineSong(entry.key, song);
+      logger.log('recoverPendingOfflineDownloads: recuperada ${entry.key}');
+    }
+    await Hive.box('userNoBackup').delete(_pendingOfflineKey);
+  } catch (e, st) {
+    logger.log(
+      'Error recovering pending offline downloads',
+      error: e,
+      stackTrace: st,
+    );
+  }
+}
+
 Future<bool> makeSongOffline(
   dynamic song, {
   void Function(double progress)? onProgress,
@@ -1504,6 +1603,12 @@ Future<bool> makeSongOffline(
     final offlineSong = Map<String, dynamic>.from(song as Map);
 
     final audioFile = File(FilePaths.getAudioPath(ytid, folder: folder));
+    offlineSong['audioPath'] = audioFile.path;
+    offlineSong['dateAdded'] = DateTime.now().millisecondsSinceEpoch;
+
+    // Anotada antes de bajar nada: apuntarla después no serviría de nada,
+    // porque el hueco que tapa es justo el de morir a mitad del proceso.
+    await _setPendingOfflineSong(ytid, offlineSong);
 
     if (!await _downloadAndTagAudioFile(
       offlineSong,
@@ -1511,46 +1616,13 @@ Future<bool> makeSongOffline(
       audioFile,
       onProgress: onProgress,
     )) {
+      // Un fallo normal sí llega hasta aquí: se limpia para que el arranque
+      // no reclame un mp3 a medio transcodificar.
+      await _clearPendingOfflineSong(ytid);
       return false;
     }
 
-    final cachedArtworkPath = await offlineArtworkCachePath(ytid);
-    offlineSong['artworkPath'] = await File(cachedArtworkPath).exists()
-        ? cachedArtworkPath
-        : null;
-
-    offlineSong['audioPath'] = audioFile.path;
-    offlineSong['dateAdded'] = DateTime.now().millisecondsSinceEpoch;
-
-    try {
-      final existingIndex = userOfflineSongs.value.indexWhere(
-        (s) => s['ytid'] == ytid,
-      );
-
-      final updatedOfflineSongs = List.from(userOfflineSongs.value);
-      if (existingIndex != -1) {
-        updatedOfflineSongs[existingIndex] = offlineSong;
-      } else {
-        updatedOfflineSongs.add(offlineSong);
-      }
-      userOfflineSongs.value = updatedOfflineSongs;
-
-      unawaited(
-        addOrUpdateData<List>(
-          'userNoBackup',
-          'offlineSongs',
-          userOfflineSongs.value,
-        ),
-      );
-    } catch (e, st) {
-      logger.log(
-        'Error updating global offline songs list',
-        error: e,
-        stackTrace: st,
-      );
-    }
-
-    notifyLocalFilesChanged();
+    await _registerOfflineSong(ytid, offlineSong);
     return true;
   } catch (e, stackTrace) {
     logger.log('Error making song offline', error: e, stackTrace: stackTrace);

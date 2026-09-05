@@ -584,7 +584,13 @@ Future<void> initialisation() async {
       await _migrateOfflineFilesToExternalStorage(oldInternalDirPath);
       // Re-check on every launch in case offline files were deleted
       // outside the app (file manager, storage cleaner, etc).
-      unawaited(offlinePlaylistService.validateOfflineLibrary());
+      // Primero se reclama lo que terminó sin registrarse y después se poda
+      // lo que ya no está en disco, o la poda no vería las recuperadas.
+      unawaited(
+        recoverPendingOfflineDownloads().whenComplete(
+          offlinePlaylistService.validateOfflineLibrary,
+        ),
+      );
     }
   } catch (e, stackTrace) {
     logger.log(

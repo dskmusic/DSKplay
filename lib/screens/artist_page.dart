@@ -37,6 +37,7 @@ import 'package:dskplay/widgets/playlist_page/empty_playlist_state.dart';
 import 'package:dskplay/widgets/playlist_page/like_button.dart';
 import 'package:dskplay/widgets/playlist_page/playlist_action_buttons.dart';
 import 'package:dskplay/widgets/playlist_page/playlist_header.dart';
+import 'package:dskplay/widgets/fullscreen_artwork_viewer.dart';
 import 'package:dskplay/widgets/section_header.dart';
 import 'package:dskplay/widgets/song_bar.dart';
 import 'package:dskplay/widgets/spinner.dart';
@@ -320,23 +321,41 @@ class _ArtistPageState extends State<ArtistPage> {
     );
   }
 
-  Widget _buildHeaderSection() {
+  Widget _buildArtistImage() {
     final screenSize = MediaQuery.sizeOf(context);
     final isLandscape = screenSize.width > screenSize.height;
+    final cube = PlaylistCube(
+      _artist!,
+      size:
+          (isLandscape
+              ? 250
+              : screenSize.width / commonPlaylistArtworkDivision) *
+          compactHeaderScale,
+      cubeIcon: FluentIcons.person_24_filled,
+      showTypeLabel: false,
+    );
 
+    // La foto del artista ya viene normalizada desde getArtistProfile, así que
+    // es la misma URL que pinta el cubo: sin foto no hay nada que ampliar y se
+    // deja el icono de siempre sin gesto que no haría nada.
+    final artwork = _artist!['image']?.toString();
+    if (artwork == null || artwork.isEmpty) return cube;
+
+    return GestureDetector(
+      onTap: () => FullscreenArtworkViewer.show(
+        context,
+        artwork: artwork,
+        fileName: _artistTitle.isEmpty ? 'DSKplay' : _artistTitle,
+      ),
+      child: cube,
+    );
+  }
+
+  Widget _buildHeaderSection() {
     return Column(
       children: [
         PlaylistHeader(
-          PlaylistCube(
-            _artist!,
-            size:
-                (isLandscape
-                    ? 250
-                    : screenSize.width / commonPlaylistArtworkDivision) *
-                compactHeaderScale,
-            cubeIcon: FluentIcons.person_24_filled,
-            showTypeLabel: false,
-          ),
+          _buildArtistImage(),
           _artistTitle,
           isArtist: true,
           monthlyListeners: showArtistExtras.value

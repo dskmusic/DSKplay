@@ -77,10 +77,23 @@ class KaraokeLyricsView extends StatelessWidget {
   }
 
   Widget _buildContent(Color activeColor, Color inactiveColor) {
+    return ValueListenableBuilder<int>(
+      valueListenable: karaokeLyricsOffset,
+      builder: (context, offsetMs, _) =>
+          _buildLines(activeColor, inactiveColor, offsetMs),
+    );
+  }
+
+  Widget _buildLines(Color activeColor, Color inactiveColor, int offsetMs) {
     return StreamBuilder<PositionData>(
       stream: audioHandler.positionDataStream,
       builder: (context, snapshot) {
-        final position = snapshot.data?.position ?? Duration.zero;
+        // El desfase se suma a la posición en vez de tocar los timestamps:
+        // las letras vienen cacheadas y compartidas, y así el ajuste no las
+        // altera ni hay que volver a parsear nada al moverlo.
+        final position =
+            (snapshot.data?.position ?? Duration.zero) +
+            Duration(milliseconds: offsetMs);
         final activeIndex = _activeIndexFor(
           position,
         ).clamp(0, lines.length - 1);

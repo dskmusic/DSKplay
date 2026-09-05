@@ -25,6 +25,10 @@ import 'package:dskplay/theme/app_colors.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 
+/// Tope del desfase manual. 5 s de sobra: pasado eso la letra no es que esté
+/// desincronizada, es que no es la de esta canción.
+const _karaokeOffsetRangeMs = 5000.0;
+
 Future<void> showKaraokeColorSettingsDialog(BuildContext context) {
   return showDialog<void>(
     context: context,
@@ -38,7 +42,7 @@ class _KaraokeColorSettingsDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(context.l10n!.karaokeColors),
+      title: Text(context.l10n!.karaokeMode),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -58,6 +62,7 @@ class _KaraokeColorSettingsDialog extends StatelessWidget {
               notifier: karaokeInactiveLyricColor,
               onSet: setKaraokeInactiveLyricColor,
             ),
+            const _KaraokeOffsetRow(),
           ],
         ),
       ),
@@ -71,6 +76,43 @@ class _KaraokeColorSettingsDialog extends StatelessWidget {
           child: Text(context.l10n!.close),
         ),
       ],
+    );
+  }
+}
+
+class _KaraokeOffsetRow extends StatelessWidget {
+  const _KaraokeOffsetRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<int>(
+      valueListenable: karaokeLyricsOffset,
+      builder: (context, offsetMs, _) {
+        final seconds = (offsetMs / 1000).toStringAsFixed(1);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                '${context.l10n!.karaokeLyricsOffset}  '
+                '${offsetMs > 0 ? '+' : ''}$seconds s',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+            Slider(
+              value: offsetMs.toDouble().clamp(
+                -_karaokeOffsetRangeMs,
+                _karaokeOffsetRangeMs,
+              ),
+              min: -_karaokeOffsetRangeMs,
+              max: _karaokeOffsetRangeMs,
+              divisions: 100,
+              onChanged: (value) => setKaraokeLyricsOffset(value.round()),
+            ),
+          ],
+        );
+      },
     );
   }
 }

@@ -159,6 +159,7 @@
   "karaokeBackgroundColor": "Color de fondo",
   "karaokeColors": "Colores del karaoke",
   "karaokeInactiveLyricColor": "Color de la letra inactiva",
+  "karaokeLyricsOffset": "Desfase de letras",
   "karaokeMode": "Modo karaoke",
   "grantStorageAccess": "Conceder acceso al almacenamiento",
   "itemsSelected": "elementos seleccionados",

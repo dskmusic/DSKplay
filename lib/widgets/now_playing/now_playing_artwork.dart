@@ -697,7 +697,7 @@ class _LyricsBackContentState extends State<_LyricsBackContent> {
           right: 8,
           top: 8,
           child: Tooltip(
-            message: context.l10n!.karaokeColors,
+            message: context.l10n!.karaokeMode,
             child: Material(
               color: colorScheme.surfaceContainerHighest.withValues(
                 alpha: 0.85,

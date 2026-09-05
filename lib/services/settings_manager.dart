@@ -229,6 +229,19 @@ final karaokeInactiveLyricColor = ValueNotifier<Color>(
   ),
 );
 
+/// Cuánto se adelantan las letras respecto a la música, en milisegundos.
+/// Positivo = salen antes, que es lo que hace falta cuando el LRC va tarde.
+/// ponytail: uno global para todas las canciones; si alguna necesitara el
+/// suyo habría que guardarlo por ytid.
+final karaokeLyricsOffset = ValueNotifier<int>(
+  Hive.box('settings').get('karaokeLyricsOffset', defaultValue: 0),
+);
+
+void setKaraokeLyricsOffset(int milliseconds) {
+  karaokeLyricsOffset.value = milliseconds;
+  Hive.box('settings').put('karaokeLyricsOffset', milliseconds);
+}
+
 void setKaraokeBackgroundColor(Color color) {
   karaokeBackgroundColor.value = color;
   Hive.box('settings').put('karaokeBackgroundColor', color.toARGB32());
@@ -266,6 +279,7 @@ void resetKaraokeColors() {
   setKaraokeBackgroundColor(karaokeDefaultBackgroundColor);
   setKaraokeActiveLyricColor(karaokeDefaultActiveLyricColor);
   setKaraokeInactiveLyricColor(karaokeDefaultInactiveLyricColor);
+  setKaraokeLyricsOffset(0);
 }
 
 final shuffleNotifier = ValueNotifier<bool>(
@@ -327,6 +341,7 @@ void reloadSettingsFromStorage() {
       karaokeDefaultInactiveLyricColor.toARGB32(),
     ),
   );
+  karaokeLyricsOffset.value = read('karaokeLyricsOffset', 0);
   collapsedLibrarySections.value = List<String>.from(
     box.get('collapsedLibrarySections', defaultValue: <String>[]) as List,
   );

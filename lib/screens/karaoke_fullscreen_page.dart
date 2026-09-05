@@ -21,6 +21,7 @@
 
 import 'package:dskplay/services/lyrics_manager.dart';
 import 'package:dskplay/services/settings_manager.dart';
+import 'package:dskplay/widgets/now_playing/karaoke_color_dialog.dart';
 import 'package:dskplay/widgets/now_playing/karaoke_lyrics_view.dart';
 import 'package:dskplay/widgets/playback_icon_button.dart';
 import 'package:dskplay/widgets/position_slider.dart';
@@ -104,12 +105,22 @@ class _KaraokeFullscreenPageState extends State<KaraokeFullscreenPage> {
               Positioned(
                 right: 8,
                 top: 8,
-                child: _CircleIconButton(
-                  icon: _karaokeEnabled
-                      ? FluentIcons.mic_sparkle_24_filled
-                      : FluentIcons.mic_sparkle_24_regular,
-                  onTap: () =>
-                      setState(() => _karaokeEnabled = !_karaokeEnabled),
+                child: Column(
+                  spacing: 8,
+                  children: [
+                    _CircleIconButton(
+                      icon: _karaokeEnabled
+                          ? FluentIcons.mic_sparkle_24_filled
+                          : FluentIcons.mic_sparkle_24_regular,
+                      onTap: () =>
+                          setState(() => _karaokeEnabled = !_karaokeEnabled),
+                    ),
+                    if (_karaokeEnabled)
+                      _CircleIconButton(
+                        icon: FluentIcons.options_24_regular,
+                        onTap: () => showKaraokeColorSettingsDialog(context),
+                      ),
+                  ],
                 ),
               ),
             Positioned(
