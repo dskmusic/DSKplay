@@ -207,9 +207,9 @@ class _DskPlayState extends State<DskPlay> with WidgetsBindingObserver {
     try {
       LicenseRegistry.addLicense(() async* {
         final license = await rootBundle.loadString(
-          'assets/licenses/paytone.txt',
+          'assets/licenses/saira.txt',
         );
-        yield LicenseEntryWithLineBreaks(['paytoneOne'], license);
+        yield LicenseEntryWithLineBreaks(['saira'], license);
       });
     } catch (e, stackTrace) {
       logger.log(
@@ -507,8 +507,8 @@ class _SplashScreen extends StatelessWidget {
                 'DSK Play',
                 style: TextStyle(
                   fontSize: 30,
-                  fontFamily: 'paytoneOne',
-                  fontWeight: FontWeight.w500,
+                  fontFamily: headingFontFamily,
+                  fontVariations: headingFontVariations,
                   color: splashAccentColor,
                   letterSpacing: -0.5,
                 ),

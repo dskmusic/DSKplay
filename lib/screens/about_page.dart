@@ -25,6 +25,7 @@ import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/constants/version.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/services/update_manager.dart';
+import 'package:dskplay/theme/app_themes.dart';
 import 'package:dskplay/utilities/url_launcher.dart';
 import 'package:dskplay/widgets/confirmation_dialog.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
@@ -96,8 +97,8 @@ class _AboutPageState extends State<AboutPage> {
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.primary,
                       fontSize: 36,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'paytoneOne',
+                      fontFamily: headingFontFamily,
+                      fontVariations: headingFontVariations,
                       letterSpacing: -1.2,
                     ),
                   ),

@@ -26,6 +26,16 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
+/// Tipografía de los encabezados: barra superior, splash y cabecera de
+/// "Acerca de".
+///
+/// saira.ttf es la fuente *variable* de Saira, y su instancia por defecto es
+/// Thin (100): el grosor real tiene que venir del eje 'wght', porque un
+/// fontWeight a secas dejaría el título en fino y luego lo engordaría a base
+/// de síntesis. Sube o baja [headingFontVariations] para ajustar el trazo.
+const String headingFontFamily = 'saira';
+const List<FontVariation> headingFontVariations = [FontVariation('wght', 600)];
+
 ThemeMode themeMode = getThemeMode(themeModeSetting);
 Brightness brightness = getBrightnessFromThemeMode(themeMode);
 
@@ -136,8 +146,8 @@ ThemeData getAppTheme(ColorScheme colorScheme) {
       centerTitle: true,
       titleTextStyle: TextStyle(
         fontSize: 30,
-        fontFamily: 'paytoneOne',
-        fontWeight: FontWeight.w500,
+        fontFamily: headingFontFamily,
+        fontVariations: headingFontVariations,
         color: effectiveColorScheme.primary,
         letterSpacing: -0.5,
       ),

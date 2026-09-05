@@ -66,9 +66,9 @@ flutter:
     - assets/logo.png
 
   fonts:
-    - family: paytoneOne
+    - family: saira
       fonts:
-        - asset: assets/fonts/paytone/PaytoneOne-Regular.ttf
+        - asset: assets/fonts/saira.ttf
 
 flutter_launcher_icons:
   android: true
