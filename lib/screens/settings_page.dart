@@ -456,6 +456,24 @@ class SettingsPage extends StatelessWidget {
           ),
         ),
         CustomBar(
+          context.l10n!.clearDismissedSuggestions,
+          FluentIcons.eye_24_regular,
+          onTap: () => _showConfirmationDialog(
+            context: context,
+            confirmationMessage:
+                context.l10n!.clearDismissedSuggestionsQuestion,
+            onSubmit: () async {
+              await clearHiddenRecommendations();
+              if (context.mounted) {
+                showToast(
+                  context,
+                  '${context.l10n!.dismissedSuggestionsCleared}!',
+                );
+              }
+            },
+          ),
+        ),
+        CustomBar(
           context.l10n!.clearListeningStats,
           FluentIcons.clock_24_regular,
           onTap: () => _showConfirmationDialog(
@@ -896,6 +914,7 @@ class SettingsPage extends StatelessWidget {
 
   void _showThemeModePicker(BuildContext context) {
     final isAmoled = usePureBlackColor.value;
+    final isDskfy = dskfyTheme.value;
 
     showCustomBottomSheet(
       context,
@@ -919,7 +938,7 @@ class SettingsPage extends StatelessWidget {
           BottomSheetBar(
             context.l10n!.themeModeDark,
             () => _selectThemeMode(context, ThemeMode.dark, amoled: false),
-            themeMode == ThemeMode.dark && !isAmoled,
+            themeMode == ThemeMode.dark && !isAmoled && !isDskfy,
             icon: FluentIcons.weather_moon_24_regular,
           ),
           BottomSheetBar(
@@ -927,6 +946,17 @@ class SettingsPage extends StatelessWidget {
             () => _selectThemeMode(context, ThemeMode.dark, amoled: true),
             themeMode == ThemeMode.dark && isAmoled,
             icon: FluentIcons.weather_moon_24_filled,
+          ),
+          BottomSheetBar(
+            'DSKfy',
+            () => _selectThemeMode(
+              context,
+              ThemeMode.dark,
+              amoled: false,
+              dskfy: true,
+            ),
+            isDskfy,
+            icon: FluentIcons.music_note_2_24_filled,
           ),
           BottomSheetBar(
             context.l10n!.custom,
@@ -943,10 +973,15 @@ class SettingsPage extends StatelessWidget {
     BuildContext context,
     ThemeMode mode, {
     required bool amoled,
+    bool dskfy = false,
   }) async {
     addOrUpdateData<int>('settings', 'themeIndex', mode.index);
     addOrUpdateData<bool>('settings', 'usePureBlackColor', amoled);
+    // Se guarda siempre, tambien en false: elegir cualquier otro modo tiene
+    // que apagar DSKfy, o su paleta se quedaria puesta por encima.
+    addOrUpdateData<bool>('settings', 'dskfyTheme', dskfy);
     usePureBlackColor.value = amoled;
+    dskfyTheme.value = dskfy;
     await DskPlay.updateAppState(context, newThemeMode: mode);
     closeCurrentBottomSheet();
   }

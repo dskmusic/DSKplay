@@ -62,11 +62,52 @@ ThemeMode getThemeMode(int themeModeIndex) {
   return ThemeMode.system;
 }
 
+// Paleta del tema DSKfy: grises oscuros y un unico acento verde. Va aparte de
+// los grises AMOLED porque no es un modificador sobre el acento del usuario,
+// sino un esquema cerrado que no depende de nada mas.
+const dskfyAccent = Color(0xFF1DB954);
+const _dskfySurface = Color(0xFF121212);
+const _dskfyElevated = Color(0xFF181818);
+const _dskfyContainer = Color(0xFF1F1F1F);
+const _dskfyContainerHigh = Color(0xFF282828);
+const _dskfyMutedText = Color(0xFFB3B3B3);
+
+final _dskfyColorScheme =
+    ColorScheme.fromSeed(
+      seedColor: dskfyAccent,
+      brightness: Brightness.dark,
+    ).copyWith(
+      primary: dskfyAccent,
+      onPrimary: Colors.black,
+      primaryContainer: dskfyAccent,
+      onPrimaryContainer: Colors.black,
+      secondary: dskfyAccent,
+      onSecondary: Colors.black,
+      secondaryContainer: _dskfyContainerHigh,
+      onSecondaryContainer: Colors.white,
+      surface: _dskfySurface,
+      onSurface: Colors.white,
+      onSurfaceVariant: _dskfyMutedText,
+      surfaceContainerLowest: _dskfySurface,
+      surfaceContainerLow: _dskfyElevated,
+      surfaceContainer: _dskfyContainer,
+      surfaceContainerHigh: _dskfyContainerHigh,
+      surfaceContainerHighest: _dskfyContainerHigh,
+      outline: _dskfyContainerHigh,
+      outlineVariant: _dskfyContainer,
+    );
+
 ColorScheme getAppColorScheme(
   ColorScheme? lightColorScheme,
   ColorScheme? darkColorScheme, [
   Brightness? forBrightness,
 ]) {
+  // Antes que nada: DSKfy trae sus propios grises y su verde, asi que ni el
+  // color dinamico del sistema ni el acento guardado pintan nada aqui. Al
+  // devolver ya los `surfaceContainer*` correctos, `getAppTheme` no necesita
+  // una rama propia como si pasa con el AMOLED.
+  if (dskfyTheme.value) return _dskfyColorScheme;
+
   if (useSystemColor.value &&
       lightColorScheme != null &&
       darkColorScheme != null) {

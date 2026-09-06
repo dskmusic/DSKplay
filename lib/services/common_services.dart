@@ -189,12 +189,38 @@ ValueNotifier<List<String>> userHiddenRecommendationIds =
       ),
     );
 
+// La lista se guarda entera y no se limpiaba nunca: con el tiempo eran cientos
+// de ids arrastrados en cada arranque. Los descartes viejos ya no importan.
+const _maxHiddenRecommendations = 300;
+
 Future<void> hideSongFromRecommendations(String ytid) async {
   if (userHiddenRecommendationIds.value.contains(ytid)) return;
 
   final updated = [...userHiddenRecommendationIds.value, ytid];
-  userHiddenRecommendationIds.value = updated;
-  await addOrUpdateData<List>('user', 'hiddenRecommendationIds', updated);
+  if (updated.length > _maxHiddenRecommendations) {
+    updated.removeRange(0, updated.length - _maxHiddenRecommendations);
+  }
+  await _saveHiddenRecommendations(updated);
+}
+
+/// Deshace un descarte. Sin esto, un toque sin querer en "Descartar" apartaba
+/// esa cancion de las sugerencias para siempre.
+Future<void> unhideSongFromRecommendations(String ytid) async {
+  if (!userHiddenRecommendationIds.value.contains(ytid)) return;
+
+  await _saveHiddenRecommendations(
+    [...userHiddenRecommendationIds.value]..remove(ytid),
+  );
+}
+
+Future<void> clearHiddenRecommendations() async {
+  if (userHiddenRecommendationIds.value.isEmpty) return;
+  await _saveHiddenRecommendations([]);
+}
+
+Future<void> _saveHiddenRecommendations(List<String> ids) async {
+  userHiddenRecommendationIds.value = ids;
+  await addOrUpdateData<List>('user', 'hiddenRecommendationIds', ids);
 }
 
 ValueNotifier<List> userRecentlyPlayed = ValueNotifier<List>(

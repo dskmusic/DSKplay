@@ -2626,6 +2626,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
           return;
         }
       }
+      await audioPlayer.setVolume(0);
       // Do NOT await play(): its future only completes when playback pauses/
       // stops/finishes (just_audio semantics), which would defer the resume
       // below until the song ended - losing the whole session.
@@ -2639,6 +2640,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
           _lastError = e.toString();
         }),
       );
+      unawaited(_fadeVolume(0, 1));
       listeningStatsService.resumeListeningSession(currentSong: currentSong);
     } catch (e, stackTrace) {
       logger.log('Error in play()', error: e, stackTrace: stackTrace);
@@ -2665,7 +2667,14 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         wasPlaying: audioPlayer.playing,
       );
       unawaited(listeningStatsService.flush());
+      // El fundido abre una ventana de 200 ms en la que puede entrar un play
+      // (doble toque, boton del manos libres): si pasa, esta pausa ya no es
+      // la orden vigente y pausar aqui cortaria lo que se acaba de reanudar.
+      if (!await _fadeVolume(audioPlayer.volume, 0)) return;
       await audioPlayer.pause();
+      // El volumen en reposo vuelve a 1: si la app muriera pausada, la
+      // siguiente reproduccion no puede arrancar muda.
+      await audioPlayer.setVolume(1);
       // Awaited: a Bluetooth/notification pause can be followed almost
       // immediately by the app being swiped away and the process exiting -
       // this must land on disk before that can happen.
@@ -4269,6 +4278,28 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     } catch (e, stackTrace) {
       logger.log('Error setting sleep timer', error: e, stackTrace: stackTrace);
     }
+  }
+
+  // Pausar y reanudar de golpe suena a corte de corriente. 200 ms bastan para
+  // que se note el fundido sin que el boton de la notificacion parezca lento;
+  // es el unico numero que hay que tocar si se quiere mas o menos suave.
+  static const Duration _transportFade = Duration(milliseconds: 200);
+  int _volumeFadeGeneration = 0;
+
+  /// Lleva el volumen de [from] a [to] en [_transportFade]. Devuelve false si
+  /// otra pausa o reanudacion lo adelanto a mitad: manda el ultimo.
+  Future<bool> _fadeVolume(double from, double to) async {
+    final generation = ++_volumeFadeGeneration;
+    const steps = 10;
+    final stepDelay = _transportFade ~/ steps;
+
+    for (var i = 1; i <= steps; i++) {
+      if (generation != _volumeFadeGeneration) return false;
+      await audioPlayer.setVolume(from + (to - from) * i / steps);
+      if (i < steps) await Future<void>.delayed(stepDelay);
+    }
+
+    return true;
   }
 
   /// Baja el volumen poco a poco antes de parar. Vuelve a 1 en `cancel` y

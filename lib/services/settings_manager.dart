@@ -40,6 +40,13 @@ final usePureBlackColor = ValueNotifier<bool>(
   Hive.box('settings').get('usePureBlackColor', defaultValue: false),
 );
 
+/// Tema DSKfy: paleta cerrada (grises oscuros + verde). Manda sobre el color
+/// del sistema y sobre el acento elegido, por eso es un ajuste aparte y no
+/// otro valor de acento.
+final dskfyTheme = ValueNotifier<bool>(
+  Hive.box('settings').get('dskfyTheme', defaultValue: false),
+);
+
 final offlineMode = ValueNotifier<bool>(
   Hive.box('settings').get('offlineMode', defaultValue: false),
 );
@@ -307,6 +314,7 @@ void reloadSettingsFromStorage() {
   playNextSongAutomatically.value = read('playNextSongAutomatically', false);
   useSystemColor.value = read('useSystemColor', true);
   usePureBlackColor.value = read('usePureBlackColor', false);
+  dskfyTheme.value = read('dskfyTheme', false);
   offlineMode.value = read('offlineMode', false);
   wrappedEnabled.value = read('wrappedEnabled', true);
   includePodcasts.value = read('includePodcasts', true);

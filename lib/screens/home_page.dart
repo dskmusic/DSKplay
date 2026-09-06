@@ -85,11 +85,21 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  // Ni al descartar ni al deshacer se piden sugerencias nuevas: la lista de
+  // abajo se filtra sola contra los descartes. Recalcular devolvia otras
+  // canciones, asi que la que acababas de recuperar no volvia a salir.
   Future<void> _dismissSuggestion(dynamic song) async {
     final ytid = song['ytid']?.toString();
     if (ytid == null || ytid.isEmpty) return;
     await hideSongFromRecommendations(ytid);
-    _refreshRecommendedSongs();
+    if (!mounted) return;
+
+    showToastWithButton(
+      context,
+      context.l10n!.suggestionDismissed,
+      context.l10n!.undo,
+      () => unhideSongFromRecommendations(ytid),
+    );
   }
 
   void _refreshSuggestedPlaylists() {
@@ -307,7 +317,16 @@ class _HomePageState extends State<HomePage> {
       future: _recommendedSongsFuture,
       builder: (context, data) {
         if (data.isEmpty) return const SizedBox.shrink();
-        return _buildRecommendedForYouSection(context, data);
+        return ValueListenableBuilder<List<String>>(
+          valueListenable: userHiddenRecommendationIds,
+          builder: (context, hidden, __) {
+            final visible = data
+                .where((song) => !hidden.contains(song['ytid']))
+                .toList();
+            if (visible.isEmpty) return const SizedBox.shrink();
+            return _buildRecommendedForYouSection(context, visible);
+          },
+        );
       },
     );
   }

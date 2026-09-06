@@ -56,6 +56,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -111,6 +112,13 @@ class _DskPlayState extends State<DskPlay> with WidgetsBindingObserver {
         languageSetting = newLocale;
       }
       if (newAccentColor != null) {
+        // Cambiar el acento (preset, color a medida o color del sistema) apaga
+        // DSKfy. Va aqui y no en cada boton porque su paleta manda sobre el
+        // acento: si no, elegir un color no haria nada visible.
+        if (dskfyTheme.value) {
+          dskfyTheme.value = false;
+          addOrUpdateData<bool>('settings', 'dskfyTheme', false);
+        }
         if (systemColorStatus != null &&
             useSystemColor.value != systemColorStatus) {
           useSystemColor.value = systemColorStatus;
@@ -442,6 +450,12 @@ class _DskPlayState extends State<DskPlay> with WidgetsBindingObserver {
             supportedLocales: appSupportedLocales,
             locale: languageSetting,
             routerConfig: NavigationManager.router,
+            // Un unico swipe abierto en toda la app: abrir uno cierra el que
+            // hubiera. Va aqui y no en cada lista porque las filas
+            // deslizables estan repartidas por varias pantallas.
+            builder: (context, child) => SlidableAutoCloseBehavior(
+              child: child ?? const SizedBox.shrink(),
+            ),
           ),
         );
       },
