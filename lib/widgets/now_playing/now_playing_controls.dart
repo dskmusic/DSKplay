@@ -164,6 +164,35 @@ class NowPlayingControls extends StatelessWidget {
   /// Se oculta solo cuando la reproduccion no viene de ninguna lista (radio,
   /// cola manual...), asi que no ocupa sitio cuando no aporta nada.
   Widget _buildSourceLink(BuildContext context, ColorScheme colorScheme) {
+    // Un episodio de podcast se escucha por el podcast, no por la lista de la
+    // que salio: en este sitio se enseña el podcast y lleva a sus episodios.
+    if (metadata.extras?['isPodcastEpisode'] == true) {
+      final podcastTitle =
+          (audioHandler.currentPlayingPodcast?.podcastTitle ??
+                  audioHandler.pendingPodcastResume?.podcastTitle ??
+                  metadata.album ??
+                  metadata.artist ??
+                  '')
+              .trim();
+      if (podcastTitle.isEmpty) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: TextButton.icon(
+          onPressed: () => openCurrentPodcastEpisodeList(context),
+          icon: const Icon(FluentIcons.headphones_24_regular, size: 16),
+          label: Text(
+            podcastTitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          style: TextButton.styleFrom(
+            foregroundColor: colorScheme.primary,
+            visualDensity: VisualDensity.compact,
+          ),
+        ),
+      );
+    }
+
     return ValueListenableBuilder<Map?>(
       valueListenable: nowPlayingSource,
       builder: (context, source, _) {
