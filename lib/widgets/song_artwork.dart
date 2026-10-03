@@ -196,10 +196,14 @@ class _ArtworkWithFallbacksState extends State<_ArtworkWithFallbacks> {
       );
     }
 
+    final decodeWidth = artworkDecodeWidth(context, widget.size);
+
     return CachedNetworkImage(
       width: widget.size,
       height: widget.size,
       imageUrl: artwork,
+      memCacheWidth: decodeWidth,
+      memCacheHeight: decodeWidth,
       imageBuilder: (context, imageProvider) => ClipRRect(
         borderRadius: BorderRadius.circular(widget.borderRadius),
         child: Image(image: imageProvider, fit: BoxFit.cover),

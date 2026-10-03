@@ -244,33 +244,60 @@ Future<bool> clearCache() async {
   }
 }
 
-// Clean up old cache entries to prevent excessive storage usage
+/// Edad minima para borrar algo aunque ya haya caducado.
+///
+/// [getData] acepta una `cachingDuration` explicita que puede ser mas larga
+/// que la que adivina [_getCacheDurationForKey]: las URLs de stream se guardan
+/// 3 h y la clave dice hora y media. Con este suelo, una entrada que su
+/// llamante todavia considera buena no se borra por detras.
+const Duration _minPruneAge = Duration(hours: 6);
+
+/// Borra de la caja `cache` lo que ya ha caducado.
+///
+/// [getData] solo tira una entrada vencida cuando alguien vuelve a pedir *esa
+/// misma clave*, asi que las busquedas, catalogos y listas que no se repiten
+/// se quedan ahi para siempre. Y Hive carga la caja entera en memoria al
+/// abrirla, en el arranque, asi que lo que no se poda se paga en cada inicio.
 Future<void> cleanupOldCacheEntries() async {
   try {
     final cacheBox = await _openBox('cache');
     final now = DateTime.now();
 
-    // Get all keys except the ones with _date suffix
-    final keys = cacheBox.keys
-        .where((k) => !k.toString().endsWith('_date'))
-        .toList();
+    final keys = cacheBox.keys.map((k) => k.toString()).toSet();
+    final expired = <String>[];
 
     for (final key in keys) {
-      final dateKey = '${key}_date';
-      final date = cacheBox.get(dateKey);
+      if (key.endsWith('_date')) {
+        // Fecha huerfana: su valor ya no esta (lo borro deleteData o una
+        // version anterior de esta poda).
+        if (!keys.contains(key.substring(0, key.length - 5))) {
+          expired.add(key);
+        }
+        continue;
+      }
 
-      if (date == null) {
-        await cacheBox.delete(key);
+      final date = cacheBox.get('${key}_date');
+      if (date is! DateTime) {
+        // Sin fecha no hay forma de saber si vale: fuera.
+        expired.add(key);
         continue;
       }
 
       final age = now.difference(date);
-      // Very old cache entries (older than 30 days) should be removed
-      if (age > const Duration(days: 30)) {
-        await cacheBox.delete(key);
-        await cacheBox.delete(dateKey);
+      if (age > _getCacheDurationForKey(key) && age > _minPruneAge) {
+        expired
+          ..add(key)
+          ..add('${key}_date');
       }
     }
+
+    if (expired.isEmpty) return;
+
+    for (final key in expired) {
+      _memoryCache.remove('cache_$key');
+    }
+    // Una sola escritura para todas; de paso Hive decide si compacta.
+    await cacheBox.deleteAll(expired);
   } catch (e, stackTrace) {
     logger.log(
       'Error cleaning up old cache entries',

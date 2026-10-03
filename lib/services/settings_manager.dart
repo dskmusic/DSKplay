@@ -92,6 +92,22 @@ final showArtistExtras = ValueNotifier<bool>(
   Hive.box('settings').get('showArtistExtras', defaultValue: true),
 );
 
+/// De donde salen la ficha de artista y la discografia: 'ytmusic' (por
+/// defecto), 'deezer' o 'none'.
+///
+/// El elegido se pide primero y el otro queda de respaldo automatico, asi que
+/// esto no es tanto "que fuente usar" como "cual va delante". Deezer existe
+/// porque YouTube Music es la unica extraccion que NO cubre NewPipeExtractor:
+/// si Google cambia sus renderers, ninguna actualizacion lo arregla. Ver
+/// artist_service.dart y deezer.dart.
+///
+/// 'none' no pregunta a nadie: deja la pagina de artista sin ficha y sin
+/// canciones (el catalogo se construye desde la discografia), asi que es para
+/// comparar, no para dejarlo puesto.
+final artistProviderSetting = ValueNotifier<String>(
+  Hive.box('settings').get('artistProvider', defaultValue: 'ytmusic'),
+);
+
 /// Which bottom-nav tab the app opens on at cold start (route path, e.g.
 /// '/home', '/podcasts'). Read once by NavigationManager's initialLocation -
 /// stored in the same 'settings' box as everything else, so it's carried

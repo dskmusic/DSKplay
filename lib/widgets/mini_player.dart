@@ -23,7 +23,6 @@ import 'dart:math' as math;
 
 import 'package:audio_service/audio_service.dart';
 import 'package:dskplay/main.dart';
-import 'package:dskplay/models/full_player_state.dart';
 import 'package:dskplay/models/position_data.dart';
 import 'package:dskplay/screens/now_playing_page.dart';
 import 'package:dskplay/widgets/marquee.dart';
@@ -32,20 +31,41 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:rxdart/rxdart.dart';
 
-final Stream<FullPlayerState> _fullPlayerStateStream =
-    Rx.combineLatest3(
-          audioHandler.playbackStateStream,
-          audioHandler.queue.distinct(),
-          audioHandler.positionDataStream,
-          (PlaybackState state, List<MediaItem> queue, PositionData pos) =>
-              FullPlayerState(
-                playbackState: state,
-                queue: queue,
-                position: pos,
-              ),
-        )
-        .throttleTime(const Duration(milliseconds: 120), trailing: true)
-        .asBroadcastStream();
+/// Lo unico del mini player que no depende del reloj: cambia al pausar, al
+/// pasar de cancion o al tocar la cola.
+typedef PlayerChrome = ({
+  bool playing,
+  AudioProcessingState processingState,
+  bool hasNext,
+});
+
+/// Recorta de [state] lo que el mini player pinta de verdad.
+///
+/// `playbackState` emite tambien al avanzar la posicion, y de todo lo que
+/// trae aqui solo se usan tres campos: quedandose con ellos, dos estados que
+/// solo difieran en el reloj salen iguales y el `distinct` de abajo los tira.
+PlayerChrome playerChromeOf(PlaybackState state, List<MediaItem> queue) => (
+  playing: state.playing,
+  processingState: state.processingState,
+  hasNext: queue.length > 1 && (state.queueIndex ?? 0) < queue.length - 1,
+);
+
+/// La posicion se queda fuera a proposito.
+///
+/// Antes entraba aqui y el `StreamBuilder` que cuelga de este stream
+/// reconstruia el mini player entero —portada, marquesina, titulo, artista—
+/// varias veces por segundo, cuando el unico que mira la posicion es el aro
+/// de progreso del boton de play ([_ProgressRing]).
+final Stream<PlayerChrome> _playerChromeStream = Rx.combineLatest2(
+  audioHandler.playbackStateStream,
+  audioHandler.queue.distinct(),
+  playerChromeOf,
+).distinct().asBroadcastStream();
+
+PlayerChrome _chromeNow() => playerChromeOf(
+  audioHandler.playbackState.valueOrNull ?? PlaybackState(),
+  audioHandler.queue.valueOrNull ?? const <MediaItem>[],
+);
 
 class MiniPlayer extends StatelessWidget {
   const MiniPlayer({super.key});
@@ -68,40 +88,24 @@ class MiniPlayer extends StatelessWidget {
           final metadata = mediaSnapshot.data;
           if (metadata == null) return const SizedBox.shrink();
 
-          return StreamBuilder<FullPlayerState>(
-            stream: _fullPlayerStateStream,
+          return StreamBuilder<PlayerChrome>(
+            stream: _playerChromeStream,
             // playbackState/queue are already available synchronously (via
             // valueOrNull) the moment metadata is non-null - e.g. right after
             // a cold-start restore, which only seeds those two plus
             // mediaItem, not a live position tick. Without this, the mini
-            // player would stay hidden until _fullPlayerStateStream's
-            // position-based combineLatest happens to emit, which may lag
-            // behind the first frame.
-            initialData: FullPlayerState(
-              playbackState:
-                  audioHandler.playbackState.valueOrNull ??
-                  PlaybackState(),
-              queue: audioHandler.queue.valueOrNull ?? const [],
-              position: PositionData(
-                Duration.zero,
-                Duration.zero,
-                metadata.duration ?? Duration.zero,
-              ),
-            ),
+            // player would stay hidden until _playerChromeStream's
+            // combineLatest happens to emit, which may lag behind the first
+            // frame.
+            initialData: _chromeNow(),
             builder: (context, stateSnapshot) {
-              final state = stateSnapshot.data;
-              if (state == null) return const SizedBox.shrink();
-
-              final hasNext =
-                  state.queue.length > 1 &&
-                  (state.playbackState.queueIndex ?? 0) <
-                      state.queue.length - 1;
+              final chrome = stateSnapshot.data;
+              if (chrome == null) return const SizedBox.shrink();
 
               return _MiniPlayerBody(
                 colorScheme: colorScheme,
                 metadata: metadata,
-                state: state,
-                hasNext: hasNext,
+                chrome: chrome,
               );
             },
           );
@@ -115,14 +119,12 @@ class _MiniPlayerBody extends StatefulWidget {
   const _MiniPlayerBody({
     required this.colorScheme,
     required this.metadata,
-    required this.state,
-    required this.hasNext,
+    required this.chrome,
   });
 
   final ColorScheme colorScheme;
   final MediaItem metadata;
-  final FullPlayerState state;
-  final bool hasNext;
+  final PlayerChrome chrome;
 
   @override
   State<_MiniPlayerBody> createState() => _MiniPlayerBodyState();
@@ -167,16 +169,6 @@ class _MiniPlayerBodyState extends State<_MiniPlayerBody>
   Widget build(BuildContext context) {
     final colorScheme = widget.colorScheme;
     final metadata = widget.metadata;
-    final state = widget.state;
-
-    final totalDuration = state.position.duration > Duration.zero
-        ? state.position.duration
-        : (metadata.duration ?? Duration.zero);
-    final progress = totalDuration.inMilliseconds == 0
-        ? 0.0
-        : (state.position.position.inMilliseconds /
-                  totalDuration.inMilliseconds)
-              .clamp(0.0, 1.0);
 
     return AnimatedBuilder(
       animation: _scaleAnimation,
@@ -236,9 +228,8 @@ class _MiniPlayerBodyState extends State<_MiniPlayerBody>
                       ),
                       _ControlsWidget(
                         colorScheme: colorScheme,
-                        playbackState: state.playbackState,
-                        hasNext: widget.hasNext,
-                        progress: progress,
+                        chrome: widget.chrome,
+                        fallbackDuration: metadata.duration ?? Duration.zero,
                       ),
                     ],
                   ),
@@ -343,15 +334,16 @@ class _MetadataWidget extends StatelessWidget {
 class _ControlsWidget extends StatelessWidget {
   const _ControlsWidget({
     required this.colorScheme,
-    required this.playbackState,
-    required this.hasNext,
-    required this.progress,
+    required this.chrome,
+    required this.fallbackDuration,
   });
 
   final ColorScheme colorScheme;
-  final PlaybackState playbackState;
-  final bool hasNext;
-  final double progress;
+  final PlayerChrome chrome;
+
+  /// Duracion del `MediaItem`, para el aro mientras el reproductor aun no ha
+  /// dicho la suya.
+  final Duration fallbackDuration;
 
   @override
   Widget build(BuildContext context) {
@@ -360,10 +352,10 @@ class _ControlsWidget extends StatelessWidget {
       children: [
         _CircularPlayButton(
           colorScheme: colorScheme,
-          playbackState: playbackState,
-          progress: progress,
+          chrome: chrome,
+          fallbackDuration: fallbackDuration,
         ),
-        if (hasNext) ...[
+        if (chrome.hasNext) ...[
           const SizedBox(width: 4),
           IconButton(
             onPressed: audioHandler.skipToNext,
@@ -385,18 +377,18 @@ class _ControlsWidget extends StatelessWidget {
 class _CircularPlayButton extends StatelessWidget {
   const _CircularPlayButton({
     required this.colorScheme,
-    required this.playbackState,
-    required this.progress,
+    required this.chrome,
+    required this.fallbackDuration,
   });
 
   final ColorScheme colorScheme;
-  final PlaybackState playbackState;
-  final double progress;
+  final PlayerChrome chrome;
+  final Duration fallbackDuration;
 
   @override
   Widget build(BuildContext context) {
-    final processingState = playbackState.processingState;
-    final isPlaying = playbackState.playing;
+    final processingState = chrome.processingState;
+    final isPlaying = chrome.playing;
     final isLoading =
         processingState == AudioProcessingState.loading ||
         processingState == AudioProcessingState.buffering;
@@ -408,14 +400,10 @@ class _CircularPlayButton extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          CustomPaint(
-            size: const Size(48, 48),
-            painter: _CircularProgressPainter(
-              progress: progress,
-              backgroundColor: colorScheme.surfaceContainerHighest,
-              progressColor: colorScheme.primary,
-              strokeWidth: 3,
-            ),
+          _ProgressRing(
+            backgroundColor: colorScheme.surfaceContainerHighest,
+            progressColor: colorScheme.primary,
+            fallbackDuration: fallbackDuration,
           ),
           if (isLoading)
             SizedBox(
@@ -445,6 +433,49 @@ class _CircularPlayButton extends StatelessWidget {
               visualDensity: VisualDensity.compact,
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// Lo unico del mini player suscrito a la posicion. El `RepaintBoundary` corta
+/// aqui el repintado: lo de alrededor no se entera de que el aro avanza.
+class _ProgressRing extends StatelessWidget {
+  const _ProgressRing({
+    required this.backgroundColor,
+    required this.progressColor,
+    required this.fallbackDuration,
+  });
+
+  final Color backgroundColor;
+  final Color progressColor;
+  final Duration fallbackDuration;
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      child: StreamBuilder<PositionData>(
+        stream: audioHandler.positionDataStream,
+        builder: (context, snapshot) {
+          final data = snapshot.data;
+          final total = (data?.duration ?? Duration.zero) > Duration.zero
+              ? data!.duration
+              : fallbackDuration;
+          final progress = total.inMilliseconds == 0
+              ? 0.0
+              : ((data?.position.inMilliseconds ?? 0) / total.inMilliseconds)
+                    .clamp(0.0, 1.0);
+
+          return CustomPaint(
+            size: const Size(48, 48),
+            painter: _CircularProgressPainter(
+              progress: progress,
+              backgroundColor: backgroundColor,
+              progressColor: progressColor,
+              strokeWidth: 3,
+            ),
+          );
+        },
       ),
     );
   }

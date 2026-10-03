@@ -26,6 +26,7 @@ import 'package:app_links/app_links.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/localization/app_localizations.dart';
+import 'package:dskplay/screens/home_page.dart' show prewarmHomeData;
 import 'package:dskplay/screens/now_playing_page.dart';
 import 'package:dskplay/screens/search_page.dart'
     show reloadSearchHistoryFromStorage;
@@ -553,6 +554,12 @@ Future<void> initialisation() async {
 
     onUserDataChanged = cloudBackupService.scheduleAutoBackup;
     unawaited(cloudBackupService.init());
+    // Lo caducado de la caja 'cache' se queda cargado en memoria en cada
+    // arranque hasta que alguien lo poda, y nadie lo poda al leer.
+    unawaited(cleanupOldCacheEntries());
+    // Las listas sugeridas y las recomendaciones tardan lo que tarde la red:
+    // que empiecen ya, mientras se ve el splash y se monta el resto.
+    prewarmHomeData();
 
     audioHandler = await AudioService.init(
       builder: DskPlayAudioHandler.new,

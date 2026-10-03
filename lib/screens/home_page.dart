@@ -19,6 +19,8 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
+import 'dart:async';
+
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
@@ -43,6 +45,30 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+Future<List>? _prewarmedSuggestedPlaylists;
+Future<List>? _prewarmedRecommendedSongs;
+
+/// Lanza las dos peticiones de la portada durante el arranque, mientras se ve
+/// el splash, en vez de esperar a que se monte la pantalla.
+///
+/// Se las queda el primer [HomePage] que aparezca; a partir de ahi cada
+/// entrada pide lo suyo. Ninguna de las dos toca `audioHandler`, asi que puede
+/// llamarse antes de que exista.
+void prewarmHomeData() {
+  // El fallo se queda dentro del future y lo pinta AsyncLoader cuando alguien
+  // lo escuche. Este handler vacio solo evita que Dart lo cante como error no
+  // capturado si la peticion revienta antes de que exista la pantalla.
+  Future<List> started(Future<List> request) {
+    unawaited(request.then((_) {}, onError: (_, __) {}));
+    return request;
+  }
+
+  _prewarmedSuggestedPlaylists = started(
+    getPlaylists(playlistsNum: recommendedCubesNumber),
+  );
+  _prewarmedRecommendedSongs = started(getRecommendedSongs());
+}
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -63,10 +89,13 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _suggestedPlaylistsFuture = getPlaylists(
-      playlistsNum: recommendedCubesNumber,
-    );
-    _recommendedSongsFuture = getRecommendedSongs();
+    _suggestedPlaylistsFuture =
+        _prewarmedSuggestedPlaylists ??
+        getPlaylists(playlistsNum: recommendedCubesNumber);
+    _recommendedSongsFuture =
+        _prewarmedRecommendedSongs ?? getRecommendedSongs();
+    _prewarmedSuggestedPlaylists = null;
+    _prewarmedRecommendedSongs = null;
     externalRecommendations.addListener(_refreshRecommendedSongs);
     includePodcasts.addListener(_refreshRecommendedSongs);
   }
@@ -333,10 +362,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildLatestMonthRecapSection() {
     return ListenableBuilder(
-      listenable: Listenable.merge([
-        wrappedEnabled,
-        includePodcasts,
-      ]),
+      listenable: Listenable.merge([wrappedEnabled, includePodcasts]),
       builder: (context, __) {
         if (!wrappedEnabled.value) return const SizedBox.shrink();
 

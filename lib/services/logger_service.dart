@@ -19,12 +19,19 @@
  *     please visit: https://dskmusic.com or https://github.com/dskmusic
  */
 
+import 'dart:collection';
+
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+/// Entradas que se guardan para poder copiarlas. Las mas viejas se van: en una
+/// sesion larga el buffer crecia sin tope, y al ser un String reconstruido en
+/// cada `+=` el coste subia con lo ya acumulado.
+const int _maxRetainedLogs = 200;
+
 class Logger {
-  String _logs = '';
+  final Queue<String> _logs = ListQueue<String>();
   int _logCount = 0;
 
   void log(String errorLocation, {Object? error, StackTrace? stackTrace}) {
@@ -40,14 +47,15 @@ class Logger {
         '[$timestamp] $errorLocation:$errorMessage\n$stackTraceMessage';
 
     debugPrint(logMessage);
-    _logs += '$logMessage\n';
+    _logs.add(logMessage);
+    if (_logs.length > _maxRetainedLogs) _logs.removeFirst();
     _logCount++;
   }
 
   Future<String> copyLogs(BuildContext context) async {
     try {
-      if (_logs != '') {
-        await Clipboard.setData(ClipboardData(text: _logs));
+      if (_logs.isNotEmpty) {
+        await Clipboard.setData(ClipboardData(text: _logs.join('\n')));
         return '${context.l10n!.copyLogsSuccess}.';
       } else {
         return '${context.l10n!.copyLogsNoLogs}.';

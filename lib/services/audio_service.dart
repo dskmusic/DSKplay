@@ -292,6 +292,19 @@ class DskPlayAudioHandler extends BaseAudioHandler {
 
   Stream<PlaybackState> get playbackStateStream => _playbackStateStream;
 
+  /// Solo si suena o no, para quien no necesita el resto del estado.
+  ///
+  /// `playbackState` late una vez por segundo mientras hay reproduccion
+  /// (`_playbackStateHeartbeat`), asi que suscribirse a el entero reconstruye
+  /// lo que cuelgue del `StreamBuilder` en cada latido.
+  ///
+  /// ponytail: sin `asBroadcastStream`, se arma uno por suscriptor. Es un
+  /// `map` sobre un `BehaviorSubject`, que ya es broadcast y replica su valor
+  /// al escuchar; compartir uno solo haria que la ultima pantalla en cerrarse
+  /// lo dejara muerto para la siguiente.
+  Stream<bool> get playingStream =>
+      playbackState.map((state) => state.playing).distinct();
+
   List<MediaControl> _controls(bool playing) {
     final hasMultipleTracks = _queueList.length > 1;
 

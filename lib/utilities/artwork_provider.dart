@@ -26,6 +26,21 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
+/// Ancho en pixeles reales al que decodificar una portada que se va a pintar
+/// en un hueco de [size] px logicos, o `null` para decodificarla tal cual.
+///
+/// Sin esto una miniatura de 320-1000 px se decodifica entera para acabar en
+/// un cubo de 50, y lo que ocupa en memoria son los pixeles decodificados, no
+/// el JPEG.
+///
+/// ponytail: solo se recorta por debajo de 320 px, el ancho de la fuente mas
+/// pobre que usa la app (`mqdefault`). Por encima de ese tope decodificar al
+/// tamano del hueco dejaria de ahorrar para empezar a escalar hacia arriba.
+int? artworkDecodeWidth(BuildContext context, double size) {
+  final width = (size * MediaQuery.devicePixelRatioOf(context)).round();
+  return width > 0 && width < 320 ? width : null;
+}
+
 class ArtworkProvider {
   ArtworkProvider._();
 

@@ -352,11 +352,13 @@ class _BottomActionsRowState extends State<BottomActionsRow> {
     ColorScheme colorScheme,
     double size,
   ) {
-    return StreamBuilder<PlaybackState>(
-      stream: audioHandler.playbackState,
-      initialData: audioHandler.playbackState.valueOrNull,
+    // De todo el estado aqui solo se pinta la velocidad, y `playbackState`
+    // late una vez por segundo mientras suena.
+    return StreamBuilder<double>(
+      stream: audioHandler.playbackState.map((state) => state.speed).distinct(),
+      initialData: audioHandler.playbackState.valueOrNull?.speed ?? 1.0,
       builder: (context, snapshot) {
-        final speed = snapshot.data?.speed ?? 1.0;
+        final speed = snapshot.data ?? 1.0;
         final isActive = speed != 1.0;
         return IconButton(
           icon: Text(
@@ -387,10 +389,9 @@ class _BottomActionsRowState extends State<BottomActionsRow> {
   }
 }
 
-String _formatSpeed(double speed) =>
-    speed == speed.roundToDouble()
-        ? speed.toStringAsFixed(0)
-        : speed.toStringAsFixed(1);
+String _formatSpeed(double speed) => speed == speed.roundToDouble()
+    ? speed.toStringAsFixed(0)
+    : speed.toStringAsFixed(1);
 
 const _minCustomSpeed = 0.1;
 const _maxCustomSpeed = 10.0;
@@ -409,9 +410,7 @@ void _showPlaybackSpeedDialog(BuildContext context, double currentSpeed) {
           customSpeedController.text.replaceAll(',', '.'),
         );
         if (value == null) return;
-        final clamped = value
-            .clamp(_minCustomSpeed, _maxCustomSpeed)
-            ;
+        final clamped = value.clamp(_minCustomSpeed, _maxCustomSpeed);
         audioHandler.audioPlayer.setSpeed(clamped);
         Navigator.pop(dialogContext);
       }
@@ -449,7 +448,8 @@ void _showPlaybackSpeedDialog(BuildContext context, double currentSpeed) {
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => applyCustomSpeed(),
               decoration: InputDecoration(
-                labelText: 'Velocidad personalizada (${_minCustomSpeed}x - ${_maxCustomSpeed.toStringAsFixed(0)}x)',
+                labelText:
+                    'Velocidad personalizada (${_minCustomSpeed}x - ${_maxCustomSpeed.toStringAsFixed(0)}x)',
                 border: const OutlineInputBorder(),
                 suffixText: 'x',
               ),

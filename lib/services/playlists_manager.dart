@@ -1666,7 +1666,7 @@ Future<Map?> getPlaylistInfoForWidget(
   final offlinePlaylist = _findOfflinePlaylist(normalizedId);
   if (offlinePlaylist != null) return offlinePlaylist;
 
-  if (normalizedId.startsWith('MPRE')) {
+  if (isArtistAlbumId(normalizedId)) {
     return getArtistAlbum(normalizedId, forceRefresh: forceRefresh);
   }
 

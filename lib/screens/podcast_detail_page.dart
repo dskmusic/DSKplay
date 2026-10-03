@@ -560,16 +560,61 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
                     stream: audioHandler.mediaItem,
                     builder: (context, snapshot) {
                       final nowPlayingKey = snapshot.data?.id;
-                      return StreamBuilder<PlaybackState>(
-                        stream: audioHandler.playbackState,
+                      // Solo interesa si suena: con el estado entero esta
+                      // pantalla se reconstruia con cada latido del
+                      // reproductor.
+                      return StreamBuilder<bool>(
+                        stream: audioHandler.playingStream,
+                        initialData:
+                            audioHandler.playbackState.valueOrNull?.playing ??
+                            false,
                         builder: (context, playbackSnapshot) {
-                          final isPlaying =
-                              playbackSnapshot.data?.playing ?? false;
-                          return ListView(
+                          final isPlaying = playbackSnapshot.data ?? false;
+                          return ListView.builder(
                             controller: _episodeListController,
                             padding: commonSingleChildScrollViewPadding,
-                            children: [
-                              Column(
+                            // La cabecera ocupa la fila 0 y de ahi en adelante
+                            // va un episodio por fila. Antes eran children
+                            // fijos: se construia la lista entera de golpe.
+                            itemCount: episodes.length + 1,
+                            itemBuilder: (context, index) {
+                              if (index > 0) {
+                                final episode = episodes[index - 1];
+                                return Padding(
+                                  key: _episodeItemKeys.putIfAbsent(
+                                    episode.key,
+                                    GlobalKey.new,
+                                  ),
+                                  padding: const EdgeInsets.only(bottom: 6),
+                                  child: PodcastEpisodeBar(
+                                    episode: episode,
+                                    podcast: _podcast,
+                                    isPlaying:
+                                        episode.key == nowPlayingKey &&
+                                        isPlaying,
+                                    selectionMode: _selectionMode,
+                                    selected: _selectedKeys.contains(
+                                      episode.key,
+                                    ),
+                                    onSelectToggle: () =>
+                                        _toggleSelection(episode.key),
+                                    onLongPress: () =>
+                                        _toggleSelection(episode.key),
+                                    onTap: () => _selectionMode
+                                        ? _toggleSelection(episode.key)
+                                        : _showEpisodeOptions(episode),
+                                    onPlayPauseTap: _selectionMode
+                                        ? null
+                                        : () => episode.key == nowPlayingKey
+                                              ? (isPlaying
+                                                    ? audioHandler.pause()
+                                                    : audioHandler.play())
+                                              : _playEpisode(episode),
+                                  ),
+                                );
+                              }
+
+                              return Column(
                                 key: _episodeListHeaderKey,
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
@@ -714,41 +759,8 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
                                     ),
                                   ),
                                 ],
-                              ),
-                              for (final episode in episodes)
-                                Padding(
-                                  key: _episodeItemKeys.putIfAbsent(
-                                    episode.key,
-                                    GlobalKey.new,
-                                  ),
-                                  padding: const EdgeInsets.only(bottom: 6),
-                                  child: PodcastEpisodeBar(
-                                    episode: episode,
-                                    podcast: _podcast,
-                                    isPlaying:
-                                        episode.key == nowPlayingKey &&
-                                        isPlaying,
-                                    selectionMode: _selectionMode,
-                                    selected: _selectedKeys.contains(
-                                      episode.key,
-                                    ),
-                                    onSelectToggle: () =>
-                                        _toggleSelection(episode.key),
-                                    onLongPress: () =>
-                                        _toggleSelection(episode.key),
-                                    onTap: () => _selectionMode
-                                        ? _toggleSelection(episode.key)
-                                        : _showEpisodeOptions(episode),
-                                    onPlayPauseTap: _selectionMode
-                                        ? null
-                                        : () => episode.key == nowPlayingKey
-                                              ? (isPlaying
-                                                    ? audioHandler.pause()
-                                                    : audioHandler.play())
-                                              : _playEpisode(episode),
-                                  ),
-                                ),
-                            ],
+                              );
+                            },
                           );
                         },
                       );

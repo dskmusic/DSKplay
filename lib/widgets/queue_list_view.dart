@@ -26,6 +26,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
+import 'package:dskplay/utilities/artwork_provider.dart';
 import 'package:dskplay/utilities/flutter_toast.dart';
 import 'package:dskplay/utilities/formatter.dart';
 import 'package:dskplay/utilities/playlist_dialogs.dart';
@@ -129,10 +130,7 @@ class _QueueWidgetState extends State<QueueWidget> {
     if (attempt == 0) {
       final estimatedOffset = currentIndex * _estimatedTileExtent;
       _scrollController.jumpTo(
-        estimatedOffset.clamp(
-          0.0,
-          _scrollController.position.maxScrollExtent,
-        ),
+        estimatedOffset.clamp(0.0, _scrollController.position.maxScrollExtent),
       );
     }
     WidgetsBinding.instance.addPostFrameCallback(
@@ -380,8 +378,7 @@ class _QueueWidgetState extends State<QueueWidget> {
         // The real, unique entry id - not composited with the list index,
         // which used to make the removal lookup below never match anything.
         final queueEntryId =
-            song['queueEntryId']?.toString() ??
-            'legacy_${song['ytid']}_$index';
+            song['queueEntryId']?.toString() ?? 'legacy_${song['ytid']}_$index';
         return QueueTile(
           key: _keyFor(queueEntryId),
           song: song,
@@ -430,7 +427,6 @@ class _QueueWidgetState extends State<QueueWidget> {
     );
   }
 }
-
 
 class QueueTile extends StatelessWidget {
   const QueueTile({
@@ -590,10 +586,13 @@ class _ArtworkThumbnail extends StatelessWidget {
     // stretch over the bars with fill + centerSlice, otherwise crop with cover —
     // matching SongBar so the queue frames covers the same way (no black bars).
     final isImageSmall = imageUrl.contains('default.jpg');
+    final decodeWidth = artworkDecodeWidth(context, size);
     return CachedNetworkImage(
       width: size,
       height: size,
       imageUrl: imageUrl,
+      memCacheWidth: decodeWidth,
+      memCacheHeight: decodeWidth,
       imageBuilder: (_, imageProvider) => ClipRRect(
         borderRadius: BorderRadius.circular(radius),
         child: Image(

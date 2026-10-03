@@ -24,9 +24,80 @@ import 'dart:async';
 import 'package:dskplay/main.dart' show logger;
 import 'package:dskplay/screens/playlist_page.dart' show PlaylistPage;
 import 'package:dskplay/services/data_manager.dart';
+import 'package:dskplay/services/deezer.dart';
 import 'package:dskplay/services/newpipe.dart';
+import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/services/ytmusic.dart';
 import 'package:dskplay/utilities/formatter.dart';
+
+/// Fuente elegida en ajustes, y la otra como respaldo.
+///
+/// Las dos devuelven los mismos modelos ([MusicSource]), asi que todo lo de
+/// abajo da igual de donde vengan los datos. La ficha de artista es la unica
+/// parte de la app que no cubre NewPipeExtractor, y por eso es la unica que
+/// lleva segunda fuente.
+/// 'none' en ajustes: no se le pregunta a nadie por datos de artista. La
+/// pagina de artista se queda sin ficha Y sin catalogo (la lista de canciones
+/// sale de la discografia), asi que es un modo para probar, no para usar.
+bool get _musicSourcesDisabled => artistProviderSetting.value == 'none';
+
+MusicSource get _primaryMusicSource =>
+    artistProviderSetting.value == 'deezer' ? deezer : ytMusic;
+
+MusicSource get _backupMusicSource =>
+    artistProviderSetting.value == 'deezer' ? ytMusic : deezer;
+
+/// Pide [call] a la fuente elegida y, si revienta o viene vacia, a la otra.
+///
+/// [isEmpty] distingue "no hay datos" de "hay datos": una lista vacia o un
+/// perfil sin nada es exactamente lo que deja YouTube Music cuando cambia sus
+/// renderers, y no lanza ninguna excepcion al hacerlo.
+Future<T?> _fromMusicSource<T>(
+  Future<T> Function(MusicSource source) call, {
+  required bool Function(T value) isEmpty,
+  required String what,
+}) async {
+  if (_musicSourcesDisabled) return null;
+
+  try {
+    final value = await call(_primaryMusicSource);
+    if (!isEmpty(value)) return value;
+    logger.log('$what empty on ${_primaryMusicSource.runtimeType}');
+  } catch (e, stackTrace) {
+    logger.log(
+      '$what failed on ${_primaryMusicSource.runtimeType}',
+      error: e,
+      stackTrace: stackTrace,
+    );
+  }
+
+  try {
+    final value = await call(_backupMusicSource);
+    return isEmpty(value) ? null : value;
+  } catch (e, stackTrace) {
+    logger.log(
+      '$what failed on ${_backupMusicSource.runtimeType} too',
+      error: e,
+      stackTrace: stackTrace,
+    );
+    return null;
+  }
+}
+
+/// Si [id] es de una release: `MPREb_...` los de YouTube Music, `dz:` los de
+/// Deezer. Lo mira quien enruta un id suelto, como
+/// `getPlaylistInfoForWidget`, para saber que no es una lista de YouTube.
+bool isArtistAlbumId(String id) =>
+    id.startsWith('MPRE') || albumIdIsDeezer(id);
+
+/// A quien se le pregunta por una release: su id dice de donde salio, asi que
+/// aqui no hay respaldo posible ni falta.
+MusicSource _sourceForAlbum(String albumId) =>
+    albumIdIsDeezer(albumId) ? deezer : ytMusic;
+
+/// Sufijo de fuente para las claves de cache: cambiar de proveedor en ajustes
+/// tiene que enseñar sus datos al momento, no los que dejo el anterior.
+String get _sourceCacheTag => artistProviderSetting.value;
 
 const artistCatalogCacheVersion = 15;
 const artistSearchCacheVersion = 10;
@@ -46,7 +117,7 @@ Future<List<Map<String, dynamic>>> searchVerifiedArtists(
   if (normalizedQuery.isEmpty) return [];
 
   final cacheKey =
-      'search_music_artists_v${artistSearchCacheVersion}_l$limit'
+      'search_music_artists_v${artistSearchCacheVersion}_${_sourceCacheTag}_l$limit'
       '_${normalizedQuery.toLowerCase()}';
   final cachedArtists = await getData('cache', cacheKey);
   if (cachedArtists is List) {
@@ -57,27 +128,23 @@ Future<List<Map<String, dynamic>>> searchVerifiedArtists(
         .toList();
   }
 
-  try {
-    final artists = _dedupeResolvedArtists(
-      (await ytMusic
-              .searchArtists(normalizedQuery)
-              .timeout(_artistRequestTimeout))
-          .where((artist) => !looksUnofficialArtistName(artist.name))
-          .map(_artistMapFromMusicArtist),
-    ).take(limit).toList();
+  final found = await _fromMusicSource<List<MusicArtist>>(
+    (source) =>
+        source.searchArtists(normalizedQuery).timeout(_artistRequestTimeout),
+    isEmpty: (artists) => artists.isEmpty,
+    what: 'Artist search for "$normalizedQuery"',
+  );
 
-    if (artists.isNotEmpty) {
-      unawaited(addOrUpdateData<List>('cache', cacheKey, artists));
-    }
-    return artists;
-  } catch (e, stackTrace) {
-    logger.log(
-      'Error while searching YouTube Music artists for "$normalizedQuery"',
-      error: e,
-      stackTrace: stackTrace,
-    );
-    return [];
+  final artists = _dedupeResolvedArtists(
+    (found ?? const <MusicArtist>[])
+        .where((artist) => !looksUnofficialArtistName(artist.name))
+        .map(_artistMapFromMusicArtist),
+  ).take(limit).toList();
+
+  if (artists.isNotEmpty) {
+    unawaited(addOrUpdateData<List>('cache', cacheKey, artists));
   }
+  return artists;
 }
 
 Future<Map<String, dynamic>?> resolveArtist(
@@ -206,7 +273,7 @@ Future<Map<String, dynamic>?> getArtistCatalog(
 
     final resolvedArtistId = artist['ytid']?.toString() ?? artistId;
     final cacheKey =
-        'artist_catalog_v${artistCatalogCacheVersion}_$resolvedArtistId';
+        'artist_catalog_v${artistCatalogCacheVersion}_${_sourceCacheTag}_$resolvedArtistId';
     if (!forceRefresh) {
       final cachedArtist = await getData('cache', cacheKey);
       if (cachedArtist is Map &&
@@ -282,7 +349,8 @@ Future<Map<String, dynamic>?> getArtistProfile(
     final resolvedArtistId = artist['ytid']?.toString() ?? artistId;
     if (!_isChannelId(resolvedArtistId)) return null;
 
-    final cacheKey = 'artist_profile_v${artistProfileCacheVersion}_$resolvedArtistId';
+    final cacheKey =
+        'artist_profile_v${artistProfileCacheVersion}_${_sourceCacheTag}_$resolvedArtistId';
     if (!forceRefresh) {
       final cachedProfile = await getData('cache', cacheKey);
       if (cachedProfile is Map) {
@@ -293,9 +361,22 @@ Future<Map<String, dynamic>?> getArtistProfile(
       await deleteData('cache', '${cacheKey}_date');
     }
 
-    final profile = await ytMusic
-        .getArtistProfile(resolvedArtistId)
-        .timeout(_artistProfileTimeout);
+    final profile = await _fromMusicSource<MusicArtistProfile>(
+      (source) => source
+          .getArtistProfile(
+            resolvedArtistId,
+            name: artist['title']?.toString(),
+          )
+          .timeout(_artistProfileTimeout),
+      // Un perfil sin nada util no vale como respuesta: mejor preguntar a la
+      // otra fuente que enseñar una ficha en blanco.
+      isEmpty: (value) =>
+          value.topSongs.isEmpty &&
+          value.releases.isEmpty &&
+          value.monthlyListeners == null,
+      what: 'Artist profile $resolvedArtistId',
+    );
+    if (profile == null) return null;
 
     final artistProfile = {
       ...artist,
@@ -354,8 +435,10 @@ Future<Map<String, dynamic>?> getArtistAlbum(
     await deleteData('cache', '${cacheKey}_date');
   }
 
+  if (_musicSourcesDisabled) return null;
+
   try {
-    final release = await ytMusic
+    final release = await _sourceForAlbum(normalizedAlbumId)
         .getAlbum(normalizedAlbumId)
         .timeout(_musicAlbumTimeout);
 
@@ -526,19 +609,14 @@ Future<Map<String, dynamic>?> _resolveMusicArtistFromTerms(
   for (final term in normalizedTerms) {
     if (!searched.add(term.toLowerCase())) continue;
 
-    List<MusicArtist> candidates;
-    try {
-      candidates = await ytMusic
-          .searchArtists(term)
-          .timeout(_artistRequestTimeout);
-    } catch (e, stackTrace) {
-      logger.log(
-        'YouTube Music artist search failed for "$term"',
-        error: e,
-        stackTrace: stackTrace,
-      );
-      continue;
-    }
+    final candidates =
+        await _fromMusicSource<List<MusicArtist>>(
+          (source) =>
+              source.searchArtists(term).timeout(_artistRequestTimeout),
+          isEmpty: (value) => value.isEmpty,
+          what: 'Artist search for "$term"',
+        ) ??
+        const <MusicArtist>[];
 
     for (final candidate in candidates) {
       if (candidate.id == trustedLookupId ||
@@ -635,9 +713,15 @@ Future<List<Map<String, dynamic>>> _buildArtistCatalogFromMusic(
   );
 
   try {
-    final releases = await ytMusic
-        .getArtistReleases(artistId)
-        .timeout(_musicDiscographyTimeout);
+    final releases =
+        await _fromMusicSource<List<MusicAlbum>>(
+          (source) => source
+              .getArtistReleases(artistId, name: artistName)
+              .timeout(_musicDiscographyTimeout),
+          isEmpty: (value) => value.isEmpty,
+          what: 'Discography of $artistName ($artistId)',
+        ) ??
+        const <MusicAlbum>[];
 
     if (releases.isEmpty) {
       logger.log('YouTube Music discography empty for $artistName ($artistId)');
@@ -673,7 +757,7 @@ Future<List<Map<String, dynamic>>> _loadAlbumSongs(
   String artistName,
 ) async {
   try {
-    final tracks = await ytMusic
+    final tracks = await _sourceForAlbum(album.id)
         .getAlbumTracks(album.id, author: artistName, channelId: channelId)
         .timeout(_musicAlbumTimeout);
     return [for (final track in tracks) returnSongLayout(0, track)];

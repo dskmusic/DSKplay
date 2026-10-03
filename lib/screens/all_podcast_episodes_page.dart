@@ -39,8 +39,7 @@ class AllPodcastEpisodesPage extends StatefulWidget {
   const AllPodcastEpisodesPage({super.key});
 
   @override
-  State<AllPodcastEpisodesPage> createState() =>
-      _AllPodcastEpisodesPageState();
+  State<AllPodcastEpisodesPage> createState() => _AllPodcastEpisodesPageState();
 }
 
 class _AllPodcastEpisodesPageState extends State<AllPodcastEpisodesPage> {
@@ -59,9 +58,7 @@ class _AllPodcastEpisodesPageState extends State<AllPodcastEpisodesPage> {
     setState(() => _loading = true);
 
     final perPodcast = await Future.wait(
-      podcastManager.subscriptions.value.map((
-        podcast,
-      ) async {
+      podcastManager.subscriptions.value.map((podcast) async {
         final result = await fetchPodcastFeed(podcast.feedUrl);
         if (result == null) {
           return <(PodcastEpisode, Podcast)>[];
@@ -107,10 +104,14 @@ class _AllPodcastEpisodesPageState extends State<AllPodcastEpisodesPage> {
               stream: audioHandler.mediaItem,
               builder: (context, snapshot) {
                 final nowPlayingKey = snapshot.data?.id;
-                return StreamBuilder<PlaybackState>(
-                  stream: audioHandler.playbackState,
+                // Solo interesa si suena: con el estado entero esta lista se
+                // reconstruia con cada latido del reproductor.
+                return StreamBuilder<bool>(
+                  stream: audioHandler.playingStream,
+                  initialData:
+                      audioHandler.playbackState.valueOrNull?.playing ?? false,
                   builder: (context, playbackSnapshot) {
-                    final isPlaying = playbackSnapshot.data?.playing ?? false;
+                    final isPlaying = playbackSnapshot.data ?? false;
                     return ListView.builder(
                       padding: commonSingleChildScrollViewPadding,
                       itemCount: _items.length,
@@ -125,8 +126,11 @@ class _AllPodcastEpisodesPageState extends State<AllPodcastEpisodesPage> {
                             episode: episode,
                             podcast: podcast,
                             isPlaying: episodeIsPlaying,
-                            onTap: () =>
-                                showPodcastEpisodeOptions(context, podcast, episode),
+                            onTap: () => showPodcastEpisodeOptions(
+                              context,
+                              podcast,
+                              episode,
+                            ),
                             onPlayPauseTap: () => episode.key == nowPlayingKey
                                 ? (isPlaying
                                       ? audioHandler.pause()

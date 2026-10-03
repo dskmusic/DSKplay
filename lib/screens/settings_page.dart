@@ -226,6 +226,25 @@ class SettingsPage extends StatelessWidget {
             );
           },
         ),
+        ValueListenableBuilder<String>(
+          valueListenable: artistProviderSetting,
+          builder: (_, value, __) {
+            return CustomBar(
+              'Fuente de datos de artista',
+              FluentIcons.cloud_24_regular,
+              description: switch (value) {
+                'deezer' =>
+                  'Deezer (YouTube Music queda de respaldo). Mas lenta: cada '
+                      'cancion hay que buscarla en YouTube',
+                'none' =>
+                  'Ninguna: sin ficha de artista y sin sus canciones. Solo '
+                      'para comparar',
+                _ => 'YouTube Music (Deezer queda de respaldo si falla)',
+              },
+              onTap: () => _showArtistProviderPicker(context),
+            );
+          },
+        ),
         ValueListenableBuilder<bool>(
           valueListenable: showArtistExtras,
           builder: (_, value, __) {
@@ -1102,6 +1121,41 @@ class SettingsPage extends StatelessWidget {
             },
             audioQualitySetting.value == quality,
             icon: qualityIcons[index],
+          );
+        },
+      ),
+    );
+  }
+
+  void _showArtistProviderPicker(BuildContext context) {
+    const providers = ['ytmusic', 'deezer', 'none'];
+    const names = ['YouTube Music', 'Deezer', 'Ninguna'];
+    const icons = [
+      FluentIcons.music_note_2_24_regular,
+      FluentIcons.cloud_24_regular,
+      FluentIcons.prohibited_24_regular,
+    ];
+
+    showCustomBottomSheet(
+      context,
+      ListView.builder(
+        shrinkWrap: true,
+        physics: const BouncingScrollPhysics(),
+        padding: commonListViewBottomPadding,
+        itemCount: providers.length,
+        itemBuilder: (context, index) {
+          final provider = providers[index];
+
+          return BottomSheetBar(
+            names[index],
+            () {
+              addOrUpdateData<String>('settings', 'artistProvider', provider);
+              artistProviderSetting.value = provider;
+              showToast(context, context.l10n!.settingChangedMsg);
+              Navigator.pop(context);
+            },
+            artistProviderSetting.value == provider,
+            icon: icons[index],
           );
         },
       ),

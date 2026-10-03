@@ -171,8 +171,39 @@ class MusicArtistProfile {
   final List<MusicArtist> relatedArtists;
 }
 
+/// Fuente de datos de artista: la ficha rica (oyentes, top de canciones,
+/// discografia) que NewPipeExtractor no da.
+///
+/// Dos implementaciones, elegibles en ajustes y usadas la una como respaldo de
+/// la otra: [MusicClient] (YouTube Music) y `DeezerClient` (deezer.dart). Los
+/// ids de artista son SIEMPRE canales `UC...` de YouTube, porque de ellos
+/// cuelgan la navegacion y las caches de la app; los de release los emite cada
+/// fuente y llevan prefijo cuando no son de YouTube.
+abstract interface class MusicSource {
+  /// Artistas canonicos que casan con [query].
+  Future<List<MusicArtist>> searchArtists(String query);
+
+  /// Ficha del artista del canal [channelId]. [name] es su nombre ya
+  /// resuelto, que las fuentes ajenas a YouTube necesitan para localizarlo.
+  Future<MusicArtistProfile> getArtistProfile(String channelId, {String? name});
+
+  /// Discografia completa del artista. Mismos parametros que
+  /// [getArtistProfile].
+  Future<List<MusicAlbum>> getArtistReleases(String channelId, {String? name});
+
+  /// Una release con sus pistas.
+  Future<MusicReleasePage> getAlbum(String albumId);
+
+  /// Las pistas de una release, atribuidas a [author].
+  Future<List<Video>> getAlbumTracks(
+    String albumId, {
+    required String author,
+    String? channelId,
+  });
+}
+
 /// Queries the YouTube Music (`WEB_REMIX`) browse endpoints.
-class MusicClient {
+class MusicClient implements MusicSource {
   const MusicClient();
 
   static const _remixContext = {
@@ -227,6 +258,7 @@ class MusicClient {
   }
 
   /// Searches YouTube Music for canonical artist entries matching [query].
+  @override
   Future<List<MusicArtist>> searchArtists(String query) async {
     final normalizedQuery = query.trim();
     if (normalizedQuery.isEmpty) return [];
@@ -336,23 +368,28 @@ class MusicClient {
   /// a partial page of the same artist, whose header still points at the
   /// canonical channel. [MusicArtistProfile.id] holds that one, so a caller
   /// that asked with an uploader can tell and read the real page instead.
-  Future<MusicArtistProfile> getArtistProfile(dynamic channelId) async {
-    final id = channelId.toString();
+  @override
+  Future<MusicArtistProfile> getArtistProfile(
+    String channelId, {
+    String? name,
+  }) async {
+    // [name] no se usa: la propia pagina del canal ya trae el nombre.
+    final id = channelId;
     final root = await _browse(id);
 
     final header =
         _firstRenderer(root, 'musicImmersiveHeaderRenderer') ??
         _firstRenderer(root, 'musicVisualHeaderRenderer');
-    final name = (_runsText(header?.getMap('title')) ?? '').trim();
+    final pageName = (_runsText(header?.getMap('title')) ?? '').trim();
     final canonicalId = _headerChannelId(header) ?? id;
 
     return MusicArtistProfile(
       id: canonicalId,
-      name: name,
+      name: pageName,
       thumbnailUrl: _thumbnailUrl(header, 'thumbnail'),
       description: _runsText(header?.getMap('description')),
       monthlyListeners: _runsText(header?.getMap('monthlyListenerCount')),
-      topSongs: _parseTopSongs(root, channelId: canonicalId, author: name),
+      topSongs: _parseTopSongs(root, channelId: canonicalId, author: pageName),
       releases: await _collectDiscography(root),
       relatedArtists: _collectRelatedArtists(
         root,
@@ -372,6 +409,7 @@ class MusicClient {
 
   /// Returns a release with its tracks, credited to the artist its own header
   /// names.
+  @override
   Future<MusicReleasePage> getAlbum(String albumBrowseId) async {
     final root = await _browse(albumBrowseId);
     final header =
@@ -454,8 +492,12 @@ class MusicClient {
 
   /// Returns the full discography (albums, singles and EPs) of a YouTube Music
   /// artist.
-  Future<List<MusicAlbum>> getArtistReleases(dynamic channelId) async {
-    final id = channelId.toString();
+  @override
+  Future<List<MusicAlbum>> getArtistReleases(
+    String channelId, {
+    String? name,
+  }) async {
+    final id = channelId;
     final root = await _browse(id);
 
     final releases = <String, MusicAlbum>{};
@@ -485,6 +527,7 @@ class MusicClient {
   }
 
   /// Returns the tracks of a release as [Video]s.
+  @override
   Future<List<Video>> getAlbumTracks(
     String albumBrowseId, {
     required String author,
