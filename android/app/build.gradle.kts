@@ -58,6 +58,9 @@ android {
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Para mostrarla en Acerca de; derivada de newpipeVersion, asi que
+        // el sync automatico la actualiza sin tocar nada mas.
+        buildConfigField("String", "NEWPIPE_VERSION", "\"$newpipeVersion\"")
     }
 
     signingConfigs {

@@ -24,6 +24,7 @@ import 'dart:async';
 import 'package:dskplay/constants/app_constants.dart';
 import 'package:dskplay/constants/version.dart';
 import 'package:dskplay/extensions/l10n.dart';
+import 'package:dskplay/services/newpipe.dart';
 import 'package:dskplay/services/update_manager.dart';
 import 'package:dskplay/theme/app_themes.dart';
 import 'package:dskplay/utilities/url_launcher.dart';
@@ -31,6 +32,12 @@ import 'package:dskplay/widgets/confirmation_dialog.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+
+/// Releases de la libreria nativa que extrae YouTube. Enlaza aqui, y no a la
+/// raiz del repo, para poder comparar de un vistazo con la version compilada.
+final _newpipeReleasesUrl = Uri.parse(
+  'https://github.com/TeamNewPipe/NewPipeExtractor/releases',
+);
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
@@ -41,6 +48,21 @@ class AboutPage extends StatefulWidget {
 
 class _AboutPageState extends State<AboutPage> {
   Timer? _versionLongPressTimer;
+  String? _newpipeVersion;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNewpipeVersion();
+  }
+
+  // ponytail: si el canal falla, no se muestra la linea y listo.
+  Future<void> _loadNewpipeVersion() async {
+    try {
+      final v = await NewPipe.version();
+      if (mounted) setState(() => _newpipeVersion = v);
+    } catch (_) {}
+  }
 
   void _startVersionLongPress() {
     _versionLongPressTimer = Timer(
@@ -140,6 +162,13 @@ class _AboutPageState extends State<AboutPage> {
                       ),
                     ),
                   ),
+                  if (_newpipeVersion != null) ...[
+                    const SizedBox(height: 10),
+                    TextButton(
+                      onPressed: () => launchURL(_newpipeReleasesUrl),
+                      child: Text('NewPipe Extractor $_newpipeVersion ↗'),
+                    ),
+                  ],
                 ],
               ),
             ),

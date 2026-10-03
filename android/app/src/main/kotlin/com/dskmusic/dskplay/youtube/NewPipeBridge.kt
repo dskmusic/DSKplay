@@ -2,6 +2,7 @@ package com.dskmusic.dskplay.youtube
 
 import android.os.Handler
 import android.os.Looper
+import com.dskmusic.dskplay.BuildConfig
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -42,6 +43,7 @@ class NewPipeBridge private constructor() : MethodChannel.MethodCallHandler {
                         call.argument<List<String>>("filters") ?: listOf("videos"),
                         call.argument<Int>("pages") ?: 1,
                     )
+                    "version" -> BuildConfig.NEWPIPE_VERSION
                     "suggestions" -> NewPipeExtraction.suggestions(call.argument<String>("query")!!)
                     "video" -> NewPipeExtraction.video(call.argument<String>("id")!!)
                     "related" -> NewPipeExtraction.related(call.argument<String>("id")!!)

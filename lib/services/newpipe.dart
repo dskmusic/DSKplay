@@ -254,6 +254,10 @@ abstract final class NewPipe {
   static Future<void> setProxy(String? hostPort) =>
       _channel.invokeMethod<void>('setProxy', {'proxy': hostPort});
 
+  /// Versión de la librería nativa con la que se compiló la app
+  /// (`val newpipeVersion` de android/app/build.gradle.kts).
+  static Future<String?> version() => _channel.invokeMethod<String>('version');
+
   static Future<List<String>> suggestions(String query) async =>
       (await _channel.invokeListMethod<String>('suggestions', {
         'query': query,
