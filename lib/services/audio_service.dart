@@ -1699,6 +1699,14 @@ class DskPlayAudioHandler extends BaseAudioHandler {
           },
           androidCompactActionIndices: const [0, 1, 2],
           processingState: AudioProcessingState.loading,
+          // Con playing en false audio_service no entra en estado de
+          // reproduccion, y sin servicio en primer plano Android congela el
+          // proceso en cuanto la app deja de verse: la carga se queda a medias
+          // y la cancion solo arranca al volver. Declararlo aqui lo levanta
+          // (servicio + wakelock) desde el toque, y como la app usa
+          // androidStopForegroundOnPause: false, el playing: false real que
+          // llega mientras carga ya no lo tira.
+          playing: true,
           queueIndex:
               queueIndex ??
               (_currentQueueIndex < _queueList.length
@@ -2928,6 +2936,15 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         await audioPlayer.pause();
       }
 
+      // Antes de la primera espera de red, no despues: es lo unico que
+      // asegura que el servicio en primer plano este arriba si el usuario se
+      // va a otra app o bloquea la pantalla justo tras pulsar play.
+      _emitOptimisticLoadingState(
+        song: songData,
+        includeMediaItem: true,
+        mediaId: mediaId,
+      );
+
       final playback = await _resolvePlaybackSource(songData);
 
       // Abort if a newer song was requested while we were fetching the stream URL.
@@ -2942,14 +2959,11 @@ class DskPlayAudioHandler extends BaseAudioHandler {
 
       if (playback == null) {
         _lastError = 'Failed to get song URL';
+        // El estado optimista ya salio: hay que deshacerlo o se queda el
+        // spinner colgado para siempre.
+        _updatePlaybackState();
         return false;
       }
-
-      _emitOptimisticLoadingState(
-        song: songData,
-        includeMediaItem: true,
-        mediaId: mediaId,
-      );
 
       final audioSource = await buildAudioSource(
         songData,
@@ -2968,6 +2982,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       if (audioSource == null) {
         logger.log('Failed to build audio source for ${songData['ytid']}');
         _lastError = 'Failed to build audio source';
+        _updatePlaybackState();
         return false;
       }
 
@@ -2982,6 +2997,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     } catch (e, stackTrace) {
       logger.log('Error playing song', error: e, stackTrace: stackTrace);
       _lastError = e.toString();
+      _updatePlaybackState();
       return false;
     }
   }
@@ -3312,6 +3328,9 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       this.mediaItem.add(mediaItem);
       queue.add([mediaItem]);
 
+      // Igual que en playSong: primer plano arriba antes de esperar nada.
+      _emitOptimisticLoadingState(queueIndex: 0);
+
       if (castService.isCasting) {
         return _castPlayResolved(radioSong, streamUrl, false, isLive: true);
       }
@@ -3328,6 +3347,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       if (audioSource == null) {
         logger.log('Failed to build audio source for radio stream: $id');
         _lastError = 'Failed to load radio stream';
+        _updatePlaybackState();
         return false;
       }
 
@@ -3363,6 +3383,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         stackTrace: stackTrace,
       );
       _lastError = e.toString();
+      _updatePlaybackState();
       return false;
     }
   }
@@ -3536,6 +3557,9 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         await audioPlayer.pause();
       }
 
+      // Igual que en playSong: primer plano arriba antes de esperar nada.
+      _emitOptimisticLoadingState();
+
       _currentPlayingPodcast = (
         episode: _episodeFromQueueSong(episodeSong),
         podcastTitle: episodeSong['artist']?.toString() ?? '',
@@ -3571,6 +3595,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         );
         _lastError = 'Failed to load podcast episode';
         _currentPlayingPodcast = null;
+        _updatePlaybackState();
         return false;
       }
 
@@ -3628,6 +3653,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
         stackTrace: stackTrace,
       );
       _lastError = e.toString();
+      _updatePlaybackState();
       return false;
     }
   }
