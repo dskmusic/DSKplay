@@ -215,6 +215,7 @@ class _ArtistPageState extends State<ArtistPage> {
               children: [
                 _buildHeaderSection(),
                 _buildTopSongsSection(),
+                _buildAllSongsButton(),
                 if (_albums.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 24),
@@ -268,6 +269,26 @@ class _ArtistPageState extends State<ArtistPage> {
       playlistData: _artist ?? widget.artistData,
       cubeIcon: FluentIcons.person_24_filled,
       isArtist: true,
+    );
+  }
+
+  /// Entrada a la ficha completa del artista: el boton vive aqui y no dentro
+  /// de "canciones destacadas" porque ese bloque se oculta con los adornos de
+  /// YouTube Music apagados, y aun asi se quiere poder ver todo el catalogo.
+  Widget _buildAllSongsButton() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: SizedBox(
+        width: double.infinity,
+        child: FilledButton.tonalIcon(
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => _buildAllSongsPage()),
+          ),
+          icon: const Icon(FluentIcons.arrow_right_24_filled),
+          iconAlignment: IconAlignment.end,
+          label: Text(context.l10n!.allSongs),
+        ),
+      ),
     );
   }
 

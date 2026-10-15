@@ -153,8 +153,13 @@ class _PlaylistPageState extends State<PlaylistPage> {
       if (initialPlaylist != null) {
         _playlist = initialPlaylist;
         final playlistList = _playlist?['list'] as List?;
+        // Una lista vacia solo es definitiva si viene de leer el catalogo
+        // (trae catalogStatus); la ficha del artista llega con un 'list' vacio
+        // de relleno, y sin pedir el catalogo saldria sin canciones.
         final shouldFetchInitialPlaylist =
-            playlistList == null || (!widget.isArtist && playlistList.isEmpty);
+            playlistList == null ||
+            (playlistList.isEmpty &&
+                (!widget.isArtist || initialPlaylist['catalogStatus'] == null));
         if (shouldFetchInitialPlaylist && resolvedId != null) {
           _playlist =
               await getPlaylistInfoForWidget(
