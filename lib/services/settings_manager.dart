@@ -191,6 +191,14 @@ final volumeNormalizationEnabled = ValueNotifier<bool>(
   Hive.box('settings').get('volumeNormalizationEnabled', defaultValue: false),
 );
 
+/// Control por Bluetooth (AVRCP): cuando está desactivado, los botones de los
+/// auriculares (reproducir/pausar, siguiente, anterior) no mueven la app, pero
+/// el sonido (A2DP) y el volumen (que se gestiona a nivel de sistema) siguen
+/// funcionando con normalidad.
+final bluetoothMediaControlsEnabled = ValueNotifier<bool>(
+  Hive.box('settings').get('bluetoothMediaControlsEnabled', defaultValue: true),
+);
+
 Locale languageSetting = getLocaleFromLanguageCode(
   Hive.box(
         'settings',
@@ -353,6 +361,7 @@ void reloadSettingsFromStorage() {
   equalizerEnabled.value = read('equalizerEnabled', false);
   equalizerBandGains.value = _readEqualizerGains();
   volumeNormalizationEnabled.value = read('volumeNormalizationEnabled', false);
+  bluetoothMediaControlsEnabled.value = read('bluetoothMediaControlsEnabled', true);
   karaokeBackgroundColor.value = Color(
     read('karaokeBackgroundColor', karaokeDefaultBackgroundColor.toARGB32()),
   );

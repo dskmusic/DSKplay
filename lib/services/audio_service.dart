@@ -2626,6 +2626,20 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     );
   }
 
+  /// Botones de medios de los auriculares/manos libres Bluetooth (AVRCP).
+  ///
+  /// audio_service encamina aquí los pulsos "genuinos" del mando Bluetooth
+  /// (play/pausa, siguiente, anterior) - ver `onMediaButtonEvent` en el lado
+  /// nativo. Cuando [bluetoothMediaControlsEnabled] está desactivado nos los
+  /// tragamos sin hacer nada; el volumen no pasa por aquí (lo gestiona el
+  /// sistema) y los botones de la propia notificación usan otra ruta, así que
+  /// ambos siguen funcionando con normalidad.
+  @override
+  Future<void> click([MediaButton button = MediaButton.media]) async {
+    if (!bluetoothMediaControlsEnabled.value) return;
+    await super.click(button);
+  }
+
   @override
   Future<void> play() async {
     try {

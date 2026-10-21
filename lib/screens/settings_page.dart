@@ -145,6 +145,24 @@ class SettingsPage extends StatelessWidget {
             );
           },
         ),
+        ValueListenableBuilder<bool>(
+          valueListenable: bluetoothMediaControlsEnabled,
+          builder: (_, value, __) {
+            return CustomBar(
+              'Control por Bluetooth',
+              FluentIcons.bluetooth_24_regular,
+              description:
+                  'Permite que los botones de los auriculares (reproducir, '
+                  'pausar, siguiente, anterior) controlen la app. El volumen '
+                  'sigue funcionando siempre',
+              trailing: Switch(
+                value: value,
+                onChanged: (value) =>
+                    _toggleBluetoothMediaControls(context, value),
+              ),
+            );
+          },
+        ),
         CustomBar(
           context.l10n!.dynamicColor,
           FluentIcons.toggle_left_24_regular,
@@ -1288,6 +1306,12 @@ class SettingsPage extends StatelessWidget {
   void _toggleVolumeNormalization(BuildContext context, bool value) {
     addOrUpdateData<bool>('settings', 'volumeNormalizationEnabled', value);
     volumeNormalizationEnabled.value = value;
+    showToast(context, context.l10n!.settingChangedMsg);
+  }
+
+  void _toggleBluetoothMediaControls(BuildContext context, bool value) {
+    addOrUpdateData<bool>('settings', 'bluetoothMediaControlsEnabled', value);
+    bluetoothMediaControlsEnabled.value = value;
     showToast(context, context.l10n!.settingChangedMsg);
   }
 
