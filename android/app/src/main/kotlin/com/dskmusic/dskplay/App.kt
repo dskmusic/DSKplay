@@ -58,12 +58,12 @@ class App : Application() {
       appContext?.let {
         val intent = Intent(it, IdleCloseService::class.java)
           .putExtra(IdleCloseService.EXTRA_END_TIME_MILLIS, endTimeMillis)
-        ContextCompat.startForegroundService(it, intent)
+        IdleCloseService.start(it, intent)
       }
     }
 
     private fun stopIdleKeepAlive() {
-      appContext?.let { it.stopService(Intent(it, IdleCloseService::class.java)) }
+      appContext?.let { IdleCloseService.stop(it) }
     }
 
     /**
@@ -89,8 +89,19 @@ class App : Application() {
     private var idleCloseRunnable: Runnable? = null
 
     private fun armIdleClose(minutes: Int) {
-      cancelIdleClose()
-      if (minutes <= 0) return
+      // Only the Handler callback is cleared here, never the service: a
+      // full cancelIdleClose() would stopService() the keep-alive that the
+      // immediately following start is about to (re)use, and stopping it
+      // while its previous start is still pending is exactly what crashed
+      // with ForegroundServiceDidNotStartInTimeException. Re-starting it is
+      // idempotent - it just redelivers onStartCommand with the new end
+      // time - so there is nothing to tear down first.
+      idleCloseRunnable?.let { idleCloseHandler.removeCallbacks(it) }
+      idleCloseRunnable = null
+      if (minutes <= 0) {
+        stopIdleKeepAlive()
+        return
+      }
       val delayMs = minutes * 60_000L
       startIdleKeepAlive(System.currentTimeMillis() + delayMs)
       val runnable = Runnable { Process.killProcess(Process.myPid()) }

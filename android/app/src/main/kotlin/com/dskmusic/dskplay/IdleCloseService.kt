@@ -9,6 +9,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 
 /**
  * Exists solely to keep the process out of Android's cached-app freezer
@@ -27,14 +28,45 @@ class IdleCloseService : Service() {
     private const val NOTIFICATION_ID = 900002
     private const val CHANNEL_ID = "idle_close"
     const val EXTRA_END_TIME_MILLIS = "endTimeMillis"
+
+    // Guards the window between startForegroundService() and this service
+    // actually running onStartCommand(). Calling stopService() inside that
+    // window tears down a ServiceRecord that never got to call
+    // startForeground(), and the system answers with
+    // ForegroundServiceDidNotStartInTimeException - a hard crash, reported
+    // from a phone where screen-lock delivered inactive+paused back to back
+    // and the second arm's stop killed the first arm's pending start.
+    // So a stop that arrives too early is only recorded here, and the
+    // service shuts itself down the moment it is legally allowed to.
+    @Volatile private var running = false
+    @Volatile private var stopRequested = false
+
+    fun start(context: Context, intent: Intent) {
+      stopRequested = false
+      ContextCompat.startForegroundService(context, intent)
+    }
+
+    fun stop(context: Context) {
+      stopRequested = true
+      if (running) context.stopService(Intent(context, IdleCloseService::class.java))
+    }
   }
 
   override fun onBind(intent: Intent?): IBinder? = null
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    running = true
     val endTimeMillis = intent?.getLongExtra(EXTRA_END_TIME_MILLIS, 0L) ?: 0L
+    // Always honoured first, even when a stop is already pending: the
+    // system's contract is startForeground() before anything else.
     startForeground(NOTIFICATION_ID, build(endTimeMillis))
+    if (stopRequested) stopSelf()
     return START_NOT_STICKY
+  }
+
+  override fun onDestroy() {
+    running = false
+    super.onDestroy()
   }
 
   private fun build(endTimeMillis: Long): Notification {

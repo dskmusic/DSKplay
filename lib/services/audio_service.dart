@@ -955,7 +955,12 @@ class DskPlayAudioHandler extends BaseAudioHandler {
       final bufferedPosition = audioPlayer.bufferedPosition;
 
       if (isPlaying) {
+        // Nulled, not just cancelled: handleAppBackgrounded() reads this as
+        // "is an idle countdown running?", and a cancelled Timer is still
+        // non-null - which had it starting the native keep-alive service on
+        // every minimise/screen-lock even mid-playback.
         _idleAutoCloseTimer?.cancel();
+        _idleAutoCloseTimer = null;
         _cancelNativeIdleClose();
       } else if (currentState == null ||
           (currentState.playing &&
@@ -2562,6 +2567,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
   /// giving up, so the process still closes once the download finishes.
   void _scheduleIdleAutoClose() {
     _idleAutoCloseTimer?.cancel();
+    _idleAutoCloseTimer = null;
     final minutes = autoCloseAfterPauseMinutes.value;
     if (minutes <= 0) {
       _cancelNativeIdleClose();
@@ -2735,6 +2741,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     if (castService.isCasting) await castService.disconnect();
     _debounceTimer?.cancel();
     _idleAutoCloseTimer?.cancel();
+    _idleAutoCloseTimer = null;
     _completionEventPending = false;
     _currentLoadingIndex = -1;
     _currentLoadingTransitionId = -1;
@@ -3711,6 +3718,7 @@ class DskPlayAudioHandler extends BaseAudioHandler {
 
     if (playing) {
       _idleAutoCloseTimer?.cancel();
+      _idleAutoCloseTimer = null;
       _cancelNativeIdleClose();
     }
 
