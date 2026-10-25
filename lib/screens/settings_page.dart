@@ -44,6 +44,7 @@ import 'package:dskplay/widgets/bottom_sheet_bar.dart';
 import 'package:dskplay/widgets/confirmation_dialog.dart';
 import 'package:dskplay/widgets/custom_bar.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
+import 'package:dskplay/widgets/seasonal_decor.dart';
 import 'package:dskplay/widgets/section_header.dart';
 import 'package:dskplay/widgets/update_dialog.dart';
 import 'package:file_picker/file_picker.dart';
@@ -68,7 +69,9 @@ class SettingsPage extends StatelessWidget {
         if (!didPop) BottomNavigationPage.handleBackPress(context);
       },
       child: Scaffold(
-        appBar: AppBar(title: Text(context.l10n!.settings)),
+        appBar: AppBar(
+        title: SeasonalDecorTrigger(child: Text(context.l10n!.settings)),
+      ),
         body: SingleChildScrollView(
           padding: commonSingleChildScrollViewPadding,
           child: Column(

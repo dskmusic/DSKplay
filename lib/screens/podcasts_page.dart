@@ -31,6 +31,7 @@ import 'package:dskplay/services/podcast_feed_service.dart';
 import 'package:dskplay/services/podcast_manager.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:dskplay/widgets/podcast_card.dart';
+import 'package:dskplay/widgets/seasonal_decor.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -131,7 +132,9 @@ class _PodcastsPageState extends State<PodcastsPage> {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => Scaffold(
-          appBar: AppBar(title: Text(context.l10n!.discover)),
+          appBar: AppBar(
+            title: SeasonalDecorTrigger(child: Text(context.l10n!.discover)),
+          ),
           body: _DiscoverTab(
             onOpenPodcast: _openPodcast,
             autoFocusSearch: autoFocusSearch,
@@ -146,7 +149,7 @@ class _PodcastsPageState extends State<PodcastsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(context.l10n!.podcasts),
+        title: SeasonalDecorTrigger(child: Text(context.l10n!.podcasts)),
         actions: [
           IconButton(
             tooltip: 'Podcasts favoritos',

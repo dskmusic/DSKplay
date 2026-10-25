@@ -42,6 +42,7 @@ import 'package:dskplay/widgets/custom_search_bar.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:dskplay/widgets/playlist_bar.dart';
 import 'package:dskplay/widgets/radio_station_card.dart';
+import 'package:dskplay/widgets/seasonal_decor.dart';
 import 'package:dskplay/widgets/section_title.dart';
 import 'package:dskplay/widgets/song_bar.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -254,7 +255,9 @@ class _SearchPageState extends State<SearchPage> {
         if (!didPop) BottomNavigationPage.handleBackPress(context);
       },
       child: Scaffold(
-      appBar: AppBar(title: Text(context.l10n!.search)),
+      appBar: AppBar(
+          title: SeasonalDecorTrigger(child: Text(context.l10n!.search)),
+        ),
       body: SingleChildScrollView(
         padding: commonSingleChildScrollViewPadding,
         child: Column(

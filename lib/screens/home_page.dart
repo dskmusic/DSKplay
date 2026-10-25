@@ -37,6 +37,7 @@ import 'package:dskplay/widgets/announcement_box.dart';
 import 'package:dskplay/widgets/listening_recap_card.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:dskplay/widgets/playlist_cube.dart';
+import 'package:dskplay/widgets/seasonal_decor.dart';
 import 'package:dskplay/widgets/section_header.dart';
 import 'package:dskplay/widgets/song_bar.dart';
 import 'package:dskplay/widgets/spinner.dart';
@@ -166,12 +167,16 @@ class _HomePageState extends State<HomePage> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('DSK Play'),
-              Text('by DSK', style: TextStyle(fontSize: 11)),
-            ],
+          // Menu oculto de decoracion: dos segundos sobre el titulo. Igual
+          // en todos los encabezados de la app.
+          title: const SeasonalDecorTrigger(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('DSK Play'),
+                Text('by DSK', style: TextStyle(fontSize: 11)),
+              ],
+            ),
           ),
         ),
         body: SingleChildScrollView(

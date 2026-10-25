@@ -51,6 +51,7 @@ import 'package:dskplay/utilities/language_utils.dart';
 import 'package:dskplay/utilities/playlist_utils.dart';
 import 'package:dskplay/utilities/sharing_intent.dart';
 import 'package:dskplay/widgets/confirmation_dialog.dart';
+import 'package:dskplay/widgets/seasonal_decor.dart';
 import 'package:dskplay/widgets/update_dialog.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/foundation.dart';
@@ -454,8 +455,10 @@ class _DskPlayState extends State<DskPlay> with WidgetsBindingObserver {
             // Un unico swipe abierto en toda la app: abrir uno cierra el que
             // hubiera. Va aqui y no en cada lista porque las filas
             // deslizables estan repartidas por varias pantallas.
-            builder: (context, child) => SlidableAutoCloseBehavior(
-              child: child ?? const SizedBox.shrink(),
+            builder: (context, child) => SeasonalDecor(
+              child: SlidableAutoCloseBehavior(
+                child: child ?? const SizedBox.shrink(),
+              ),
             ),
           ),
         );

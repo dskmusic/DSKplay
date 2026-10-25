@@ -25,6 +25,7 @@ import 'package:dskplay/widgets/now_playing/karaoke_color_dialog.dart';
 import 'package:dskplay/widgets/now_playing/karaoke_lyrics_view.dart';
 import 'package:dskplay/widgets/playback_icon_button.dart';
 import 'package:dskplay/widgets/position_slider.dart';
+import 'package:dskplay/widgets/seasonal_decor.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -50,15 +51,20 @@ class _KaraokeFullscreenPageState extends State<KaraokeFullscreenPage> {
   late bool _karaokeEnabled =
       widget.karaokeEnabled && widget.result.hasSyncedLyrics;
 
+  double _previousDecor = 1;
+
   @override
   void initState() {
     super.initState();
     WakelockPlus.enable();
+    _previousDecor = decorIntensity.value;
+    decorIntensity.value = 0;
   }
 
   @override
   void dispose() {
     WakelockPlus.disable();
+    decorIntensity.value = _previousDecor;
     super.dispose();
   }
 

@@ -37,6 +37,7 @@ import 'package:dskplay/widgets/confirmation_dialog.dart';
 import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:dskplay/widgets/overflow_menu_button.dart';
 import 'package:dskplay/widgets/popup_menu_item.dart';
+import 'package:dskplay/widgets/seasonal_decor.dart';
 import 'package:dskplay/widgets/swipe_action_pane.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
@@ -551,12 +552,14 @@ class _LocalFilesPageState extends State<LocalFilesPage> {
               ],
             )
           : null,
-      title: Text(
-        _showingFavorites
-            ? 'Favoritos'
-            : _canGoUp
-            ? fileNameFromPath(_currentPath)
-            : context.l10n!.localFiles,
+      title: SeasonalDecorTrigger(
+        child: Text(
+          _showingFavorites
+              ? 'Favoritos'
+              : _canGoUp
+              ? fileNameFromPath(_currentPath)
+              : context.l10n!.localFiles,
+        ),
       ),
       actions: _hasPermission != true || _showingFavorites
           ? null

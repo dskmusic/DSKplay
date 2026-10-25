@@ -30,6 +30,7 @@ import 'package:dskplay/widgets/now_playing/cast_devices_sheet.dart';
 import 'package:dskplay/widgets/now_playing/now_playing_artwork.dart';
 import 'package:dskplay/widgets/now_playing/now_playing_controls.dart';
 import 'package:dskplay/widgets/queue_list_view.dart';
+import 'package:dskplay/widgets/seasonal_decor.dart';
 import 'package:dskplay/widgets/song_bar.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/foundation.dart';
@@ -63,6 +64,20 @@ class NowPlayingPage extends StatefulWidget {
 
 class _NowPlayingPageState extends State<NowPlayingPage> {
   final _lyricsController = FlipCardController();
+  double _previousDecor = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _previousDecor = decorIntensity.value;
+    decorIntensity.value = 0.4;
+  }
+
+  @override
+  void dispose() {
+    decorIntensity.value = _previousDecor;
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

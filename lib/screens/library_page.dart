@@ -41,6 +41,7 @@ import 'package:dskplay/widgets/mini_player_bottom_space.dart';
 import 'package:dskplay/widgets/folder_picker_dialog.dart';
 import 'package:dskplay/widgets/multi_select.dart';
 import 'package:dskplay/widgets/playlist_bar.dart';
+import 'package:dskplay/widgets/seasonal_decor.dart';
 import 'package:dskplay/widgets/section_header.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
@@ -216,7 +217,9 @@ class _LibraryPageState extends State<LibraryPage> {
           !hasOfflineSongs) {
         final colorScheme = Theme.of(context).colorScheme;
         return Scaffold(
-          appBar: AppBar(title: Text(context.l10n!.library)),
+          appBar: AppBar(
+        title: SeasonalDecorTrigger(child: Text(context.l10n!.library)),
+      ),
           body: Center(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
