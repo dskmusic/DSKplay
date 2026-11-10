@@ -3,7 +3,7 @@ import java.io.FileInputStream
 
 // Version de NewPipeExtractor. La actualiza sola el workflow
 // .github/workflows/newpipe_sync.yml; no cambiar el formato de esta linea.
-val newpipeVersion = "v0.27.0"
+val newpipeVersion = "v0.27.1"
 
 plugins {
     id("com.android.application")
