@@ -28,6 +28,7 @@ import 'package:dskplay/main.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/download_notification_service.dart';
 import 'package:dskplay/services/local_files_service.dart';
+import 'package:dskplay/services/pin_shortcut_service.dart';
 import 'package:dskplay/services/playlists_manager.dart';
 import 'package:dskplay/services/router_service.dart';
 import 'package:dskplay/services/settings_manager.dart';
@@ -195,6 +196,12 @@ List<PopupMenuEntry<String>> _buildSongMenuItems({
       label: l10n.share,
       colorScheme: colorScheme,
     ),
+    buildPopupMenuItem<String>(
+      value: 'pin_shortcut',
+      icon: FluentIcons.add_circle_24_regular,
+      label: 'Añadir al escritorio',
+      colorScheme: colorScheme,
+    ),
   ];
 }
 
@@ -300,6 +307,9 @@ Future<void> _handleSongMenuAction({
       break;
     case 'share':
       await shareSongFlow(context, song, ytid);
+      break;
+    case 'pin_shortcut':
+      if (song is Map) await pinSongShortcut(context, song);
       break;
   }
 }

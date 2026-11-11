@@ -38,6 +38,7 @@ import 'package:dskplay/services/download_foreground_service.dart';
 import 'package:dskplay/services/io_service.dart';
 import 'package:dskplay/services/listening_stats_service.dart';
 import 'package:dskplay/services/logger_service.dart';
+import 'package:dskplay/services/pin_shortcut_service.dart';
 import 'package:dskplay/services/playlist_download_service.dart';
 import 'package:dskplay/services/playlist_sharing.dart';
 import 'package:dskplay/services/playlists_manager.dart';
@@ -666,6 +667,11 @@ void handleIncomingLink(Uri? uri) async {
 
   if (uri.host == 'nav') {
     _handleShortcutNavigation(uri);
+    return;
+  }
+
+  if (uri.host == 'play') {
+    unawaited(handlePlayShortcut(uri));
     return;
   }
 

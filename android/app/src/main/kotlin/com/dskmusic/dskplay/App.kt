@@ -177,6 +177,9 @@ class App : Application() {
       // Extraccion de YouTube (busqueda/streams/listas) con NewPipeExtractor.
       NewPipeBridge.register(engine.dartExecutor.binaryMessenger)
 
+      // Accesos directos fijados en el escritorio ("Anadir al escritorio").
+      PinShortcut.register(engine.dartExecutor.binaryMessenger, applicationContext)
+
       // Reproduccion en Chromecast y Smart TV (DLNA).
       CastBridge.register(engine.dartExecutor.binaryMessenger, this)
 

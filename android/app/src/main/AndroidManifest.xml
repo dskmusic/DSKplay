@@ -103,6 +103,12 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:scheme="dskplay" android:host="nav" />
             </intent-filter>
+            <!-- Pinned home-screen shortcuts that play something (see PinShortcut.kt) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="dskplay" android:host="play" />
+            </intent-filter>
             <!-- Intent filter for handling text sharing -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />

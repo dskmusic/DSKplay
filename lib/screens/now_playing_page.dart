@@ -62,6 +62,13 @@ class NowPlayingPage extends StatefulWidget {
   State<NowPlayingPage> createState() => _NowPlayingPageState();
 }
 
+/// Cuantas pantallas del reproductor completo hay abiertas ahora mismo.
+int _openNowPlayingPages = 0;
+
+/// Si el reproductor completo ya esta en pantalla (el reproductor sigue a lo
+/// que suena, asi que no hace falta abrir otro).
+bool get isNowPlayingOpen => _openNowPlayingPages > 0;
+
 class _NowPlayingPageState extends State<NowPlayingPage> {
   final _lyricsController = FlipCardController();
   double _previousDecor = 1;
@@ -69,6 +76,7 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
   @override
   void initState() {
     super.initState();
+    _openNowPlayingPages++;
     _previousDecor = decorIntensity.value;
     decorIntensity.value = 0.4;
   }
@@ -76,6 +84,7 @@ class _NowPlayingPageState extends State<NowPlayingPage> {
   @override
   void dispose() {
     decorIntensity.value = _previousDecor;
+    _openNowPlayingPages--;
     super.dispose();
   }
 

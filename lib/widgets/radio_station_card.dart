@@ -20,7 +20,10 @@
  */
 
 import 'package:dskplay/models/radio_model.dart';
+import 'package:dskplay/services/pin_shortcut_service.dart';
 import 'package:dskplay/utilities/artwork_provider.dart';
+import 'package:dskplay/widgets/overflow_menu_button.dart';
+import 'package:dskplay/widgets/popup_menu_item.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 
@@ -118,6 +121,17 @@ class RadioStationCard extends StatelessWidget {
                   minimumSize: const Size(48, 48),
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
+              ),
+              OverflowMenuButton<String>(
+                onSelected: (_) => pinRadioShortcut(context, station),
+                itemBuilder: (context) => [
+                  buildPopupMenuItem<String>(
+                    value: 'pin_shortcut',
+                    icon: FluentIcons.add_circle_24_regular,
+                    label: 'Añadir al escritorio',
+                    colorScheme: colorScheme,
+                  ),
+                ],
               ),
             ],
           ),

@@ -27,6 +27,7 @@ import 'package:dskplay/extensions/l10n.dart';
 import 'package:dskplay/main.dart';
 import 'package:dskplay/models/podcast_model.dart';
 import 'package:dskplay/services/podcast_download_service.dart';
+import 'package:dskplay/services/pin_shortcut_service.dart';
 import 'package:dskplay/services/podcast_feed_service.dart';
 import 'package:dskplay/services/podcast_manager.dart';
 import 'package:dskplay/utilities/artwork_provider.dart';
@@ -491,6 +492,9 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
                       case 'filter_pending':
                         setState(() => _listenedFilter = false);
                         break;
+                      case 'pin_shortcut':
+                        unawaited(pinPodcastShortcut(context, _podcast));
+                        break;
                     }
                   },
                   itemBuilder: (context) => [
@@ -522,6 +526,12 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
                       icon: FluentIcons.circle_24_filled,
                       label: 'Ver solo pendientes',
                       selected: _listenedFilter == false,
+                    ),
+                    const PopupMenuDivider(),
+                    _episodeMenuItem(
+                      value: 'pin_shortcut',
+                      icon: FluentIcons.add_circle_24_regular,
+                      label: 'Añadir al escritorio',
                     ),
                   ],
                 ),

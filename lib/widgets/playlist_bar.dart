@@ -26,6 +26,7 @@ import 'package:dskplay/services/artist_service.dart';
 import 'package:dskplay/services/common_services.dart';
 import 'package:dskplay/services/data_manager.dart';
 import 'package:dskplay/services/download_notification_service.dart';
+import 'package:dskplay/services/pin_shortcut_service.dart';
 import 'package:dskplay/services/playlist_download_service.dart';
 import 'package:dskplay/services/playlists_manager.dart';
 import 'package:dskplay/services/router_service.dart';
@@ -290,6 +291,19 @@ class PlaylistBar extends StatelessWidget {
                       case 'export_device':
                         _handleExportToDevice(context);
                         break;
+                      case 'pin_shortcut':
+                        unawaited(
+                          pinPlaylistShortcut(
+                            context,
+                            id: _resolvedPlaylistId!,
+                            title: displayTitle,
+                            image: isArtist
+                                ? normalizeArtistThumbnailUrl(playlistArtwork)
+                                : playlistArtwork,
+                            isArtist: isArtist,
+                          ),
+                        );
+                        break;
                     }
                   },
                   itemBuilder: (BuildContext context) {
@@ -396,6 +410,13 @@ class PlaylistBar extends StatelessWidget {
                           labelStyle: isFolder
                               ? TextStyle(color: colorScheme.error)
                               : null,
+                        ),
+                      if (!isFolder && _resolvedPlaylistId != null)
+                        buildPopupMenuItem<String>(
+                          value: 'pin_shortcut',
+                          icon: FluentIcons.add_circle_24_regular,
+                          label: 'Añadir al escritorio',
+                          colorScheme: colorScheme,
                         ),
                     ];
                   },

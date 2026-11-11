@@ -28,6 +28,7 @@ import 'package:dskplay/screens/bottom_navigation_page.dart';
 import 'package:dskplay/services/data_manager.dart';
 import 'package:dskplay/services/io_service.dart';
 import 'package:dskplay/services/local_files_service.dart';
+import 'package:dskplay/services/pin_shortcut_service.dart';
 import 'package:dskplay/services/router_service.dart';
 import 'package:dskplay/services/settings_manager.dart';
 import 'package:dskplay/utilities/edit_tags_dialog.dart';
@@ -978,6 +979,8 @@ class _FolderRow extends StatelessWidget {
                     onToggleFavorite();
                   case 'delete':
                     await _confirmAndDelete(context);
+                  case 'pin_shortcut':
+                    await pinFolderShortcut(context, directory.path);
                 }
               },
               itemBuilder: (context) => [
@@ -1013,6 +1016,12 @@ class _FolderRow extends StatelessWidget {
                   value: 'delete',
                   icon: FluentIcons.delete_24_regular,
                   label: l10n.delete,
+                  colorScheme: colorScheme,
+                ),
+                buildPopupMenuItem<String>(
+                  value: 'pin_shortcut',
+                  icon: FluentIcons.add_circle_24_regular,
+                  label: 'Añadir al escritorio',
                   colorScheme: colorScheme,
                 ),
               ],
@@ -1174,6 +1183,12 @@ class _LocalFileRowState extends State<_LocalFileRow> {
                       label: l10n.delete,
                       colorScheme: colorScheme,
                     ),
+                    buildPopupMenuItem<String>(
+                      value: 'pin_shortcut',
+                      icon: FluentIcons.add_circle_24_regular,
+                      label: 'Añadir al escritorio',
+                      colorScheme: colorScheme,
+                    ),
                   ],
                 ),
               ],
@@ -1292,6 +1307,8 @@ class _LocalFileRowState extends State<_LocalFileRow> {
         }
       case 'delete':
         await _deleteFile();
+      case 'pin_shortcut':
+        if (mounted) await pinSongShortcut(context, _song);
     }
   }
 }
