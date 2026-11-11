@@ -222,7 +222,10 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
       return;
     }
 
-    _attemptScrollToEpisode(episodes[targetIndex].key, targetIndex);
+    // Anchor 2 rows above the target (already-listened context) at the top
+    // of the viewport, so the unlistened one shows as the 3rd row.
+    final anchorIndex = targetIndex < 2 ? 0 : targetIndex - 2;
+    _attemptScrollToEpisode(episodes[anchorIndex].key, anchorIndex);
   }
 
   // The row for a target far down the list may not be built yet (the
@@ -247,12 +250,12 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
         targetContext,
         duration: const Duration(milliseconds: 400),
         curve: Curves.easeInOut,
-        alignment: 0.1,
       );
       return;
     }
 
-    if (attempt >= 6) return;
+    // ponytail: 30 attempts x 300px nudge covers very long lists; raise if still short.
+    if (attempt >= 30) return;
 
     final headerHeight =
         (_episodeListHeaderKey.currentContext?.findRenderObject() as RenderBox?)
