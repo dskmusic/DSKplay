@@ -513,10 +513,13 @@ Future<void> handlePlayShortcut(Uri uri) async {
             final dateB = b.pubDate ?? DateTime(0);
             return ascending ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
           });
-        final next = episodes
-            .where((e) => !podcastManager.isListened(e.key))
-            .firstOrNull;
-        if (next == null) return _fail('Todos los episodios están escuchados');
+        // Si ya estan todos escuchados, el primero segun el orden elegido.
+        final next =
+            episodes
+                .where((e) => !podcastManager.isListened(e.key))
+                .firstOrNull ??
+            episodes.firstOrNull;
+        if (next == null) return _fail('El podcast no tiene episodios');
         unawaited(_showPlayer());
         final ok = await audioHandler.playPodcastEpisode(
           next,
