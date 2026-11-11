@@ -58,7 +58,17 @@ object PinShortcut {
             .setIcon(icon)
             .setIntent(intent)
             .build()
-          ShortcutManagerCompat.requestPinShortcut(ctx, info, null)
+          val requested = ShortcutManagerCompat.requestPinShortcut(ctx, info, null)
+          // Se manda la app al fondo para que se vea el escritorio (y el
+          // dialogo de confirmacion del launcher) con el icono nuevo.
+          if (requested) {
+            ctx.startActivity(
+              Intent(Intent.ACTION_MAIN)
+                .addCategory(Intent.CATEGORY_HOME)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+          }
+          requested
         } catch (e: Exception) {
           false
         }
