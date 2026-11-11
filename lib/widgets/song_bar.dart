@@ -216,6 +216,8 @@ Future<void> _handleSongMenuAction({
   VoidCallback? onDismissSuggestion,
   FutureOr<void> Function()? onRename,
   VoidCallback? onRemoveFromTimeMachine,
+  String? shortcutPlaylistId,
+  List? shortcutSongs,
 }) async {
   switch (value) {
     case 'play_next':
@@ -309,7 +311,14 @@ Future<void> _handleSongMenuAction({
       await shareSongFlow(context, song, ytid);
       break;
     case 'pin_shortcut':
-      if (song is Map) await pinSongShortcut(context, song);
+      if (song is Map) {
+        await pinSongShortcut(
+          context,
+          song,
+          playlistId: shortcutPlaylistId,
+          songs: shortcutSongs,
+        );
+      }
       break;
   }
 }
@@ -600,6 +609,8 @@ class SongBar extends StatefulWidget {
     this.showQueueActions = true,
     this.showPlayTime = false,
     this.playlistId,
+    this.shortcutPlaylistId,
+    this.shortcutSongs,
     this.onRenamed,
     this.rank,
     this.barPadding,
@@ -626,6 +637,14 @@ class SongBar extends StatefulWidget {
   final bool isFromOfflineSongsList;
   final bool showQueueActions;
   final String? playlistId;
+
+  /// Lista o album de la que viene esta fila, para que "Anadir al escritorio"
+  /// pueda conservarla (null: la cancion se anade suelta).
+  final String? shortcutPlaylistId;
+
+  /// Lista que se esta viendo cuando no tiene identificador (resultados,
+  /// sugerencias): el acceso directo la lleva dentro.
+  final List? shortcutSongs;
   final VoidCallback? onRenamed;
   final EdgeInsetsGeometry? barPadding;
   final int? rank;
@@ -821,6 +840,8 @@ class _SongBarState extends State<SongBar> {
     onDismissSuggestion: widget.onDismissSuggestion,
     onRename: () => _handleRenameSong(context),
     onRemoveFromTimeMachine: widget.onRemoveFromTimeMachine,
+    shortcutPlaylistId: widget.shortcutPlaylistId,
+    shortcutSongs: widget.shortcutSongs,
   );
 
   List<SlidableAction> _buildStartActions(ColorScheme colorScheme) {

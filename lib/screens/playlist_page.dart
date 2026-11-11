@@ -1017,6 +1017,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
       },
       borderRadius: borderRadius,
       playlistId: playlistId,
+      shortcutPlaylistId: widget.isArtist ? null : _resolvedPlaylistId,
       onRenamed: () => setState(() {}),
       reorderHandle: reorderHandle,
     );

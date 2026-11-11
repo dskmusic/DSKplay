@@ -298,6 +298,21 @@ class SettingsPage extends StatelessWidget {
             );
           },
         ),
+        ValueListenableBuilder<String>(
+          valueListenable: shortcutSongMode,
+          builder: (_, value, __) {
+            return CustomBar(
+              'Accesos directos de canciones',
+              FluentIcons.add_circle_24_regular,
+              description: switch (value) {
+                'single' => 'Solo la canción elegida',
+                'ask' => 'Preguntar al añadir',
+                _ => 'Conservar la lista, desde esa canción',
+              },
+              onTap: () => _showShortcutSongModePicker(context),
+            );
+          },
+        ),
         ValueListenableBuilder<int>(
           valueListenable: autoCloseAfterPauseMinutes,
           builder: (_, value, __) {
@@ -1214,6 +1229,40 @@ class SettingsPage extends StatelessWidget {
             icon: FluentIcons.arrow_trending_down_24_regular,
           );
         },
+      ),
+    );
+  }
+
+  void _showShortcutSongModePicker(BuildContext context) {
+    const options = {
+      'list': 'Conservar la lista, desde esa canción',
+      'single': 'Solo la canción elegida',
+      'ask': 'Preguntar al añadir',
+    };
+
+    showCustomBottomSheet(
+      context,
+      ListView(
+        shrinkWrap: true,
+        physics: const BouncingScrollPhysics(),
+        padding: commonListViewBottomPadding,
+        children: [
+          for (final entry in options.entries)
+            BottomSheetBar(
+              entry.value,
+              () {
+                addOrUpdateData<String>(
+                  'settings',
+                  'shortcutSongMode',
+                  entry.key,
+                );
+                shortcutSongMode.value = entry.key;
+                showToast(context, context.l10n!.settingChangedMsg);
+                Navigator.pop(context);
+              },
+              shortcutSongMode.value == entry.key,
+            ),
+        ],
       ),
     );
   }

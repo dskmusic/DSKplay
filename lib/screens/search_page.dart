@@ -511,6 +511,7 @@ class _SearchPageState extends State<SearchPage> {
             key: listItemKey('search_song', index, song),
             showMusicDuration: true,
             borderRadius: borderRadius,
+            shortcutSongs: _songsSearchResult,
           ),
         );
       }

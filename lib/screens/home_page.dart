@@ -477,6 +477,7 @@ class _HomePageState extends State<HomePage> {
                 data[index],
                 true,
                 borderRadius: borderRadius,
+                shortcutSongs: data,
                 onDismissSuggestion: () => _dismissSuggestion(data[index]),
               ),
             );

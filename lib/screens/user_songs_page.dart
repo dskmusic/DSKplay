@@ -579,6 +579,7 @@ class _UserSongsPageState extends State<UserSongsPage> {
       song,
       true,
       onPlay: () => _playSong(song, playlist, index),
+      shortcutSongs: playlist['list'] as List?,
       borderRadius: borderRadius,
       isRecentSong: isRecentSong,
       isFromLikedSongs: isLikedSongs,

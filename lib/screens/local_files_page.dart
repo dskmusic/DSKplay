@@ -1308,7 +1308,7 @@ class _LocalFileRowState extends State<_LocalFileRow> {
       case 'delete':
         await _deleteFile();
       case 'pin_shortcut':
-        if (mounted) await pinSongShortcut(context, _song);
+        if (mounted) await pinSongShortcut(context, _song, inFolder: true);
     }
   }
 }

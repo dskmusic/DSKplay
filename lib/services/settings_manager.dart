@@ -72,6 +72,13 @@ final includePodcasts = ValueNotifier<bool>(
   ),
 );
 
+/// Que hace "Anadir al escritorio" en una cancion que viene de una lista o
+/// carpeta: 'list' (conserva la lista, desde esa cancion), 'single' (solo la
+/// cancion) o 'ask' (pregunta cada vez).
+final shortcutSongMode = ValueNotifier<String>(
+  Hive.box('settings').get('shortcutSongMode', defaultValue: 'list'),
+);
+
 final rememberLastPlayback = ValueNotifier<bool>(
   Hive.box('settings').get('rememberLastPlayback', defaultValue: true),
 );
@@ -343,6 +350,7 @@ void reloadSettingsFromStorage() {
   wrappedEnabled.value = read('wrappedEnabled', true);
   includePodcasts.value = read('includePodcasts', true);
   rememberLastPlayback.value = read('rememberLastPlayback', true);
+  shortcutSongMode.value = read('shortcutSongMode', 'list');
   showArtistExtras.value = read('showArtistExtras', true);
   startScreenSetting.value = read('startScreen', '/home');
   autoCloseAfterPauseMinutes.value = read('autoCloseAfterPauseMinutes', 10);
