@@ -21,7 +21,7 @@ import java.net.URL
  */
 object PinShortcut {
   private const val CHANNEL = "dskplay/pin_shortcut"
-  private const val ICON_SIZE = 192
+  private const val ICON_SIZE = 432
   private const val ACTIVITY = "com.ryanheise.audioservice.AudioServiceActivity"
 
   fun register(messenger: BinaryMessenger, ctx: Context) {
@@ -47,7 +47,7 @@ object PinShortcut {
         val ok = try {
           val bitmap = loadBitmap(image)
           val icon = if (bitmap != null) {
-            IconCompat.createWithBitmap(bitmap)
+            IconCompat.createWithAdaptiveBitmap(bitmap)
           } else {
             IconCompat.createWithResource(ctx, R.mipmap.ic_launcher)
           }

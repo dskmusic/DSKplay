@@ -276,6 +276,8 @@ Future<void> handlePlayShortcut(Uri uri) async {
     switch (kind) {
       case 'song':
         final img = q['img'] ?? '';
+        // Antes de reproducir: play() no devuelve hasta que se pausa.
+        unawaited(_showPlayer());
         await audioHandler.addPlaylistToQueue(
           [
             {
@@ -291,22 +293,22 @@ Future<void> handlePlayShortcut(Uri uri) async {
           replace: true,
           startIndex: 0,
         );
-        await _showPlayer();
       case 'file':
         final file = File(q['path'] ?? '');
         if (!await file.exists()) return _fail('El archivo ya no existe');
+        unawaited(_showPlayer());
         await audioHandler.addPlaylistToQueue(
           [await buildLocalSongMap(file)],
           replace: true,
           startIndex: 0,
         );
-        await _showPlayer();
       case 'folder':
         final path = q['path'] ?? '';
         final dir = Directory(path);
         if (!await dir.exists()) return _fail('La carpeta ya no existe');
         final files = await collectAudioFilesRecursively(dir);
         if (files.isEmpty) return _fail('La carpeta no tiene canciones');
+        unawaited(_showPlayer());
         await audioHandler.addPlaylistToQueue(
           await buildLocalSongMaps(files),
           replace: true,
@@ -317,8 +319,8 @@ Future<void> handlePlayShortcut(Uri uri) async {
                 '${NavigationManager.localFilesPath}?path=${Uri.encodeComponent(path)}',
           },
         );
-        await _showPlayer();
       case 'radio':
+        unawaited(_showPlayer());
         final ok = await audioHandler.playRadioStream(
           id: q['id'] ?? '',
           name: q['name'] ?? '',
@@ -327,7 +329,6 @@ Future<void> handlePlayShortcut(Uri uri) async {
           genre: q['genre'],
         );
         if (!ok) return _fail('No se pudo reproducir la emisora');
-        await _showPlayer();
       case 'podcast':
         final feed = await fetchPodcastFeed(q['feed'] ?? '');
         if (feed == null) return _fail('No se pudo cargar el podcast');
@@ -344,6 +345,7 @@ Future<void> handlePlayShortcut(Uri uri) async {
             .where((e) => !podcastManager.isListened(e.key))
             .firstOrNull;
         if (next == null) return _fail('Todos los episodios están escuchados');
+        unawaited(_showPlayer());
         final ok = await audioHandler.playPodcastEpisode(
           next,
           podcastTitle: feed.podcast.title,
@@ -352,7 +354,6 @@ Future<void> handlePlayShortcut(Uri uri) async {
                   as String?,
         );
         if (!ok) return _fail('No se pudo reproducir el episodio');
-        await _showPlayer();
       case 'playlist':
       case 'artist':
       case 'artist_radio':
@@ -369,6 +370,7 @@ Future<void> handlePlayShortcut(Uri uri) async {
         if (playlist == null || songs.isEmpty) {
           return _fail('No se pudo cargar el contenido');
         }
+        unawaited(_showPlayer());
         if (kind == 'artist_radio') {
           await audioHandler.addPlaylistToQueue(
             songs..shuffle(),
@@ -381,7 +383,6 @@ Future<void> handlePlayShortcut(Uri uri) async {
             songIndex: 0,
           );
         }
-        await _showPlayer();
     }
   } catch (e, stackTrace) {
     logger.log('Error playing shortcut', error: e, stackTrace: stackTrace);
