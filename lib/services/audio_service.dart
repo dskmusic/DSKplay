@@ -2103,6 +2103,21 @@ class DskPlayAudioHandler extends BaseAudioHandler {
     String? localPath,
     Duration position,
   ) async {
+    // La posicion de este episodio se guarda siempre, aunque el ajuste de
+    // recordar lo ultimo reproducido este apagado: al 90 % cuenta como
+    // terminado y se descarta; los primeros segundos no merece la pena.
+    final duration = audioPlayer.duration;
+    if (duration != null &&
+        duration > Duration.zero &&
+        position.inMilliseconds >= duration.inMilliseconds * 0.9) {
+      unawaited(podcastManager.clearPosition(episode.key));
+    } else if (position >= const Duration(seconds: 5) &&
+        // Mientras carga otra fuente la posicion aun puede ser la de la
+        // anterior: no se le atribuye a este episodio.
+        audioPlayer.processingState == ProcessingState.ready) {
+      unawaited(podcastManager.savePosition(episode.key, position));
+    }
+
     if (!rememberLastPlayback.value) return;
     try {
       final userBox = Hive.box('user');

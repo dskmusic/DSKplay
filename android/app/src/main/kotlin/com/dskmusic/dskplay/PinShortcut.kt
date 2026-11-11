@@ -1,6 +1,10 @@
 package com.dskmusic.dskplay
 
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.IntentFilter
+import android.content.IntentSender
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -8,6 +12,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
+import androidx.core.content.ContextCompat
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
@@ -58,23 +63,45 @@ object PinShortcut {
             .setIcon(icon)
             .setIntent(intent)
             .build()
-          val requested = ShortcutManagerCompat.requestPinShortcut(ctx, info, null)
-          // Se manda la app al fondo para que se vea el escritorio (y el
-          // dialogo de confirmacion del launcher) con el icono nuevo.
-          if (requested) {
-            ctx.startActivity(
-              Intent(Intent.ACTION_MAIN)
-                .addCategory(Intent.CATEGORY_HOME)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
-          }
-          requested
+          ShortcutManagerCompat.requestPinShortcut(ctx, info, confirmationSender(ctx))
         } catch (e: Exception) {
           false
         }
         Handler(Looper.getMainLooper()).post { result.success(ok) }
       }.start()
     }
+  }
+
+  private var pinReceiver: BroadcastReceiver? = null
+
+  /**
+   * El launcher dispara este aviso cuando el usuario confirma el dialogo: solo
+   * entonces se manda la app al fondo (hacerlo antes cerraba el dialogo).
+   */
+  private fun confirmationSender(ctx: Context): IntentSender {
+    val action = "${ctx.packageName}.PIN_SHORTCUT_CONFIRMED"
+    pinReceiver?.let { runCatching { ctx.unregisterReceiver(it) } }
+    val receiver = object : BroadcastReceiver() {
+      override fun onReceive(c: Context, intent: Intent) {
+        runCatching { ctx.unregisterReceiver(this) }
+        pinReceiver = null
+        runCatching {
+          ctx.startActivity(
+            Intent(Intent.ACTION_MAIN)
+              .addCategory(Intent.CATEGORY_HOME)
+              .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+          )
+        }
+      }
+    }
+    pinReceiver = receiver
+    ContextCompat.registerReceiver(
+      ctx, receiver, IntentFilter(action), ContextCompat.RECEIVER_NOT_EXPORTED,
+    )
+    return PendingIntent.getBroadcast(
+      ctx, 0, Intent(action).setPackage(ctx.packageName),
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    ).intentSender
   }
 
   /** URL http(s), data URI base64 o ruta de fichero; null si no hay o falla. */

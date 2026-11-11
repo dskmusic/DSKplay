@@ -98,14 +98,53 @@ Future<void> playPodcastEpisode(
     }
   }
 
+  // Si se quedo a medias (aunque entre medias sonara otra cosa), pregunta si
+  // continuar o empezar de nuevo.
+  Duration? resumeAt;
+  final saved = podcastManager.savedPosition(episode.key);
+  if (saved != null) {
+    final resume = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(context.l10n!.resumePodcastQuestion),
+        content: Text('${context.l10n!.resumeEpisode}: ${_formatPosition(saved)}'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(context.l10n!.startOver),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(context.l10n!.resumeEpisode),
+          ),
+        ],
+      ),
+    );
+    if (resume == null || !context.mounted) return;
+    if (resume) {
+      resumeAt = saved;
+    } else {
+      unawaited(podcastManager.clearPosition(episode.key));
+    }
+  }
+
   final success = await audioHandler.playPodcastEpisode(
     episode,
     podcastTitle: podcast.title,
     localPath: localPath,
+    initialPosition: resumeAt,
   );
   if (!success && context.mounted) {
     showToast(context, context.l10n!.playbackFailed);
   }
+}
+
+String _formatPosition(Duration d) {
+  String two(int n) => n.toString().padLeft(2, '0');
+  final h = d.inHours;
+  final m = two(d.inMinutes.remainder(60));
+  final s = two(d.inSeconds.remainder(60));
+  return h > 0 ? '$h:$m:$s' : '${d.inMinutes}:$s';
 }
 
 Future<void> _copyEpisodeInfo(

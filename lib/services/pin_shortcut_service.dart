@@ -349,6 +349,7 @@ Future<void> handlePlayShortcut(Uri uri) async {
         final ok = await audioHandler.playPodcastEpisode(
           next,
           podcastTitle: feed.podcast.title,
+          initialPosition: podcastManager.savedPosition(next.key),
           localPath:
               podcastManager.getDownloadedEpisode(next.key)?['audioPath']
                   as String?,

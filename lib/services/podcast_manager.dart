@@ -363,7 +363,34 @@ class PodcastManager {
   bool isListened(String episodeKey) =>
       listenedEpisodeKeys.value.contains(episodeKey);
 
+  // Posicion de cada episodio a medias, aparte de "lo ultimo que sonaba": asi
+  // sobrevive a abrir una cancion u otro episodio entre medias.
+  static const _positionsKey = 'podcastEpisodePositions';
+  Map<String, int>? _positions;
+
+  Map<String, int> get _savedPositions => _positions ??=
+      (Hive.box('user').get(_positionsKey, defaultValue: {}) as Map).map(
+        (k, v) => MapEntry(k as String, v as int),
+      );
+
+  /// Donde se quedo [episodeKey], o null si no hay nada guardado.
+  Duration? savedPosition(String episodeKey) {
+    final ms = _savedPositions[episodeKey];
+    return ms == null ? null : Duration(milliseconds: ms);
+  }
+
+  Future<void> savePosition(String episodeKey, Duration position) {
+    _savedPositions[episodeKey] = position.inMilliseconds;
+    return Hive.box('user').put(_positionsKey, _savedPositions);
+  }
+
+  Future<void> clearPosition(String episodeKey) async {
+    if (_savedPositions.remove(episodeKey) == null) return;
+    await Hive.box('user').put(_positionsKey, _savedPositions);
+  }
+
   Future<void> setListened(String episodeKey, {required bool listened}) async {
+    if (listened) unawaited(clearPosition(episodeKey));
     final current = listenedEpisodeKeys.value;
     if (listened == current.contains(episodeKey)) return;
 
@@ -384,6 +411,7 @@ class PodcastManager {
       current.removeAll(episodeKeys);
     }
     listenedEpisodeKeys.value = current.toList();
+    if (listened) episodeKeys.forEach((k) => unawaited(clearPosition(k)));
     await _persistListened();
   }
 
