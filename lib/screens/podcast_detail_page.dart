@@ -370,6 +370,40 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
     );
   }
 
+  Future<void> _confirmAndMarkAllListened() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => ConfirmationDialog(
+        confirmationMessage: '¿Marcar todos los episodios como escuchados?',
+        submitMessage: dialogContext.l10n!.markAllAsListened,
+        onCancel: () => Navigator.of(dialogContext).pop(false),
+        onSubmit: () => Navigator.of(dialogContext).pop(true),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    // Solo los que no estaban escuchados, para que deshacer no toque los que
+    // ya lo estaban. ponytail: la posicion guardada no se restaura al deshacer.
+    final changed = _episodes
+        .map((e) => e.key)
+        .where((k) => !podcastManager.isListened(k))
+        .toList();
+    if (changed.isEmpty) {
+      showToast(context, context.l10n!.allEpisodesListened);
+      return;
+    }
+    await podcastManager.setAllListened(changed, listened: true);
+    if (!mounted) return;
+    showToastWithButton(
+      context,
+      context.l10n!.markAllAsListened,
+      context.l10n!.undo,
+      () => podcastManager.setAllListened(changed, listened: false),
+      duration: const Duration(seconds: 5),
+      icon: FluentIcons.checkmark_circle_20_regular,
+    );
+  }
+
   Future<void> _confirmAndToggleSubscription(bool isSubscribed) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -401,10 +435,21 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
       appBar: AppBar(
         title: _selectionMode
             ? Text('${_selectedKeys.length}')
-            : Text(
-                _podcast.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+            : GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  if (!_episodeListController.hasClients) return;
+                  _episodeListController.animateTo(
+                    0,
+                    duration: const Duration(milliseconds: 400),
+                    curve: Curves.easeInOut,
+                  );
+                },
+                child: Text(
+                  _podcast.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
         leading: _selectionMode
             ? IconButton(
@@ -454,31 +499,21 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
                     );
                   },
                 ),
-                ValueListenableBuilder<List<Podcast>>(
-                  valueListenable: podcastManager.subscriptions,
-                  builder: (context, _, _) {
-                    final isSubscribed = podcastManager.isSubscribed(
-                      _podcast.id,
-                    );
-                    return IconButton(
-                      tooltip: isSubscribed
-                          ? context.l10n!.unsubscribe
-                          : context.l10n!.subscribe,
-                      icon: Icon(
-                        isSubscribed
-                            ? FluentIcons.checkmark_circle_24_filled
-                            : FluentIcons.add_circle_24_regular,
-                      ),
-                      onPressed: () =>
-                          _confirmAndToggleSubscription(isSubscribed),
-                    );
-                  },
+                IconButton(
+                  tooltip: context.l10n!.markAllAsListened,
+                  icon: const Icon(FluentIcons.checkmark_circle_24_regular),
+                  onPressed: _confirmAndMarkAllListened,
                 ),
                 PopupMenuButton<String>(
                   onSelected: (value) {
                     switch (value) {
                       case 'mark_all_listened':
-                        _markAllEpisodes(listened: true);
+                        _confirmAndMarkAllListened();
+                        break;
+                      case 'toggle_subscription':
+                        _confirmAndToggleSubscription(
+                          podcastManager.isSubscribed(_podcast.id),
+                        );
                         break;
                       case 'mark_all_not_listened':
                         _markAllEpisodes(listened: false);
@@ -533,6 +568,19 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
                       icon: FluentIcons.add_circle_24_regular,
                       label: 'Añadir al escritorio',
                     ),
+                    const PopupMenuDivider(),
+                    if (podcastManager.isSubscribed(_podcast.id))
+                      _episodeMenuItem(
+                        value: 'toggle_subscription',
+                        icon: FluentIcons.dismiss_circle_24_regular,
+                        label: context.l10n!.unsubscribe,
+                      )
+                    else
+                      _episodeMenuItem(
+                        value: 'toggle_subscription',
+                        icon: FluentIcons.add_circle_24_regular,
+                        label: context.l10n!.subscribe,
+                      ),
                   ],
                 ),
               ],
