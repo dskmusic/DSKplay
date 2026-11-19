@@ -375,7 +375,7 @@ class _PodcastDetailPageState extends State<PodcastDetailPage> {
       context: context,
       builder: (dialogContext) => ConfirmationDialog(
         confirmationMessage: '¿Marcar todos los episodios como escuchados?',
-        submitMessage: dialogContext.l10n!.markAllAsListened,
+        submitMessage: 'Aceptar',
         onCancel: () => Navigator.of(dialogContext).pop(false),
         onSubmit: () => Navigator.of(dialogContext).pop(true),
       ),
